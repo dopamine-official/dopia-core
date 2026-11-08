@@ -19,6 +19,7 @@ import {
 import { type Account } from "@/lib/contracts";
 import { defaultLocale, resolveLocale, text, type Locale } from "@/i18n";
 import { messages } from "@/lib/translations";
+import { syncAnalyticsAccount } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
 
 type Session = {
@@ -94,6 +95,7 @@ export function Providers({ children }: { children: ReactNode }) {
       const changed = previousId !== next.account_id;
       accountRef.current = next;
       setApiContext(localeRef.current, next.account_id);
+      syncAnalyticsAccount(next);
       setAccount(next);
       if (changed) query.clear();
       // Initial page loads must preserve this account's saved drafts and turns.

@@ -121,6 +121,9 @@ def load_routes(path: Path, missing: list[str]) -> dict[str, Route]:
     return routes
 
 
+APP_ENVS = ("dev", "prod")
+
+
 def load_settings(env_file: Path | None = None) -> Settings:
     """Reads env vars and the route file. Raises SettingsError listing every missing item."""
     load_env_file(env_file if env_file is not None else ROOT_DIR / ".env.local")
@@ -156,8 +159,17 @@ def load_settings(env_file: Path | None = None) -> Settings:
             continue
         provider_api_keys[route.provider] = api_key
 
+    # With PostHog on, APP_ENV must be explicit: PostHog hides `dev`, so a production server
+    # that silently fell back to `dev` would vanish from every chart.
+    app_env = _env("APP_ENV")
+    posthog_api_key = _env("POSTHOG_API_KEY")
+    if app_env is not None and app_env not in APP_ENVS:
+        missing.append(f"APP_ENV must be one of {', '.join(APP_ENVS)} (got {app_env!r})")
+    elif app_env is None and posthog_api_key is not None:
+        missing.append("APP_ENV (required when POSTHOG_API_KEY is set)")
+
     settings = Settings(
-        app_env=_env("APP_ENV", "dev") or "dev",
+        app_env=app_env or "dev",
         app_release=_env("APP_RELEASE") or _env("RAILWAY_GIT_COMMIT_SHA") or "local",
         port=int(_env("PORT", "8100") or "8100"),
         chat_request_timeout_seconds=_float_env("CHAT_REQUEST_TIMEOUT_SECONDS", 90.0, missing),
@@ -166,7 +178,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         prompt_dir=prompt_dir,
         routes=routes,
         provider_api_keys=provider_api_keys,
-        posthog_api_key=_env("POSTHOG_API_KEY"),
+        posthog_api_key=posthog_api_key,
         posthog_host=_env("POSTHOG_HOST"),
     )
     if missing:

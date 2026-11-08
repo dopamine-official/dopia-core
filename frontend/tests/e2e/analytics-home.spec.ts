@@ -518,3 +518,39 @@ test("recent chat clicks from the chat room and My Page", async ({
     page: "me",
   });
 });
+
+test("app error screen and its retry", async ({ page, analytics }) => {
+  const crash = (on: boolean) =>
+    page.evaluate((value) => {
+      (window as unknown as { e2eCrash: boolean }).e2eCrash = value;
+    }, on);
+  await page.addInitScript(() => {
+    (window as unknown as { e2eCrash: boolean }).e2eCrash = true;
+  });
+  await page.goto("/e2e/crash");
+  const retry = page.getByRole("button", {
+    name: "다시 불러오기",
+    exact: true,
+  });
+  await expect(retry).toBeVisible();
+  await sent(analytics, "error_screen_viewed", {
+    target: "app",
+    code: "unknown",
+    page: "error",
+  });
+
+  await retry.click();
+  await sent(analytics, "retry_clicked", { target: "app", page: "error" });
+  await sent(analytics, "retry_finished", { target: "app", result: "failed" });
+  await expect(retry).toBeVisible();
+
+  await crash(false);
+  await retry.click();
+  await expect(page.locator("main#main")).toHaveText("recovered");
+  await sent(analytics, "retry_finished", { target: "app", result: "loaded" });
+  await settle(page);
+  expect(count(analytics, "retry_clicked")).toBe(2);
+  expect(count(analytics, "retry_finished")).toBe(2);
+  // Shown first, then again after the retry that failed.
+  expect(count(analytics, "error_screen_viewed")).toBe(2);
+});

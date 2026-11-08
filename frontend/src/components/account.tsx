@@ -4,11 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { api, readAccount } from "@/lib/api";
 import { accountIdentitySchema, accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
+import { PageContext } from "./page";
 import { useSession } from "./providers";
 import { Avatar, Footer, Icon, Modal, SiteHeader } from "./ui";
 import { RecentChats } from "./recent-chats";
 
 export function Profile() {
+  return (
+    <PageContext value="me">
+      <ProfileScreen />
+    </PageContext>
+  );
+}
+function ProfileScreen() {
   const { account, t, changeAccount, accountRedirect, notice } = useSession();
   const router = useRouter();
   const [edit, setEdit] = useState(false);

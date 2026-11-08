@@ -7,6 +7,7 @@ import { api, readStream, request } from "@/lib/api";
 import { ApiError, roomSchema, type Message, type Room } from "@/lib/contracts";
 import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
+import { PageContext } from "./page";
 import { useSession } from "./providers";
 import { ErrorState, Icon, Loading, Modal, ProfileMenu } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
@@ -35,6 +36,13 @@ function turnIndex(room: Room | undefined, clientMessageId: string) {
   return found === -1 ? users.length + 1 : found + 1;
 }
 export function Chat({ roomId }: { roomId: string }) {
+  return (
+    <PageContext value="chat_room">
+      <ChatRoom roomId={roomId} />
+    </PageContext>
+  );
+}
+function ChatRoom({ roomId }: { roomId: string }) {
   const { account, locale, t, notice, openLogin } = useSession();
   const query = useQueryClient();
   const router = useRouter();
@@ -345,7 +353,10 @@ export function Chat({ roomId }: { roomId: string }) {
           className="icon_button"
           aria-label={t("common.menu")}
           aria-expanded={menu}
-          onClick={() => setMenu(true)}
+          onClick={() => {
+            track("sidebar_toggled", "chat_room", { open: true });
+            setMenu(true);
+          }}
         >
           <Icon name="menu" />
         </button>
@@ -363,7 +374,10 @@ export function Chat({ roomId }: { roomId: string }) {
               type="button"
               className="login_link"
               aria-haspopup="dialog"
-              onClick={() => openLogin({ returnTo: `/chats/${roomId}` })}
+              onClick={() => {
+                track("login_link_clicked", "chat_room");
+                openLogin({ returnTo: `/chats/${roomId}` });
+              }}
             >
               {t("account.login.button")}
             </button>
@@ -377,11 +391,19 @@ export function Chat({ roomId }: { roomId: string }) {
           drawer
           title={t("common.recent")}
           titleContent={
-            <Link className="brand" href="/" onNavigate={() => setMenu(false)}>
+            <Link
+              className="brand"
+              href="/"
+              onClick={() => track("logo_clicked", "chat_room")}
+              onNavigate={() => setMenu(false)}
+            >
               {t("common.brand")}
             </Link>
           }
-          onClose={() => setMenu(false)}
+          onClose={() => {
+            track("sidebar_toggled", "chat_room", { open: false });
+            setMenu(false);
+          }}
         >
           <RecentChats
             currentId={roomId}
@@ -396,6 +418,7 @@ export function Chat({ roomId }: { roomId: string }) {
       {deleteTarget && (
         <DeleteChatModal
           chat={deleteTarget}
+          currentId={roomId}
           onClose={() => setDeleteTarget(null)}
           onDeleted={leaveDeletedRoom}
         />

@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
 import { useSession } from "./providers";
+import { useTrack } from "./page";
 
 export function Icon({
   name,
@@ -64,13 +65,18 @@ export function Icon({
 }
 export function LocaleSelect() {
   const { locale, setLocale, t } = useSession();
+  const send = useTrack();
   return (
     <label className="language_select">
       <Icon name="globe" />
       <span className="sr_only">{t("common.language")}</span>
       <select
         value={locale}
-        onChange={(e) => setLocale(e.target.value as Locale)}
+        onChange={(e) => {
+          const next = e.target.value as Locale;
+          send("locale_changed", { from: locale, to: next });
+          setLocale(next);
+        }}
       >
         {supportedLocales.map((value) => (
           <option key={value} value={value}>
@@ -104,6 +110,7 @@ export function SiteHeader({
   safe?: boolean;
 }) {
   const { t, account, openLogin } = useSession();
+  const send = useTrack();
   return (
     <header className="site_header">
       <div className="header_start">
@@ -117,7 +124,7 @@ export function SiteHeader({
             <Icon name="menu" />
           </button>
         )}
-        <Link className="brand" href="/">
+        <Link className="brand" href="/" onClick={() => send("logo_clicked")}>
           {t("common.brand")}
         </Link>
       </div>
@@ -129,7 +136,10 @@ export function SiteHeader({
             type="button"
             className="login_link"
             aria-haspopup="dialog"
-            onClick={() => openLogin()}
+            onClick={() => {
+              send("login_link_clicked");
+              openLogin();
+            }}
           >
             {t("account.login.button")}
           </button>
@@ -219,16 +229,20 @@ export function LoginOptions({
     </>
   );
 }
+type ProfileMenuItem =
+  "profile" | "charge" | "my_characters" | "create_character";
 // PostHog flag `character_creation_enabled` is not wired yet; the spec's default (and unreadable) value is false.
 const characterCreationEnabled = false;
 export function ProfileMenu() {
   const { t, account } = useSession();
+  const send = useTrack();
   const [open, setOpen] = useState(false);
   const [charge, setCharge] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
-  const close = (focusButton = true) => {
+  const choose = (item: ProfileMenuItem, focusButton = false) => {
+    send("profile_menu_item_clicked", { item });
     setOpen(false);
     if (focusButton) button.current?.focus();
   };
@@ -236,10 +250,13 @@ export function ProfileMenu() {
     if (!open) return;
     panel.current?.querySelector<HTMLElement>("a, button")?.focus();
     const onPointer = (event: PointerEvent) => {
-      if (!wrap.current?.contains(event.target as Node)) setOpen(false);
+      if (wrap.current?.contains(event.target as Node)) return;
+      send("profile_menu_closed", { method: "outside" });
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      send("profile_menu_closed", { method: "escape" });
       setOpen(false);
       button.current?.focus();
     };
@@ -249,7 +266,7 @@ export function ProfileMenu() {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, send]);
   return (
     <div className="profile_menu_wrap" ref={wrap}>
       <button
@@ -259,7 +276,10 @@ export function ProfileMenu() {
         aria-label={t("account.menu.profile_button")}
         aria-expanded={open}
         aria-controls="profile_menu"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          send("profile_button_clicked", { open: !open });
+          setOpen(!open);
+        }}
       >
         <Avatar photo={account.photo_url} name={account.nickname} />
       </button>
@@ -273,7 +293,7 @@ export function ProfileMenu() {
           <Link
             href="/me"
             className="menu_profile"
-            onClick={() => close(false)}
+            onClick={() => choose("profile")}
           >
             <Avatar photo={account.photo_url} name={account.nickname} />
             <strong>{account.nickname}</strong>
@@ -288,7 +308,7 @@ export function ProfileMenu() {
               className="menu_button"
               aria-haspopup="dialog"
               onClick={() => {
-                close();
+                choose("charge", true);
                 setCharge(true);
               }}
             >
@@ -299,13 +319,16 @@ export function ProfileMenu() {
             <>
               <hr />
               <div className="menu_line">
-                <Link href="/characters/mine" onClick={() => close(false)}>
+                <Link
+                  href="/characters/mine"
+                  onClick={() => choose("my_characters")}
+                >
                   {t("account.menu.my_characters")}
                 </Link>
                 <Link
                   href="/characters/new"
                   className="menu_button ghost"
-                  onClick={() => close(false)}
+                  onClick={() => choose("create_character")}
                 >
                   {t("account.menu.create_character")}
                 </Link>
@@ -329,6 +352,7 @@ export function ProfileMenu() {
 }
 function SafeToggle({ onLogin }: { onLogin: () => void }) {
   const { account, changeAccount, t, notice } = useSession();
+  const send = useTrack();
   const [busy, setBusy] = useState(false);
   const adultMode =
     !account.is_guest && account.adult_verified && account.adult_mode;
@@ -341,27 +365,38 @@ function SafeToggle({ onLogin }: { onLogin: () => void }) {
       disabled={busy}
       onClick={async () => {
         if (busy) return;
+        // SAFE on means adult mode off.
+        const to = adultMode ? "safe_on" : "safe_off";
+        const finish = (result: string) =>
+          send("safe_toggle_finished", { to, result });
+        send("safe_toggle_clicked", { to });
         if (account.is_guest) {
+          finish("login_required");
           onLogin();
           return;
         }
         if (!account.adult_verified) {
+          finish("verification_required");
           notice(t("character.adult_verification_required"));
           return;
         }
         setBusy(true);
+        let next;
         try {
-          changeAccount(
-            await api("/account/me/adult_mode", accountSchema, {
-              method: "PATCH",
-              body: JSON.stringify({ adult_mode: !adultMode }),
-            }),
-          );
+          next = await api("/account/me/adult_mode", accountSchema, {
+            method: "PATCH",
+            body: JSON.stringify({ adult_mode: !adultMode }),
+          });
         } catch (error) {
+          finish("failed");
           notice(t(errorMessageKey(error)));
-        } finally {
           setBusy(false);
+          return;
         }
+        // Before the account changes, so the event still carries the mode it was sent from.
+        finish("applied");
+        changeAccount(next);
+        setBusy(false);
       }}
     >
       <span>SAFE</span>
@@ -372,6 +407,8 @@ function SafeToggle({ onLogin }: { onLogin: () => void }) {
     </button>
   );
 }
+/** How a modal was closed: its close button, a click outside, or `Esc`. */
+export type CloseReason = "button" | "outside" | "escape";
 export function Modal({
   title,
   titleContent,
@@ -384,7 +421,7 @@ export function Modal({
   title: string;
   titleContent?: ReactNode;
   children: ReactNode;
-  onClose: () => void;
+  onClose: (reason: CloseReason) => void;
   drawer?: boolean;
   closeLabel?: string;
   className?: string;
@@ -419,7 +456,7 @@ export function Modal({
       aria-label={title}
       onCancel={(event) => {
         event.preventDefault();
-        close.current();
+        close.current("escape");
       }}
       onClick={(e) => {
         // A click outside closes a modal; the sidebar drawer stays open until closed on purpose.
@@ -431,7 +468,7 @@ export function Modal({
             e.clientY < box.top ||
             e.clientY > box.bottom
           )
-            close.current();
+            close.current("outside");
         }
       }}
     >
@@ -440,7 +477,7 @@ export function Modal({
         <button
           ref={closeButton}
           className="icon_button"
-          onClick={onClose}
+          onClick={() => onClose("button")}
           aria-label={closeLabel ?? t("common.close")}
         >
           <Icon name="close" />
@@ -495,6 +532,7 @@ const policies = [
 ] as const;
 export function Footer() {
   const { t } = useSession();
+  const send = useTrack();
   const [policy, setPolicy] = useState<(typeof policies)[number] | null>(null);
   return (
     <footer className="footer">
@@ -504,7 +542,10 @@ export function Footer() {
             key={key}
             type="button"
             aria-haspopup="dialog"
-            onClick={() => setPolicy(key)}
+            onClick={() => {
+              send("footer_link_clicked", { item: key });
+              setPolicy(key);
+            }}
           >
             {t(`character.footer.${key}`)}
           </button>
@@ -519,7 +560,10 @@ export function Footer() {
           title={t(`character.footer.${policy}`)}
           closeLabel={t("character.footer.policy_close")}
           className="policy_modal"
-          onClose={() => setPolicy(null)}
+          onClose={() => {
+            send("footer_modal_closed", { item: policy });
+            setPolicy(null);
+          }}
         >
           <div className="policy_body">
             {t("character.footer.policy_placeholder")}

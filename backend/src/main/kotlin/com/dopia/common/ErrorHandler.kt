@@ -26,12 +26,14 @@ class ErrorHandler {
         MissingServletRequestPartException::class,
     )
     fun unreadable(error: Exception): ResponseEntity<ErrorBody> =
-        ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+        ResponseEntity
+            .status(HttpStatus.UNPROCESSABLE_CONTENT)
             .body(ErrorBody("invalid_input", "request body could not be read", emptyList()))
 
     @ExceptionHandler(MaxUploadSizeExceededException::class)
     fun tooLarge(error: MaxUploadSizeExceededException): ResponseEntity<ErrorBody> =
-        ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+        ResponseEntity
+            .status(HttpStatus.PAYLOAD_TOO_LARGE)
             .body(ErrorBody("file_too_large", "upload exceeds the size limit", emptyList()))
 
     @ExceptionHandler(NoResourceFoundException::class)
@@ -40,13 +42,15 @@ class ErrorHandler {
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
     fun method(error: HttpRequestMethodNotSupportedException): ResponseEntity<ErrorBody> =
-        ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+        ResponseEntity
+            .status(HttpStatus.METHOD_NOT_ALLOWED)
             .body(ErrorBody("method_not_allowed", "method not allowed", emptyList()))
 
     @ExceptionHandler(Exception::class)
     fun other(error: Exception): ResponseEntity<ErrorBody> {
         log.error("unhandled error", error)
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ErrorBody("internal_error", "unexpected server error", emptyList()))
     }
 }

@@ -30,7 +30,10 @@ class HttpAiClientTest {
     private val mapper = JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build()
 
     /** Streams [tokens] tokens [gapMs] apart, then a completed event. */
-    private fun serve(tokens: Int, gapMs: Long) {
+    private fun serve(
+        tokens: Int,
+        gapMs: Long,
+    ) {
         server.createContext("/api/v1/chat/turn") { exchange ->
             exchange.requestHeaders.forEach { (k, v) -> headers[k.lowercase()] = v.first() }
             exchange.requestBody.readAllBytes()
@@ -44,8 +47,10 @@ class HttpAiClientTest {
                         Thread.sleep(gapMs)
                     }
                     out.write(
-                        ("event: completed\ndata: {\"output\":\"done\",\"meta\":{\"model\":\"m\",\"provider\":\"p\"," +
-                            "\"prompt_version\":\"chat_v1\",\"ttft_ms\":5}}\n\n").toByteArray(),
+                        (
+                            "event: completed\ndata: {\"output\":\"done\",\"meta\":{\"model\":\"m\",\"provider\":\"p\"," +
+                                "\"prompt_version\":\"chat_v1\",\"ttft_ms\":5}}\n\n"
+                        ).toByteArray(),
                     )
                 }
             } catch (_: java.io.IOException) {
@@ -55,18 +60,22 @@ class HttpAiClientTest {
         server.start()
     }
 
-    private fun client() = HttpAiClient(
-        AppProperties(ai = AppProperties.Ai(mode = "http", baseUrl = "http://127.0.0.1:${server.address.port}", timeout = Duration.ofSeconds(30))),
-        mapper,
-    )
+    private fun client() =
+        HttpAiClient(
+            AppProperties(
+                ai = AppProperties.Ai(mode = "http", baseUrl = "http://127.0.0.1:${server.address.port}", timeout = Duration.ofSeconds(30)),
+            ),
+            mapper,
+        )
 
-    private val request = AiTurnRequest(
-        character = AiCharacter("A", "f", "p", "s", "w"),
-        history = emptyList(),
-        summary = "",
-        userInput = "hi",
-        generation = AiGeneration("ko-KR", false),
-    )
+    private val request =
+        AiTurnRequest(
+            character = AiCharacter("A", "f", "p", "s", "w"),
+            history = emptyList(),
+            summary = "",
+            userInput = "hi",
+            generation = AiGeneration("ko-KR", false),
+        )
 
     @AfterEach
     fun stop() = server.stop(0)
@@ -76,13 +85,20 @@ class HttpAiClientTest {
         serve(tokens = 2, gapMs = 0)
         val account = UUID.randomUUID()
         val tokens = mutableListOf<String>()
-        val result = client().turn(
-            "req-123", account, request, UUID.randomUUID(),
-            object : AiTurnListener {
-                override fun onToken(text: String) { tokens += text }
-                override fun stillWanted() = true
-            },
-        )
+        val result =
+            client().turn(
+                "req-123",
+                account,
+                request,
+                UUID.randomUUID(),
+                object : AiTurnListener {
+                    override fun onToken(text: String) {
+                        tokens += text
+                    }
+
+                    override fun stillWanted() = true
+                },
+            )
         assertEquals("req-123", headers["x-request-id"])
         assertEquals(account.toString(), headers["x-account-id"])
         assertEquals(listOf("t0", "t1"), tokens)
@@ -98,9 +114,15 @@ class HttpAiClientTest {
         val started = System.nanoTime()
         assertFailsWith<AiFailure> {
             client().turn(
-                "req-stop", UUID.randomUUID(), request, UUID.randomUUID(),
+                "req-stop",
+                UUID.randomUUID(),
+                request,
+                UUID.randomUUID(),
                 object : AiTurnListener {
-                    override fun onToken(text: String) { seen++ }
+                    override fun onToken(text: String) {
+                        seen++
+                    }
+
                     override fun stillWanted() = seen < 1
                 },
             )

@@ -68,7 +68,7 @@ fix(backend): 턴 중단 시 스트림을 끝까지 읽지 않음
 | 방향 | 머지 방식 |
 |---|---|
 | 작업 브랜치 → `dev` | squash merge |
-| `dev` → `main` | merge commit |
+| `release` → `main` | merge commit |
 
 <br>
 

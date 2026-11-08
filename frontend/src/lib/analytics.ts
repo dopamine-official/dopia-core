@@ -20,6 +20,9 @@ const BASE_CONFIG: Partial<PostHogConfig> = {
   disable_surveys: true,
   advanced_disable_flags: true,
   disable_external_dependency_loading: true,
+  // PostHog drops automated browsers as bots. In dev, keep them so e2e can check events;
+  // PostHog hides `dev` records from every chart anyway.
+  opt_out_useragent_filter: process.env.NEXT_PUBLIC_APP_ENV === "dev",
 };
 
 function releaseProperties() {

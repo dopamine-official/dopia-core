@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { api, readStream, request } from "@/lib/api";
-import { ApiError, roomSchema, type Message } from "@/lib/contracts";
+import { ApiError, roomSchema, type Message, type Room } from "@/lib/contracts";
+import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
 import { useSession } from "./providers";
 import { ErrorState, Icon, Loading, Modal, ProfileMenu } from "./ui";
@@ -22,6 +23,16 @@ function readPending(key: string): Pending | null {
     sessionStorage.removeItem(key);
   }
   return null;
+}
+/** 1-based order of a user message among this room's saved user messages (TRACKING-PLAN 5-4). */
+function turnIndex(room: Room | undefined, clientMessageId: string) {
+  const users = (room?.messages ?? []).filter(
+    (message) => message.role === "user" && message.turn_status !== "failed",
+  );
+  const found = users.findIndex(
+    (message) => message.client_message_id === clientMessageId,
+  );
+  return found === -1 ? users.length + 1 : found + 1;
 }
 export function Chat({ roomId }: { roomId: string }) {
   const { account, locale, t, notice, openLogin } = useSession();
@@ -53,6 +64,9 @@ export function Chat({ roomId }: { roomId: string }) {
   const textarea = useRef<HTMLTextAreaElement>(null);
   const scene = useRef<HTMLElement>(null);
   const composing = useRef(false);
+  const viewed = useRef(false);
+  const redirected = useRef(false);
+  const retrying = useRef(false);
   const key = ["room", account.account_id, roomId, locale];
   const result = useQuery({
     queryKey: key,
@@ -60,14 +74,36 @@ export function Chat({ roomId }: { roomId: string }) {
     refetchInterval: (query) =>
       query.state.data?.generating || pendingRef.current ? 600 : false,
   });
+  /** Sent once however the room turns out gone: first read, a later refetch, or a send. */
+  const recordRedirect = useCallback(
+    (code: string) => {
+      if (redirected.current) return;
+      redirected.current = true;
+      track("chat_room_redirected", "chat_room", { room_id: roomId, code });
+    },
+    [roomId],
+  );
   function updateDraft(value: string) {
     draftRef.current = value;
     setDraft(value);
     sessionStorage.setItem(storageKey, value);
   }
-  function finishPending(failed: boolean, message = "chat.failed") {
+  function finishPending(
+    failed: boolean,
+    message = "chat.failed",
+    code = "unknown",
+  ) {
     const current = pendingRef.current;
     if (!current) return;
+    // Runs once per send: pendingRef is cleared right below.
+    if (failed)
+      track("message_reply_failed", "chat_room", { room_id: roomId, code });
+    else
+      track("message_reply_completed", "chat_room", {
+        room_id: roomId,
+        character_id: result.data?.character.id ?? null,
+        turn_index: turnIndex(result.data, current.client_message_id),
+      });
     pendingRef.current = null;
     restored.current = false;
     sending.current = false;
@@ -101,6 +137,7 @@ export function Chat({ roomId }: { roomId: string }) {
       finishPending(
         true,
         errorMessageKey(new ApiError(user.error_code ?? "", 0), "chat.failed"),
+        user.error_code ?? "unknown",
       );
     else if (user?.turn_status === "completed") finishPending(false);
     else if (result.data && current && restored.current && !user)
@@ -109,17 +146,42 @@ export function Chat({ roomId }: { roomId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result.data]);
   useEffect(() => {
+    // The first settled read of this room (TRACKING-PLAN 5-1, 5-2); later refetches are not views.
+    if (viewed.current || result.isPending) return;
+    viewed.current = true;
+    // A room that is gone or not this account's is recorded as a redirect below, not a view.
+    if (!(
+      result.error instanceof ApiError &&
+      [401, 403, 404].includes(result.error.status)
+    ))
+      track("chat_room_viewed", "chat_room", {
+        room_id: roomId,
+        character_id: result.data?.character.id ?? null,
+        load_result: result.isError ? "failed" : "loaded",
+      });
+  }, [result.isPending, result.isError, result.error, result.data, roomId]);
+  useEffect(() => {
+    // A manual retry of a failed room read settles here (TRACKING-PLAN 3-19).
+    if (!retrying.current || result.isFetching) return;
+    retrying.current = false;
+    track("retry_finished", "chat_room", {
+      target: "chat_room",
+      result: result.isError ? "failed" : "loaded",
+    });
+  }, [result.isFetching, result.isError]);
+  useEffect(() => {
     if (
       result.error instanceof ApiError &&
       [401, 403, 404].includes(result.error.status)
     ) {
+      if (result.error.status !== 401) recordRedirect(result.error.code);
       controller.current?.abort();
       sessionStorage.removeItem(storageKey);
       sessionStorage.removeItem(pendingKey);
       notice(t(errorMessageKey(result.error)));
       router.replace("/");
     }
-  }, [result.error, router, storageKey, pendingKey, notice, t]);
+  }, [result.error, router, storageKey, pendingKey, notice, t, recordRedirect]);
   useEffect(() => {
     const element = scene.current;
     if (element && result.data && (follow.current || firstScroll.current)) {
@@ -127,7 +189,7 @@ export function Chat({ roomId }: { roomId: string }) {
       firstScroll.current = false;
     }
   }, [result.data, partial, pending]);
-  async function send() {
+  async function send(method: "button" | "enter") {
     const content = draftRef.current.trim();
     if (
       !content ||
@@ -137,6 +199,17 @@ export function Chat({ roomId }: { roomId: string }) {
       !result.data
     )
       return;
+    track("message_send_clicked", "chat_room", {
+      room_id: roomId,
+      character_id: result.data.character.id,
+      method,
+      // Characters as people see them: an emoji counts once, not as two UTF-16 units.
+      length: Array.from(
+        new Intl.Segmenter(locale, { granularity: "grapheme" }).segment(
+          content,
+        ),
+      ).length,
+    });
     const current = { client_message_id: crypto.randomUUID(), content };
     pendingRef.current = current;
     restored.current = false;
@@ -176,6 +249,7 @@ export function Chat({ roomId }: { roomId: string }) {
           finishPending(
             true,
             errorMessageKey(new ApiError(event.data.code, 0), "chat.failed"),
+            event.data.code,
           );
           void query.invalidateQueries({
             queryKey: ["room", account.account_id, roomId],
@@ -188,10 +262,12 @@ export function Chat({ roomId }: { roomId: string }) {
       if (error instanceof ApiError && error.status === 401) {
         // Identity recovery already failed or switched users; do not start
         // another request for the previous account's pending work.
-        if (error.code !== "account_changed") finishPending(true, message);
+        if (error.code !== "account_changed")
+          finishPending(true, message, error.code);
         return;
       }
       if (error instanceof ApiError && [403, 404].includes(error.status)) {
+        recordRedirect(error.code);
         controller.current?.abort();
         sessionStorage.removeItem(storageKey);
         sessionStorage.removeItem(pendingKey);
@@ -200,7 +276,7 @@ export function Chat({ roomId }: { roomId: string }) {
         return;
       }
       if (error instanceof ApiError && [409, 422, 429].includes(error.status)) {
-        finishPending(true, message);
+        finishPending(true, message, error.code);
         if (error.status === 409)
           void query.invalidateQueries({ queryKey: key });
         return;
@@ -215,17 +291,18 @@ export function Chat({ roomId }: { roomId: string }) {
             message.role === "user",
         );
         if (!user || user.turn_status === "failed")
-          finishPending(true, message);
+          finishPending(true, message, user?.error_code ?? errorCode(error));
         else if (user.turn_status === "completed") finishPending(false);
         // A generating turn stays locked and is polled until its terminal state.
       } catch {
-        if (!disposed.current) finishPending(true, message);
+        if (!disposed.current) finishPending(true, message, errorCode(error));
       }
     }
   }
   function addAction() {
     const input = textarea.current;
     if (!input) return;
+    track("action_button_clicked", "chat_room", { room_id: roomId });
     const start = input.selectionStart;
     const end = input.selectionEnd;
     if (draftRef.current.length + 2 > 4000) return;
@@ -340,7 +417,12 @@ export function Chat({ roomId }: { roomId: string }) {
         ) : result.isError ? (
           <ErrorState
             error={result.error}
-            retry={() => void result.refetch()}
+            retry={() => {
+              if (retrying.current) return;
+              retrying.current = true;
+              track("retry_clicked", "chat_room", { target: "chat_room" });
+              void result.refetch();
+            }}
           />
         ) : (
           <>
@@ -404,6 +486,7 @@ export function Chat({ roomId }: { roomId: string }) {
           className="scroll_bottom icon_button"
           aria-label={t("chat.bottom")}
           onClick={() => {
+            track("scroll_bottom_clicked", "chat_room", { room_id: roomId });
             if (scene.current)
               scene.current.scrollTo({
                 top: scene.current.scrollHeight,
@@ -419,7 +502,7 @@ export function Chat({ roomId }: { roomId: string }) {
         className="composer"
         onSubmit={(event) => {
           event.preventDefault();
-          void send();
+          void send("button");
         }}
       >
         <textarea
@@ -446,7 +529,7 @@ export function Chat({ roomId }: { roomId: string }) {
               event.keyCode !== 229
             ) {
               event.preventDefault();
-              void send();
+              void send("enter");
             }
           }}
         />

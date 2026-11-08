@@ -1,4 +1,6 @@
-import type { NextRequest } from "next/server";
+import { SeverityNumber } from "@opentelemetry/api-logs";
+import { after, type NextRequest } from "next/server";
+import { loggerProvider, posthogLogger } from "../../../../../instrumentation";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +9,18 @@ export const dynamic = "force-dynamic";
 // through to an external service.
 const upstream = process.env.API_UPSTREAM;
 
-function unavailable() {
+function flushPostHogLogs() {
+  const provider = loggerProvider;
+  if (provider) after(() => provider.forceFlush().catch(() => undefined));
+}
+
+function unavailable(request: NextRequest) {
+  posthogLogger?.emit({
+    body: "API proxy request skipped because no upstream is configured",
+    severityNumber: SeverityNumber.WARN,
+    attributes: { "http.request.method": request.method },
+  });
+  flushPostHogLogs();
   return Response.json(
     {
       code: "mock_not_initialized",
@@ -22,7 +35,12 @@ async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
 ) {
-  if (!upstream) return unavailable();
+  if (!upstream) return unavailable(request);
+  posthogLogger?.emit({
+    body: "API proxy request forwarding to configured upstream",
+    severityNumber: SeverityNumber.INFO,
+    attributes: { "http.request.method": request.method },
+  });
   const { path } = await context.params;
   const target = new URL(`/api/v1/${path.join("/")}`, upstream);
   target.search = request.nextUrl.search;
@@ -40,6 +58,15 @@ async function proxy(
     cache: "no-store",
     signal: request.signal,
   });
+  posthogLogger?.emit({
+    body: "API proxy received upstream response",
+    severityNumber: SeverityNumber.INFO,
+    attributes: {
+      "http.request.method": request.method,
+      "http.response.status_code": response.status,
+    },
+  });
+  flushPostHogLogs();
   const out = new Headers();
   for (const [name, value] of response.headers) {
     if (["set-cookie", "content-encoding", "content-length", "transfer-encoding", "connection"].includes(name))

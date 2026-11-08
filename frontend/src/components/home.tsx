@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { api } from "@/lib/api";
 import { homeSchema, openSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
@@ -64,6 +65,10 @@ export function Home() {
       if (controller.signal.aborted) return;
       await query.invalidateQueries({ queryKey: ["recent"] });
       if (controller.signal.aborted) return;
+      posthog.capture("chat_opened", {
+        character_id: characterId,
+        room_created: result.created,
+      });
       router.push(`/chats/${result.room_id}`);
     } catch (error) {
       if (controller.signal.aborted) return;

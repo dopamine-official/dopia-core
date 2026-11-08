@@ -16,10 +16,15 @@
     "test:e2e:server": "NEXT_PUBLIC_API_MODE=server API_UPSTREAM=http://127.0.0.1:8080 playwright test"
   },
   "dependencies": {
+    "@opentelemetry/api-logs": "^0.223.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.301.0",
+    "@opentelemetry/resources": "^3.1.0",
+    "@opentelemetry/sdk-logs": "^3.1.0",
     "@tanstack/react-query": "5.100.14",
     "idb": "8.0.0",
     "msw": "2.14.6",
     "next": "16.2.6",
+    "posthog-js": "^1.447.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zod": "4.4.3"

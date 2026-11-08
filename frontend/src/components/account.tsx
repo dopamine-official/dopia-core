@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import posthog from "posthog-js";
 import { api, readAccount } from "@/lib/api";
 import { accountIdentitySchema, accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
@@ -32,6 +33,7 @@ export function Profile() {
         accountIdentitySchema,
         { method: "POST" },
       );
+      posthog.capture(remove ? "account_withdrawn" : "account_logged_out");
       changeAccount(await readAccount(issued.account_id), "/");
     } catch (error) {
       setWithdraw(false);
@@ -161,6 +163,10 @@ function EditProfile({ onClose }: { onClose: () => void }) {
           body: form,
         }),
       );
+      posthog.capture("profile_updated", {
+        nickname_changed: nickname.trim() !== account.nickname,
+        photo_changed: Boolean(file),
+      });
       notice(t("account.me.saved"));
       onClose();
     } catch (error) {

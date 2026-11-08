@@ -15,6 +15,11 @@ import { type Account } from "@/lib/contracts";
 import { defaultLocale, resolveLocale, text, type Locale } from "@/i18n";
 import { messages } from "@/lib/translations";
 import { errorMessageKey } from "@/lib/errors";
+import posthog from "posthog-js";
+
+const posthogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_KEY && process.env.NEXT_PUBLIC_POSTHOG_HOST,
+);
 
 type Session = {
   account: Account;
@@ -85,8 +90,15 @@ export function Providers({ children }: { children: ReactNode }) {
   }, [toast]);
   const applyAccount = useCallback(
     (next: Account) => {
-      const previousId = accountRef.current?.account_id;
+      const previous = accountRef.current;
+      const previousId = previous?.account_id;
       const changed = previousId !== next.account_id;
+
+      if (posthogConfigured && changed) {
+        if (previous && !previous.is_guest) posthog.reset();
+        if (!next.is_guest) posthog.identify(next.account_id);
+      }
+
       accountRef.current = next;
       setApiContext(localeRef.current, next.account_id);
       setAccount(next);

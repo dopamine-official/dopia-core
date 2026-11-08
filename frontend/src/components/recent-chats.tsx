@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import posthog from "posthog-js";
 import { api, request } from "@/lib/api";
 import { recentSchema, type RecentResponse } from "@/lib/contracts";
 import { useSession } from "./providers";
@@ -156,6 +157,7 @@ export function DeleteChatModal({
     setBusy(true);
     try {
       await request(`/chats/${chat.room_id}`, { method: "DELETE" });
+      posthog.capture("chat_deleted");
       await onDeleted?.(chat);
       await query.invalidateQueries({ queryKey: ["recent"] });
     } catch (error) {

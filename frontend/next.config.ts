@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+
+const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+const posthogAssetsHost = posthogHost?.replace(".i.", "-assets.i.");
+const posthogScriptSrc = posthogAssetsHost ? ` ${posthogAssetsHost}` : "";
+const posthogConnectSrc = posthogHost ? ` ${posthogHost}` : "";
+
 const config: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
@@ -19,7 +25,7 @@ const config: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.r2.dev; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; worker-src 'self' blob:; font-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'",
+              `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'${posthogScriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.r2.dev; connect-src 'self' ws://127.0.0.1:* ws://localhost:*${posthogConnectSrc}; worker-src 'self' blob:; font-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self`,
           },
         ],
       },

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { localeNames, supportedLocales, type Locale } from "@/i18n";
 import { api } from "@/lib/api";
@@ -333,12 +334,16 @@ function SafeToggle({ onLogin }: { onLogin: () => void }) {
         }
         setBusy(true);
         try {
+          const nextAdultMode = !adultMode;
           changeAccount(
             await api("/account/me/adult_mode", accountSchema, {
               method: "PATCH",
-              body: JSON.stringify({ adult_mode: !adultMode }),
+              body: JSON.stringify({ adult_mode: nextAdultMode }),
             }),
           );
+          posthog.capture("adult_mode_changed", {
+            adult_mode_enabled: nextAdultMode,
+          });
         } catch (error) {
           notice(t(errorMessageKey(error)));
         } finally {

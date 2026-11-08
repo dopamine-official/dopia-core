@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { api, readStream, request } from "@/lib/api";
 import { ApiError, roomSchema, type Message } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
@@ -150,16 +151,24 @@ export function Chat({ roomId }: { roomId: string }) {
         body: JSON.stringify(current),
         signal: abort.signal,
       });
+      let accepted = false;
       await readStream(response, (event) => {
         if (
           disposed.current ||
           pendingRef.current?.client_message_id !== current.client_message_id
         )
           return;
-        if (event.event === "accepted")
+        if (event.event === "accepted") {
+          if (!accepted) {
+            accepted = true;
+            posthog.capture("chat_message_sent", {
+              message_length: content.length,
+            });
+          }
           void query.invalidateQueries({
             queryKey: ["room", account.account_id, roomId],
           });
+        }
         else if (event.event === "token")
           setPartial((value) => value + event.data.text);
         else if (event.event === "completed") {

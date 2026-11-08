@@ -120,3 +120,61 @@ test("a missing room redirects home and records why", async ({
     analytics.filter((item) => item.event === "chat_room_viewed"),
   ).toHaveLength(0);
 });
+
+test("a room deleted in another tab records the redirect when this tab reads it again", async ({
+  page,
+  context,
+  analytics,
+}) => {
+  test.setTimeout(60_000);
+  const room = await openChat(page);
+  await input(page).fill("안녕");
+  await input(page).press("Enter");
+  await expect(page.locator(".message.assistant")).toHaveCount(2);
+
+  const other = await context.newPage();
+  await other.goto("/");
+  await expect(
+    other.getByRole("heading", { name: "오리지널", exact: true }),
+  ).toBeVisible();
+  const more = other.getByRole("button", {
+    name: "겨울 대화 설정",
+    exact: true,
+  });
+  // Narrow screens keep recent chats behind the menu button.
+  if (!(await more.isVisible()))
+    await other
+      .getByRole("button", { name: "대화 목록 열기 또는 닫기", exact: true })
+      .click();
+  await more.click();
+  await other.getByRole("menuitem", { name: "삭제", exact: true }).click();
+  await other
+    .getByRole("dialog")
+    .getByRole("button", { name: "대화 삭제", exact: true })
+    .click();
+  await expect(
+    other.getByRole("button", { name: "겨울 대화 설정", exact: true }),
+  ).toHaveCount(0);
+
+  // Back on the first tab once its data is stale (10 s): the refetch finds the room gone.
+  await page.bringToFront();
+  await page.waitForTimeout(10_500);
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect(page).toHaveURL("/");
+  await sent(analytics, "chat_room_redirected", { room_id: room });
+  expect(
+    analytics.filter((item) => item.event === "chat_room_redirected"),
+  ).toHaveLength(1);
+});
+
+test("message length counts an emoji as one character", async ({
+  page,
+  analytics,
+}) => {
+  await openChat(page);
+  await input(page).fill("안녕😀");
+  await input(page).press("Enter");
+  await sent(analytics, "message_send_clicked", { length: 3 });
+});

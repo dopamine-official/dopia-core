@@ -65,6 +65,7 @@ export function Chat({ roomId }: { roomId: string }) {
   const scene = useRef<HTMLElement>(null);
   const composing = useRef(false);
   const viewed = useRef(false);
+  const redirected = useRef(false);
   const retrying = useRef(false);
   const key = ["room", account.account_id, roomId, locale];
   const result = useQuery({
@@ -73,6 +74,12 @@ export function Chat({ roomId }: { roomId: string }) {
     refetchInterval: (query) =>
       query.state.data?.generating || pendingRef.current ? 600 : false,
   });
+  /** Sent once however the room turns out gone: first read, a later refetch, or a send. */
+  function recordRedirect(code: string) {
+    if (redirected.current) return;
+    redirected.current = true;
+    track("chat_room_redirected", "chat_room", { room_id: roomId, code });
+  }
   function updateDraft(value: string) {
     draftRef.current = value;
     setDraft(value);
@@ -139,15 +146,11 @@ export function Chat({ roomId }: { roomId: string }) {
     // The first settled read of this room (TRACKING-PLAN 5-1, 5-2); later refetches are not views.
     if (viewed.current || result.isPending) return;
     viewed.current = true;
-    if (
+    // A room that is gone or not this account's is recorded as a redirect below, not a view.
+    if (!(
       result.error instanceof ApiError &&
-      [403, 404].includes(result.error.status)
-    )
-      track("chat_room_redirected", "chat_room", {
-        room_id: roomId,
-        code: result.error.code,
-      });
-    else if (!(result.error instanceof ApiError && result.error.status === 401))
+      [401, 403, 404].includes(result.error.status)
+    ))
       track("chat_room_viewed", "chat_room", {
         room_id: roomId,
         character_id: result.data?.character.id ?? null,
@@ -168,6 +171,7 @@ export function Chat({ roomId }: { roomId: string }) {
       result.error instanceof ApiError &&
       [401, 403, 404].includes(result.error.status)
     ) {
+      if (result.error.status !== 401) recordRedirect(result.error.code);
       controller.current?.abort();
       sessionStorage.removeItem(storageKey);
       sessionStorage.removeItem(pendingKey);
@@ -196,7 +200,12 @@ export function Chat({ roomId }: { roomId: string }) {
       room_id: roomId,
       character_id: result.data.character.id,
       method,
-      length: content.length,
+      // Characters as people see them: an emoji counts once, not as two UTF-16 units.
+      length: Array.from(
+        new Intl.Segmenter(locale, { granularity: "grapheme" }).segment(
+          content,
+        ),
+      ).length,
     });
     const current = { client_message_id: crypto.randomUUID(), content };
     pendingRef.current = current;
@@ -255,10 +264,7 @@ export function Chat({ roomId }: { roomId: string }) {
         return;
       }
       if (error instanceof ApiError && [403, 404].includes(error.status)) {
-        track("chat_room_redirected", "chat_room", {
-          room_id: roomId,
-          code: error.code,
-        });
+        recordRedirect(error.code);
         controller.current?.abort();
         sessionStorage.removeItem(storageKey);
         sessionStorage.removeItem(pendingKey);

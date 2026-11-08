@@ -10,8 +10,6 @@ import { errorCode } from "@/lib/analytics";
 import { useRetry, useTrack } from "./page";
 import { ErrorState, Icon, Loading, Modal, type CloseReason } from "./ui";
 export type RecentChat = RecentResponse["chats"][number];
-// Lists whose failure notice is already recorded and not yet replaced by a loaded list.
-const failureShown = new Set<string>();
 export function RecentChats({
   currentId,
   onNavigate,
@@ -27,29 +25,29 @@ export function RecentChats({
   const key = ["recent", account.account_id, locale];
   const result = useQuery({
     queryKey: key,
-    queryFn: async ({ signal }) => {
-      // Recorded here, once per read, because a screen can show this list twice (the
-      // sidebar and the mobile drawer). Only when the failure notice first appears: a
-      // later read that fails again, such as the drawer's read on opening, changes
-      // nothing on screen.
-      const id = JSON.stringify(key);
-      try {
-        const data = await api("/chats/recent", recentSchema, { signal });
-        failureShown.delete(id);
-        return data;
-      } catch (error) {
-        if (!signal.aborted && !failureShown.has(id)) {
-          failureShown.add(id);
-          send("recent_chats_load_failed");
-        }
-        throw error;
-      }
-    },
+    queryFn: ({ signal }) => api("/chats/recent", recentSchema, { signal }),
     refetchInterval: (query) => (query.state.status === "error" ? false : 3000),
   });
   const retry = useRetry("recent_chats", () => result.refetch());
+  // Once per failure shown by this list, until it loads again. A later read that fails
+  // again (window focus, a failed retry) leaves the same notice up and is not counted.
+  const reported = useRef(false);
+  useEffect(() => {
+    if (result.isSuccess) reported.current = false;
+  }, [result.isSuccess]);
   if (result.isPending) return <Loading />;
-  if (result.isError) return <ErrorState error={result.error} retry={retry} />;
+  if (result.isError)
+    return (
+      <ErrorState
+        error={result.error}
+        retry={retry}
+        onShown={() => {
+          if (reported.current) return;
+          reported.current = true;
+          send("recent_chats_load_failed");
+        }}
+      />
+    );
   if (!result.data.chats.length)
     return (
       <div className="empty_recent">
@@ -130,26 +128,29 @@ function RecentMenu({
       });
       setOpen(false);
     };
+    // On the window, before anything else, so Esc closes the menu even after focus has
+    // left it, and closes only the menu, not the drawer dialog around it.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      send("recent_chat_menu_closed", {
+        room_id: chat.room_id,
+        method: "escape",
+      });
+      setOpen(false);
+      if (wrap.current?.contains(document.activeElement))
+        button.current?.focus();
+    };
     document.addEventListener("pointerdown", onPointer);
-    return () => document.removeEventListener("pointerdown", onPointer);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, [open, send, chat.room_id]);
   return (
-    <div
-      className="recent_menu_wrap"
-      ref={wrap}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape" || !open) return;
-        // Close only this menu, not the drawer dialog around it.
-        event.preventDefault();
-        event.stopPropagation();
-        send("recent_chat_menu_closed", {
-          room_id: chat.room_id,
-          method: "escape",
-        });
-        setOpen(false);
-        button.current?.focus();
-      }}
-    >
+    <div className="recent_menu_wrap" ref={wrap}>
       <button
         ref={button}
         type="button"

@@ -1,6 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { localeNames, supportedLocales, type Locale } from "@/i18n";
 import { api } from "@/lib/api";
 import { accountSchema } from "@/lib/contracts";
@@ -491,14 +497,39 @@ export function ErrorState({
   retry,
   message,
   error,
+  onShown,
 }: {
   retry: () => void;
   message?: string;
   error?: unknown;
+  // Runs when the notice is first actually on screen, not when it is only rendered: a
+  // hidden sidebar or a closed drawer can hold it out of sight.
+  onShown?: () => void;
 }) {
   const { t } = useSession();
+  const box = useRef<HTMLDivElement>(null);
+  const shown = useRef(onShown);
+  useLayoutEffect(() => {
+    shown.current = onShown;
+  });
+  const watch = !!onShown;
+  useEffect(() => {
+    const node = box.current;
+    if (!watch || !node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Edge contact (a sidebar slid just off screen) reports a ratio of 0.
+        if (!entries.some((entry) => entry.intersectionRatio > 0)) return;
+        observer.disconnect();
+        shown.current?.();
+      },
+      { threshold: [0, 0.01] },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [watch]);
   return (
-    <div className="empty_state">
+    <div className="empty_state" ref={box}>
       <p role="alert">
         {message ?? t(errorMessageKey(error, "common.load_failed"))}
       </p>

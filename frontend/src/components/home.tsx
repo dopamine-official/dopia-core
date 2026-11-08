@@ -43,7 +43,8 @@ function useCardViews() {
     observer.current ??= new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
+          // Some browsers report any overlap as intersecting; require half the card.
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.5) continue;
           const found = spots.current.get(entry.target);
           observer.current?.unobserve(entry.target);
           if (!found) continue;

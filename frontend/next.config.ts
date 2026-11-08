@@ -1,5 +1,10 @@
+import path from "node:path";
 import type { NextConfig } from "next";
+// pnpm links packages from the workspace root, so Turbopack must resolve from there.
+const workspaceRoot = path.join(import.meta.dirname, "..");
 const config: NextConfig = {
+  turbopack: { root: workspaceRoot },
+  outputFileTracingRoot: workspaceRoot,
   reactStrictMode: true,
   devIndicators: false,
   async rewrites() {

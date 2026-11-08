@@ -66,7 +66,7 @@ curl http://127.0.0.1:8100/health
 | `MODELS_CONFIG_PATH` | `config/models.yaml` | 경로 파일 위치. `config/models.fake.yaml`이면 키 없이 동작 |
 | `PROMPT_DIR` | `prompt` | 템플릿 폴더 |
 | `PORT` | `8100` | 수신 포트. Railway가 넣어 줌 |
-| `APP_ENV` | `dev` | `dev` 또는 `prod` |
+| `APP_ENV` | `dev` | `dev` 또는 `prod`. `POSTHOG_API_KEY`가 있으면 필수. 없거나 다른 값이면 기동 실패 |
 | `APP_RELEASE` | `RAILWAY_GIT_COMMIT_SHA` 또는 `local` | PostHog AI 호출 기록의 `release` |
 | `CHAT_REQUEST_TIMEOUT_SECONDS` | `90` | 채팅 요청 전체 한도. 넘으면 `failed` `timeout` |
 | `COMPACT_REQUEST_TIMEOUT_SECONDS` | `60` | 요약 요청 전체 한도. 넘으면 502 `timeout` |

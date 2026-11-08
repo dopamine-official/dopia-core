@@ -126,7 +126,7 @@ test("a room deleted in another tab records the redirect when this tab reads it 
   context,
   analytics,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const room = await openChat(page);
   await input(page).fill("안녕");
   await input(page).press("Enter");
@@ -156,13 +156,25 @@ test("a room deleted in another tab records the redirect when this tab reads it 
     other.getByRole("button", { name: "겨울 대화 설정", exact: true }),
   ).toHaveCount(0);
 
-  // Back on the first tab once its data is stale (10 s): the refetch finds the room gone.
+  // Back on the first tab: the app reads the room again when the tab shows and its data is
+  // older than 10 s. Headless browsers may still report this tab as hidden, so say it is
+  // visible, and keep signalling until the stale read happens (timing differs on CI).
   await page.bringToFront();
-  await page.waitForTimeout(10_500);
-  await page.evaluate(() =>
-    document.dispatchEvent(new Event("visibilitychange")),
-  );
-  await expect(page).toHaveURL("/");
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => {
+          Object.defineProperty(document, "visibilityState", {
+            configurable: true,
+            get: () => "visible",
+          });
+          document.dispatchEvent(new Event("visibilitychange"));
+        });
+        return new URL(page.url()).pathname;
+      },
+      { timeout: 40_000, intervals: [1_000] },
+    )
+    .toBe("/");
   await sent(analytics, "chat_room_redirected", { room_id: room });
   expect(
     analytics.filter((item) => item.event === "chat_room_redirected"),

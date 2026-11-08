@@ -67,7 +67,9 @@ describe("account and conversation contracts", () => {
         adult_mode: false,
         adult_verified: false,
       });
-      expect(ownedRoom(restored, roomId).messages).toEqual(state.rooms[0].messages);
+      expect(ownedRoom(restored, roomId).messages).toEqual(
+        state.rooms[0].messages,
+      );
       expect(restored.accounts[0].adult_mode).toBe(false);
     },
   );

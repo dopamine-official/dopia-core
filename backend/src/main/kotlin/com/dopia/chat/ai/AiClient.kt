@@ -3,9 +3,24 @@ package com.dopia.chat.ai
 import com.dopia.chat.AiMeta
 
 /** Request body of POST /api/v1/chat/turn (AI 5-2). */
-data class AiCharacter(val name: String, val gender: String, val personality: String, val speechStyle: String, val worldSetting: String)
-data class AiHistoryItem(val role: String, val content: String)
-data class AiGeneration(val locale: String, val adultMode: Boolean)
+data class AiCharacter(
+    val name: String,
+    val gender: String,
+    val personality: String,
+    val speechStyle: String,
+    val worldSetting: String,
+)
+
+data class AiHistoryItem(
+    val role: String,
+    val content: String,
+)
+
+data class AiGeneration(
+    val locale: String,
+    val adultMode: Boolean,
+)
+
 data class AiTurnRequest(
     val character: AiCharacter,
     val history: List<AiHistoryItem>,
@@ -14,7 +29,10 @@ data class AiTurnRequest(
     val generation: AiGeneration,
 )
 
-class AiFailure(val code: String, override val message: String) : RuntimeException(message)
+class AiFailure(
+    val code: String,
+    override val message: String,
+) : RuntimeException(message)
 
 /** Receives the AI stream. Callbacks run on the turn's executor thread. */
 interface AiTurnListener {
@@ -27,7 +45,10 @@ interface AiTurnListener {
     fun stillWanted(): Boolean
 }
 
-data class AiTurnResult(val output: String, val meta: AiMeta)
+data class AiTurnResult(
+    val output: String,
+    val meta: AiMeta,
+)
 
 interface AiClient {
     /**

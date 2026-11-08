@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, readAccount } from "@/lib/api";
 import { accountIdentitySchema, accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
@@ -18,9 +18,11 @@ export function Profile() {
     if (!account.is_guest) return;
     // Guests cannot see this page: show the login modal over home and return here after login.
     const failed =
-      new URLSearchParams(window.location.search).get("error") === "login_failed";
+      new URLSearchParams(window.location.search).get("error") ===
+      "login_failed";
     router.replace(
-      accountRedirect ?? `/?login=1&return_to=%2Fme${failed ? "&error=login_failed" : ""}`,
+      accountRedirect ??
+        `/?login=1&return_to=%2Fme${failed ? "&error=login_failed" : ""}`,
     );
   }, [account.is_guest, accountRedirect, router]);
   if (account.is_guest) return null;
@@ -115,15 +117,19 @@ function EditProfile({ onClose }: { onClose: () => void }) {
   const { account, t, changeAccount, notice } = useSession();
   const [nickname, setNickname] = useState(account.nickname ?? "");
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState(account.photo_url);
+  const fileUrl = useMemo(
+    () => (file ? URL.createObjectURL(file) : null),
+    [file],
+  );
+  const preview = fileUrl ?? account.photo_url;
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+  useEffect(
+    () => () => {
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+    },
+    [fileUrl],
+  );
   async function chooseFile(selected?: File) {
     if (!selected) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(selected.type)) {

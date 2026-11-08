@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { localeNames, supportedLocales, type Locale } from "@/i18n";
 import { api } from "@/lib/api";
@@ -50,7 +49,14 @@ export function Icon({
       {name === "globe" && <circle cx="12" cy="12" r="9" />}
       {name === "more" &&
         [5, 12, 19].map((cx) => (
-          <circle key={cx} cx={cx} cy="12" r="1.6" fill="currentColor" stroke="none" />
+          <circle
+            key={cx}
+            cx={cx}
+            cy="12"
+            r="1.6"
+            fill="currentColor"
+            stroke="none"
+          />
         ))}
       <path d={paths[name]} />
     </svg>
@@ -138,7 +144,11 @@ export function LoginHost() {
   const { t, login, closeLogin } = useSession();
   if (!login) return null;
   return (
-    <Modal title={t("account.login.title")} className="login_modal" onClose={closeLogin}>
+    <Modal
+      title={t("account.login.title")}
+      className="login_modal"
+      onClose={closeLogin}
+    >
       <p className="muted">{t("account.login.description")}</p>
       <LoginOptions returnTo={login.returnTo} initialError={login.error} />
     </Modal>
@@ -260,7 +270,11 @@ export function ProfileMenu() {
           className="profile_menu"
           aria-label={t("account.menu.name")}
         >
-          <Link href="/me" className="menu_profile" onClick={() => close(false)}>
+          <Link
+            href="/me"
+            className="menu_profile"
+            onClick={() => close(false)}
+          >
             <Avatar photo={account.photo_url} name={account.nickname} />
             <strong>{account.nickname}</strong>
           </Link>
@@ -301,8 +315,13 @@ export function ProfileMenu() {
         </nav>
       )}
       {charge && (
-        <Modal title={t("account.menu.charge_title")} onClose={() => setCharge(false)}>
-          <div className="policy_body">{t("account.menu.charge_placeholder")}</div>
+        <Modal
+          title={t("account.menu.charge_title")}
+          onClose={() => setCharge(false)}
+        >
+          <div className="policy_body">
+            {t("account.menu.charge_placeholder")}
+          </div>
         </Modal>
       )}
     </div>
@@ -310,7 +329,6 @@ export function ProfileMenu() {
 }
 function SafeToggle({ onLogin }: { onLogin: () => void }) {
   const { account, changeAccount, t, notice } = useSession();
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const adultMode =
     !account.is_guest && account.adult_verified && account.adult_mode;
@@ -375,7 +393,9 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const close = useRef(onClose);
-  close.current = onClose;
+  useLayoutEffect(() => {
+    close.current = onClose;
+  });
   useLayoutEffect(() => {
     const dialog = ref.current!;
     const opener = document.activeElement;
@@ -393,14 +413,17 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={[drawer ? "drawer" : "modal", className].filter(Boolean).join(" ")}
+      className={[drawer ? "drawer" : "modal", className]
+        .filter(Boolean)
+        .join(" ")}
       aria-label={title}
       onCancel={(event) => {
         event.preventDefault();
         close.current();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
+        // A click outside closes a modal; the sidebar drawer stays open until closed on purpose.
+        if (!drawer && e.target === e.currentTarget) {
           const box = e.currentTarget.getBoundingClientRect();
           if (
             e.clientX < box.left ||
@@ -439,7 +462,9 @@ export function ErrorState({
   const { t } = useSession();
   return (
     <div className="empty_state">
-      <p role="alert">{message ?? t(errorMessageKey(error, "common.load_failed"))}</p>
+      <p role="alert">
+        {message ?? t(errorMessageKey(error, "common.load_failed"))}
+      </p>
       <button className="button" onClick={retry}>
         {t("common.retry")}
       </button>
@@ -496,7 +521,9 @@ export function Footer() {
           className="policy_modal"
           onClose={() => setPolicy(null)}
         >
-          <div className="policy_body">{t("character.footer.policy_placeholder")}</div>
+          <div className="policy_body">
+            {t("character.footer.policy_placeholder")}
+          </div>
         </Modal>
       )}
     </footer>

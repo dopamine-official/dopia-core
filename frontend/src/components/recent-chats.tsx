@@ -22,10 +22,13 @@ export function RecentChats({
   const result = useQuery({
     queryKey: ["recent", account.account_id, locale],
     queryFn: ({ signal }) => api("/chats/recent", recentSchema, { signal }),
-    refetchInterval: (query) => query.state.status === "error" ? false : 3000,
+    refetchInterval: (query) => (query.state.status === "error" ? false : 3000),
   });
   if (result.isPending) return <Loading />;
-  if (result.isError) return <ErrorState error={result.error} retry={() => void result.refetch()} />;
+  if (result.isError)
+    return (
+      <ErrorState error={result.error} retry={() => void result.refetch()} />
+    );
   if (!result.data.chats.length)
     return (
       <div className="empty_recent">
@@ -46,25 +49,26 @@ export function RecentChats({
             </span>
           </>
         );
-        const item = chat.room_id === currentId ? (
-          <div
-            className="recent_item current"
-            aria-current="page"
-            key={chat.room_id}
-          >
-            {content}
-          </div>
-        ) : (
-          <Link
-            className="recent_item"
-            aria-label={chat.character.name}
-            key={chat.room_id}
-            href={`/chats/${chat.room_id}`}
-            onNavigate={onNavigate}
-          >
-            {content}
-          </Link>
-        );
+        const item =
+          chat.room_id === currentId ? (
+            <div
+              className="recent_item current"
+              aria-current="page"
+              key={chat.room_id}
+            >
+              {content}
+            </div>
+          ) : (
+            <Link
+              className="recent_item"
+              aria-label={chat.character.name}
+              key={chat.room_id}
+              href={`/chats/${chat.room_id}`}
+              onNavigate={onNavigate}
+            >
+              {content}
+            </Link>
+          );
         if (!onDelete) return item;
         return (
           <div className="recent_row" key={chat.room_id}>
@@ -170,7 +174,11 @@ export function DeleteChatModal({
         <button className="button" onClick={onClose}>
           {t("common.cancel")}
         </button>
-        <button className="button danger" disabled={busy} onClick={() => void remove()}>
+        <button
+          className="button danger"
+          disabled={busy}
+          onClick={() => void remove()}
+        >
           {t("chat.delete")}
         </button>
       </div>

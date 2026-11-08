@@ -11,10 +11,30 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 // Home list (4-2-2)
-data class HomeBanner(val characterId: UUID, val name: String, val imageUrl: String)
-data class HomeCharacter(val id: UUID, val name: String, val tagline: String, val imageUrl: String, val creatorName: String)
-data class HomeSection(val id: UUID, val name: String, val characters: List<HomeCharacter>)
-data class HomeResponse(val banner: HomeBanner?, val sections: List<HomeSection>)
+data class HomeBanner(
+    val characterId: UUID,
+    val name: String,
+    val imageUrl: String,
+)
+
+data class HomeCharacter(
+    val id: UUID,
+    val name: String,
+    val tagline: String,
+    val imageUrl: String,
+    val creatorName: String,
+)
+
+data class HomeSection(
+    val id: UUID,
+    val name: String,
+    val characters: List<HomeCharacter>,
+)
+
+data class HomeResponse(
+    val banner: HomeBanner?,
+    val sections: List<HomeSection>,
+)
 
 // Character for CHAT (4-2-3)
 data class ChatCharacter(
@@ -30,7 +50,9 @@ data class ChatCharacter(
     val canOpenNewRoom: Boolean,
 )
 
-class CharacterNotFound(val id: UUID) : RuntimeException("character $id not found")
+class CharacterNotFound(
+    val id: UUID,
+) : RuntimeException("character $id not found")
 
 @Service
 class CharacterService(
@@ -38,14 +60,23 @@ class CharacterService(
     private val properties: AppProperties,
     private val tx: TransactionTemplate,
 ) {
-    private data class CacheEntry(val expiresAt: Instant, val value: HomeResponse)
+    private data class CacheEntry(
+        val expiresAt: Instant,
+        val value: HomeResponse,
+    )
+
     private val cache = ConcurrentHashMap<String, CacheEntry>()
 
     /** Adult exposure (CHARACTER 4-1-1 step 2). The PostHog flag defaults to visible until flags are wired. */
-    fun adultAllowed(identity: Identity, locale: RequestLocale): Boolean =
-        locale.region.adultModeAvailable && identity.isMember && identity.adultMode
+    fun adultAllowed(
+        identity: Identity,
+        locale: RequestLocale,
+    ): Boolean = locale.region.adultModeAvailable && identity.isMember && identity.adultMode
 
-    fun home(identity: Identity, locale: RequestLocale): HomeResponse {
+    fun home(
+        identity: Identity,
+        locale: RequestLocale,
+    ): HomeResponse {
         val allowed = adultAllowed(identity, locale)
         val key = "${locale.locale}|${locale.region.code}|$allowed"
         cache[key]?.takeIf { it.expiresAt.isAfter(Instant.now()) }?.let { return it.value }
@@ -57,42 +88,58 @@ class CharacterService(
 
     fun clearCache() = cache.clear()
 
-    private fun buildHome(locale: String, adultAllowed: Boolean): HomeResponse {
+    private fun buildHome(
+        locale: String,
+        adultAllowed: Boolean,
+    ): HomeResponse {
         val characters = repository.visibleCharacters().filter { adultAllowed || !it.isAdult }.associateBy { it.id }
         val membership = repository.sectionCharacters().groupBy { it.sectionId }
-        val sections = repository.publicSections().mapNotNull { section ->
-            val members = membership[section.id].orEmpty().sortedBy { it.position }.mapNotNull { characters[it.characterId] }
-            if (members.isEmpty()) return@mapNotNull null
-            HomeSection(
-                id = section.id,
-                name = I18n.resolveText(section.name, section.sourceLocale, locale),
-                characters = members.map {
-                    HomeCharacter(
-                        id = it.id,
-                        name = I18n.resolveText(it.name, it.sourceLocale, locale),
-                        tagline = I18n.resolveText(it.tagline, it.sourceLocale, locale),
-                        imageUrl = it.imageUrl,
-                        creatorName = it.creatorName,
-                    )
-                },
-            )
-        }
-        val banner = characters.values.firstOrNull { it.isBanner && it.bannerImageUrl != null }?.let {
-            HomeBanner(it.id, I18n.resolveText(it.name, it.sourceLocale, locale), it.bannerImageUrl!!)
-        }
+        val sections =
+            repository.publicSections().mapNotNull { section ->
+                val members = membership[section.id].orEmpty().sortedBy { it.position }.mapNotNull { characters[it.characterId] }
+                if (members.isEmpty()) return@mapNotNull null
+                HomeSection(
+                    id = section.id,
+                    name = I18n.resolveText(section.name, section.sourceLocale, locale),
+                    characters =
+                        members.map {
+                            HomeCharacter(
+                                id = it.id,
+                                name = I18n.resolveText(it.name, it.sourceLocale, locale),
+                                tagline = I18n.resolveText(it.tagline, it.sourceLocale, locale),
+                                imageUrl = it.imageUrl,
+                                creatorName = it.creatorName,
+                            )
+                        },
+                )
+            }
+        val banner =
+            characters.values.firstOrNull { it.isBanner && it.bannerImageUrl != null }?.let {
+                HomeBanner(it.id, I18n.resolveText(it.name, it.sourceLocale, locale), it.bannerImageUrl!!)
+            }
         return HomeResponse(banner, sections)
     }
 
     /** Uncached per-call lookup for CHAT (4-1-2). */
-    fun forChat(characterId: UUID, locale: String, adultAllowed: Boolean): ChatCharacter {
+    fun forChat(
+        characterId: UUID,
+        locale: String,
+        adultAllowed: Boolean,
+    ): ChatCharacter {
         val row = repository.find(characterId) ?: throw CharacterNotFound(characterId)
         return toChat(row, locale, adultAllowed)
     }
 
-    fun forChat(ids: Collection<UUID>, locale: String): Map<UUID, ChatCharacter> =
-        repository.findAll(ids).mapValues { (_, row) -> toChat(row, locale, adultAllowed = false) }
+    fun forChat(
+        ids: Collection<UUID>,
+        locale: String,
+    ): Map<UUID, ChatCharacter> = repository.findAll(ids).mapValues { (_, row) -> toChat(row, locale, adultAllowed = false) }
 
-    private fun toChat(row: CharacterRow, locale: String, adultAllowed: Boolean) = ChatCharacter(
+    private fun toChat(
+        row: CharacterRow,
+        locale: String,
+        adultAllowed: Boolean,
+    ) = ChatCharacter(
         id = row.id,
         name = I18n.resolveText(row.name, row.sourceLocale, locale),
         imageUrl = row.imageUrl,

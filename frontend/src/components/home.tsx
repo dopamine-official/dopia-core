@@ -108,7 +108,10 @@ export function Home() {
         </Modal>
       )}
       {deleteTarget && (
-        <DeleteChatModal chat={deleteTarget} onClose={() => setDeleteTarget(null)} />
+        <DeleteChatModal
+          chat={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+        />
       )}
       <main id="main" className="home_main">
         {result.isPending ? (
@@ -117,7 +120,10 @@ export function Home() {
             <Loading cards />
           </>
         ) : result.isError ? (
-          <ErrorState error={result.error} retry={() => void result.refetch()} />
+          <ErrorState
+            error={result.error}
+            retry={() => void result.refetch()}
+          />
         ) : (
           <>
             {result.data.banner && (

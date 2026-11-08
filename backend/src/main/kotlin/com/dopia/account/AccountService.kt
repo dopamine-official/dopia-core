@@ -29,16 +29,19 @@ data class AccountView(
     val adultVerified: Boolean,
 )
 
-data class IssuedAccount(val accountId: UUID)
-
-fun AccountRow.view() = AccountView(
-    accountId = id,
-    isGuest = isGuest,
-    nickname = if (isGuest) null else nickname,
-    photoUrl = photoUrl,
-    adultMode = !isGuest && adultMode,
-    adultVerified = !isGuest && adultVerifiedAt != null,
+data class IssuedAccount(
+    val accountId: UUID,
 )
+
+fun AccountRow.view() =
+    AccountView(
+        accountId = id,
+        isGuest = isGuest,
+        nickname = if (isGuest) null else nickname,
+        photoUrl = photoUrl,
+        adultMode = !isGuest && adultMode,
+        adultVerified = !isGuest && adultVerifiedAt != null,
+    )
 
 @Service
 class AccountService(
@@ -88,7 +91,10 @@ class AccountService(
 
     // 4-1-1 guest issuance
 
-    fun issueGuest(request: HttpServletRequest, response: HttpServletResponse): IssuedAccount {
+    fun issueGuest(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): IssuedAccount {
         identifyOrNull(request)?.let { return IssuedAccount(it.id) }
         return IssuedAccount(createGuest(response))
     }
@@ -101,12 +107,15 @@ class AccountService(
         return id
     }
 
-    fun me(identity: Identity): AccountView =
-        accounts.find(identity.accountId)?.view() ?: throw ApiException.unauthorized()
+    fun me(identity: Identity): AccountView = accounts.find(identity.accountId)?.view() ?: throw ApiException.unauthorized()
 
     // 4-1-6 profile
 
-    fun updateProfile(identity: Identity, nickname: String?, photo: ByteArray?): AccountView {
+    fun updateProfile(
+        identity: Identity,
+        nickname: String?,
+        photo: ByteArray?,
+    ): AccountView {
         if (identity.isGuest) throw ApiException("member_required", HttpStatus.FORBIDDEN, message = "guests have no profile")
         if (nickname == null && photo == null) throw ApiException.invalidInput()
         val cleaned = nickname?.filterNot { it.isISOControl() }?.trim()
@@ -116,10 +125,21 @@ class AccountService(
         }
         var photoUrl: String? = null
         if (photo != null) {
-            val type = detectImageType(photo)
-                ?: throw ApiException("photo_type_invalid", HttpStatus.UNPROCESSABLE_CONTENT, listOf(FieldError("photo", "invalid_type")), "unsupported image format")
+            val type =
+                detectImageType(photo)
+                    ?: throw ApiException(
+                        "photo_type_invalid",
+                        HttpStatus.UNPROCESSABLE_CONTENT,
+                        listOf(FieldError("photo", "invalid_type")),
+                        "unsupported image format",
+                    )
             if (photo.size > properties.photo.maxBytes) {
-                throw ApiException("file_too_large", HttpStatus.PAYLOAD_TOO_LARGE, listOf(FieldError("photo", "too_large")), "photo exceeds the size limit")
+                throw ApiException(
+                    "file_too_large",
+                    HttpStatus.PAYLOAD_TOO_LARGE,
+                    listOf(FieldError("photo", "too_large")),
+                    "photo exceeds the size limit",
+                )
             }
             photoUrl = storage.store(identity.accountId, photo, type)
         }
@@ -137,15 +157,29 @@ class AccountService(
 
     // 4-1-7 adult mode
 
-    fun updateAdultMode(identity: Identity, adultMode: Boolean, region: RegionConfig): AccountView {
+    fun updateAdultMode(
+        identity: Identity,
+        adultMode: Boolean,
+        region: RegionConfig,
+    ): AccountView {
         if (identity.isGuest) {
             val code = if (adultMode) "adult_verification_required" else "member_required"
             throw ApiException(code, HttpStatus.FORBIDDEN, message = "guests cannot change adult mode")
         }
         if (adultMode) {
-            if (!region.adultModeAvailable) throw ApiException("adult_mode_unavailable", HttpStatus.FORBIDDEN, message = "region does not offer adult mode")
+            if (!region.adultModeAvailable) {
+                throw ApiException(
+                    "adult_mode_unavailable",
+                    HttpStatus.FORBIDDEN,
+                    message = "region does not offer adult mode",
+                )
+            }
             val row = accounts.find(identity.accountId) ?: throw ApiException.unauthorized()
-            if (row.adultVerifiedAt == null) throw ApiException("adult_verification_required", HttpStatus.FORBIDDEN, message = "adult verification incomplete")
+            if (row.adultVerifiedAt ==
+                null
+            ) {
+                throw ApiException("adult_verification_required", HttpStatus.FORBIDDEN, message = "adult verification incomplete")
+            }
         }
         tx.execute { accounts.updateAdultMode(identity.accountId, adultMode) }
         events.record(identity.accountId, "safe_mode_changed", mapOf("adult_mode" to adultMode))
@@ -154,19 +188,25 @@ class AccountService(
 
     // 4-1-8 logout and withdrawal
 
-    fun logout(identity: Identity, request: HttpServletRequest, response: HttpServletResponse, withdraw: Boolean): IssuedAccount {
+    fun logout(
+        identity: Identity,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        withdraw: Boolean,
+    ): IssuedAccount {
         if (identity.isGuest) throw ApiException("member_required", HttpStatus.FORBIDDEN, message = "guests cannot log out")
         val sessionToken = cookies.read(request, Cookies.SESSION)
         val guestToken = Tokens.random()
-        val guestId = tx.execute {
-            if (withdraw) {
-                accounts.revokeAllSessions(identity.accountId)
-                accounts.markDeleted(identity.accountId)
-            } else if (sessionToken != null) {
-                accounts.revokeSession(Tokens.sha256(sessionToken))
-            }
-            accounts.insertGuest(Tokens.sha256(guestToken))
-        }!!
+        val guestId =
+            tx.execute {
+                if (withdraw) {
+                    accounts.revokeAllSessions(identity.accountId)
+                    accounts.markDeleted(identity.accountId)
+                } else if (sessionToken != null) {
+                    accounts.revokeSession(Tokens.sha256(sessionToken))
+                }
+                accounts.insertGuest(Tokens.sha256(guestToken))
+            }!!
         cookies.clearSession(response)
         cookies.setGuest(response, guestToken)
         events.record(identity.accountId, if (withdraw) "withdrawn" else "logout_succeeded")
@@ -176,34 +216,53 @@ class AccountService(
 
     // 4-1-4 login completion (provider callback or dev mock login)
 
-    data class ProviderProfile(val provider: String, val subject: String, val name: String?, val email: String?)
+    data class ProviderProfile(
+        val provider: String,
+        val subject: String,
+        val name: String?,
+        val email: String?,
+    )
 
     /** Transaction 1 of login: member lookup or creation, session, merge target. Returns the session token. */
-    fun completeLogin(profile: ProviderProfile, guestAccountId: UUID?, response: HttpServletResponse): UUID {
+    fun completeLogin(
+        profile: ProviderProfile,
+        guestAccountId: UUID?,
+        response: HttpServletResponse,
+    ): UUID {
         val token = Tokens.random()
-        val memberId = tx.execute {
-            val existing = accounts.findIdentityAccount(profile.provider, profile.subject)
-                ?.let { accounts.find(it) }
-                ?.takeIf { it.deletedAt == null }
-            val memberId = existing?.id ?: run {
-                val id = accounts.insertMember(uniqueNickname(profile.name ?: defaultName(profile.provider)), profile.email)
-                accounts.upsertIdentity(profile.provider, profile.subject, id)
-                id
-            }
-            accounts.insertSession(memberId, Tokens.sha256(token), properties.session.ttl.seconds)
-            accounts.touchLogin(memberId)
-            if (guestAccountId != null) {
-                val guest = accounts.lock(guestAccountId)
-                if (guest != null && guest.isGuest && guest.deletedAt == null) {
-                    when (guest.mergeTargetAccountId) {
-                        null -> accounts.setMergeTarget(guestAccountId, memberId)
-                        memberId -> Unit
-                        else -> throw ApiException("login_failed", HttpStatus.CONFLICT, message = "guest already merging into another member")
+        val memberId =
+            tx.execute {
+                val existing =
+                    accounts
+                        .findIdentityAccount(profile.provider, profile.subject)
+                        ?.let { accounts.find(it) }
+                        ?.takeIf { it.deletedAt == null }
+                val memberId =
+                    existing?.id ?: run {
+                        val id = accounts.insertMember(uniqueNickname(profile.name ?: defaultName(profile.provider)), profile.email)
+                        accounts.upsertIdentity(profile.provider, profile.subject, id)
+                        id
+                    }
+                accounts.insertSession(memberId, Tokens.sha256(token), properties.session.ttl.seconds)
+                accounts.touchLogin(memberId)
+                if (guestAccountId != null) {
+                    val guest = accounts.lock(guestAccountId)
+                    if (guest != null && guest.isGuest && guest.deletedAt == null) {
+                        when (guest.mergeTargetAccountId) {
+                            null -> accounts.setMergeTarget(guestAccountId, memberId)
+
+                            memberId -> Unit
+
+                            else -> throw ApiException(
+                                "login_failed",
+                                HttpStatus.CONFLICT,
+                                message = "guest already merging into another member",
+                            )
+                        }
                     }
                 }
-            }
-            memberId
-        }!!
+                memberId
+            }!!
         cookies.setSession(response, token)
         events.record(memberId, "login_succeeded", mapOf("provider" to profile.provider))
         if (guestAccountId != null) {

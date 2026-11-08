@@ -4,7 +4,10 @@ import org.springframework.stereotype.Component
 import java.util.concurrent.atomic.AtomicReference
 
 /** Next-response and home-list behaviour chosen on the web preview page. Changed only by dev endpoints. */
-data class Scenario(val response: String = "normal", val home: String = "normal") {
+data class Scenario(
+    val response: String = "normal",
+    val home: String = "normal",
+) {
     companion object {
         val RESPONSES = setOf("normal", "slow", "fail", "disconnect")
         val HOMES = setOf("normal", "empty", "error")
@@ -16,7 +19,9 @@ class PreviewScenario {
     private val state = AtomicReference(Scenario())
 
     fun get(): Scenario = state.get()
+
     fun set(next: Scenario) = state.set(next)
+
     fun reset() = state.set(Scenario())
 
     /** Returns the current response behaviour; one-shot behaviours revert to normal. */

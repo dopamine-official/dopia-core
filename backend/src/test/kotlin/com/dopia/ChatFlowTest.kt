@@ -22,7 +22,9 @@ import kotlin.test.assertTrue
 @Import(TestcontainersConfiguration::class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("dev")
-class ChatFlowTest(@LocalServerPort private val port: Int) {
+class ChatFlowTest(
+    @LocalServerPort private val port: Int,
+) {
     private val mapper = ObjectMapper()
     private val winter = "3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d"
 
@@ -30,24 +32,41 @@ class ChatFlowTest(@LocalServerPort private val port: Int) {
     private inner class Browser {
         private val client = HttpClient.newBuilder().cookieHandler(CookieManager()).build()
 
-        fun call(method: String, path: String, body: String? = null, type: String = "application/json", locale: String = "ko-KR"): HttpResponse<String> {
-            val request = HttpRequest.newBuilder(URI("http://127.0.0.1:$port/api/v1$path"))
-                .header("X-Locale", locale)
-                .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
-                .apply { if (body != null) header("Content-Type", type) }
-                .build()
+        fun call(
+            method: String,
+            path: String,
+            body: String? = null,
+            type: String = "application/json",
+            locale: String = "ko-KR",
+        ): HttpResponse<String> {
+            val request =
+                HttpRequest
+                    .newBuilder(URI("http://127.0.0.1:$port/api/v1$path"))
+                    .header("X-Locale", locale)
+                    .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
+                    .apply { if (body != null) header("Content-Type", type) }
+                    .build()
             return client.send(request, HttpResponse.BodyHandlers.ofString())
         }
 
-        fun json(method: String, path: String, body: String? = null, locale: String = "ko-KR"): JsonNode {
+        fun json(
+            method: String,
+            path: String,
+            body: String? = null,
+            locale: String = "ko-KR",
+        ): JsonNode {
             val response = call(method, path, body, locale = locale)
             assertTrue(response.statusCode() in 200..299, "$method $path -> ${response.statusCode()} ${response.body()}")
             return mapper.readTree(response.body())
         }
     }
 
-    private fun send(browser: Browser, room: String, content: String, clientId: String = UUID.randomUUID().toString()): HttpResponse<String> =
-        browser.call("POST", "/chats/$room/messages", """{"content":"$content","client_message_id":"$clientId"}""")
+    private fun send(
+        browser: Browser,
+        room: String,
+        content: String,
+        clientId: String = UUID.randomUUID().toString(),
+    ): HttpResponse<String> = browser.call("POST", "/chats/$room/messages", """{"content":"$content","client_message_id":"$clientId"}""")
 
     @Test
     fun `guest chats, logs in and keeps the room, idempotent resend replays the reply`() {
@@ -57,8 +76,25 @@ class ChatFlowTest(@LocalServerPort private val port: Int) {
         assertTrue(browser.json("GET", "/account/me").get("is_guest").asBoolean())
 
         val home = browser.json("GET", "/home")
-        assertEquals("오리지널", home.get("sections").get(0).get("name").asString())
-        assertEquals("Winter", browser.json("GET", "/home", locale = "en-US").get("sections").get(0).get("characters").get(1).get("name").asString())
+        assertEquals(
+            "오리지널",
+            home
+                .get("sections")
+                .get(0)
+                .get("name")
+                .asString(),
+        )
+        assertEquals(
+            "Winter",
+            browser
+                .json("GET", "/home", locale = "en-US")
+                .get("sections")
+                .get(0)
+                .get("characters")
+                .get(1)
+                .get("name")
+                .asString(),
+        )
 
         val opened = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""")
         val room = opened.get("room_id").asString()
@@ -68,13 +104,26 @@ class ChatFlowTest(@LocalServerPort private val port: Int) {
         val clientId = UUID.randomUUID().toString()
         val stream = send(browser, room, "안녕", clientId)
         assertEquals(200, stream.statusCode())
-        assertTrue(stream.headers().firstValue("content-type").orElse("").startsWith("text/event-stream"))
+        assertTrue(
+            stream
+                .headers()
+                .firstValue("content-type")
+                .orElse("")
+                .startsWith("text/event-stream"),
+        )
         assertTrue(stream.body().contains("event:accepted"))
         assertTrue(stream.body().contains("event:completed"))
 
         val view = browser.json("GET", "/chats/$room")
         assertEquals(3, view.get("messages").size())
-        assertEquals("completed", view.get("messages").get(1).get("turn_status").asString())
+        assertEquals(
+            "completed",
+            view
+                .get("messages")
+                .get(1)
+                .get("turn_status")
+                .asString(),
+        )
         assertEquals(false, view.get("generating").asBoolean())
 
         // Same key and text: stored result, no new turn. Same key, other text: 422.
@@ -83,12 +132,28 @@ class ChatFlowTest(@LocalServerPort private val port: Int) {
         assertEquals(3, browser.json("GET", "/chats/$room").get("messages").size())
         val mismatch = send(browser, room, "다른 내용", clientId)
         assertEquals(422, mismatch.statusCode())
-        assertEquals("client_message_id", mapper.readTree(mismatch.body()).get("detail").get(0).get("field").asString())
+        assertEquals(
+            "client_message_id",
+            mapper
+                .readTree(mismatch.body())
+                .get("detail")
+                .get(0)
+                .get("field")
+                .asString(),
+        )
 
         val member = browser.json("POST", "/mock/login", """{"provider":"google"}""")
         assertEquals(false, member.get("is_guest").asBoolean())
         assertNotEquals(guestId, member.get("account_id").asString())
-        assertEquals(room, browser.json("GET", "/chats/recent").get("chats").get(0).get("room_id").asString())
+        assertEquals(
+            room,
+            browser
+                .json("GET", "/chats/recent")
+                .get("chats")
+                .get(0)
+                .get("room_id")
+                .asString(),
+        )
 
         // Multipart profile edits are covered by the web E2E suite.
 
@@ -122,7 +187,13 @@ class ChatFlowTest(@LocalServerPort private val port: Int) {
         val messages = browser.json("GET", "/chats/$room").get("messages")
         assertEquals("failed", messages.get(1).get("turn_status").asString())
         assertEquals("mock_response_failed", messages.get(1).get("error_code").asString())
-        assertNotNull(browser.json("GET", "/chats/recent").get("chats").get(0).get("last_message"))
+        assertNotNull(
+            browser
+                .json("GET", "/chats/recent")
+                .get("chats")
+                .get(0)
+                .get("last_message"),
+        )
         assertEquals("normal", browser.json("GET", "/mock/scenario").get("response").asString())
     }
 }

@@ -17,9 +17,19 @@ data class AppProperties(
     val home: Home = Home(),
     val oauth: OAuth = OAuth(),
 ) {
-    data class Cookie(val secure: Boolean = true, val domain: String = "")
-    data class Session(val ttl: Duration = Duration.ofDays(30))
-    data class Photo(val maxBytes: Long = 2L * 1024 * 1024)
+    data class Cookie(
+        val secure: Boolean = true,
+        val domain: String = "",
+    )
+
+    data class Session(
+        val ttl: Duration = Duration.ofDays(30),
+    )
+
+    data class Photo(
+        val maxBytes: Long = 2L * 1024 * 1024,
+    )
+
     data class Storage(
         /** local or r2 */
         val mode: String = "local",
@@ -33,13 +43,23 @@ data class AppProperties(
         /** Public origin of the bucket, e.g. https://pub-xxxx.r2.dev or a custom domain. */
         val r2PublicBaseUrl: String = "",
     )
-    data class Ai(val mode: String = "stub", val baseUrl: String = "http://127.0.0.1:8100", val timeout: Duration = Duration.ofSeconds(90))
+
+    data class Ai(
+        val mode: String = "stub",
+        val baseUrl: String = "http://127.0.0.1:8100",
+        val timeout: Duration = Duration.ofSeconds(90),
+    )
+
     data class Turns(
         val maxConcurrent: Int = 64,
         val heartbeat: Duration = Duration.ofSeconds(5),
         val lostAfter: Duration = Duration.ofSeconds(45),
     )
-    data class Home(val cacheTtl: Duration = Duration.ofSeconds(60))
+
+    data class Home(
+        val cacheTtl: Duration = Duration.ofSeconds(60),
+    )
+
     data class OAuth(
         /** Origin the browser uses to reach this API (callbacks are registered under it). */
         val redirectBaseUrl: String = "http://127.0.0.1:3000",
@@ -50,6 +70,7 @@ data class AppProperties(
         val google: Google = Google(),
         val apple: Apple = Apple(),
     )
+
     data class Google(
         val clientId: String = "",
         val clientSecret: String = "",
@@ -57,6 +78,7 @@ data class AppProperties(
         val tokenUrl: String = "https://oauth2.googleapis.com/token",
         val jwksUrl: String = "https://www.googleapis.com/oauth2/v3/certs",
     )
+
     data class Apple(
         val clientId: String = "",
         val teamId: String = "",

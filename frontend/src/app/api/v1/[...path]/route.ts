@@ -27,7 +27,12 @@ async function proxy(
   const target = new URL(`/api/v1/${path.join("/")}`, upstream);
   target.search = request.nextUrl.search;
   const headers = new Headers(request.headers);
-  for (const name of ["host", "connection", "content-length", "accept-encoding"])
+  for (const name of [
+    "host",
+    "connection",
+    "content-length",
+    "accept-encoding",
+  ])
     headers.delete(name);
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const response = await fetch(target, {
@@ -42,11 +47,20 @@ async function proxy(
   });
   const out = new Headers();
   for (const [name, value] of response.headers) {
-    if (["set-cookie", "content-encoding", "content-length", "transfer-encoding", "connection"].includes(name))
+    if (
+      [
+        "set-cookie",
+        "content-encoding",
+        "content-length",
+        "transfer-encoding",
+        "connection",
+      ].includes(name)
+    )
       continue;
     out.set(name, value);
   }
-  for (const cookie of response.headers.getSetCookie()) out.append("set-cookie", cookie);
+  for (const cookie of response.headers.getSetCookie())
+    out.append("set-cookie", cookie);
   return new Response(response.status === 204 ? null : response.body, {
     status: response.status,
     headers: out,

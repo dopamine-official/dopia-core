@@ -23,8 +23,14 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
-data class MockLoginRequest(val provider: String?)
-data class ScenarioRequest(val response: String?, val home: String?)
+data class MockLoginRequest(
+    val provider: String?,
+)
+
+data class ScenarioRequest(
+    val response: String?,
+    val home: String?,
+)
 
 /**
  * Development helpers the web preview page uses: provider-less login, response scenarios,
@@ -43,9 +49,14 @@ class MockController(
     private val tx: TransactionTemplate,
 ) {
     @PostMapping("/login")
-    fun login(identity: Identity, @RequestBody body: MockLoginRequest, response: HttpServletResponse): AccountView {
-        val provider = body.provider?.takeIf { it == "google" || it == "apple" }
-            ?: throw ApiException.invalidInput(FieldError("provider", "invalid"))
+    fun login(
+        identity: Identity,
+        @RequestBody body: MockLoginRequest,
+        response: HttpServletResponse,
+    ): AccountView {
+        val provider =
+            body.provider?.takeIf { it == "google" || it == "apple" }
+                ?: throw ApiException.invalidInput(FieldError("provider", "invalid"))
         if (identity.isMember) return accounts.me(identity)
         val profile = AccountService.ProviderProfile(provider, "mock-$provider", null, null)
         val memberId = accounts.completeLogin(profile, identity.accountId, response)
@@ -56,8 +67,12 @@ class MockController(
     fun scenario(identity: Identity): Scenario = scenario.get()
 
     @PutMapping("/scenario")
-    fun setScenario(identity: Identity, @RequestBody body: ScenarioRequest): Scenario {
-        val response = body.response?.takeIf { it in Scenario.RESPONSES } ?: throw ApiException.invalidInput(FieldError("response", "invalid"))
+    fun setScenario(
+        identity: Identity,
+        @RequestBody body: ScenarioRequest,
+    ): Scenario {
+        val response =
+            body.response?.takeIf { it in Scenario.RESPONSES } ?: throw ApiException.invalidInput(FieldError("response", "invalid"))
         val home = body.home?.takeIf { it in Scenario.HOMES } ?: throw ApiException.invalidInput(FieldError("home", "invalid"))
         val next = Scenario(response, home)
         scenario.set(next)
@@ -68,9 +83,15 @@ class MockController(
     fun events(identity: Identity): List<AppEvent> = events.forAccount(identity.accountId)
 
     @PostMapping("/reset")
-    fun reset(request: HttpServletRequest, response: HttpServletResponse): AccountView {
+    fun reset(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): AccountView {
         tx.execute {
-            jdbc.sql("TRUNCATE chat_turns, chat_summaries, chat_messages, chat_rooms, sessions, account_identities, guest_identifiers, accounts").update()
+            jdbc
+                .sql(
+                    "TRUNCATE chat_turns, chat_summaries, chat_messages, chat_rooms, sessions, account_identities, guest_identifiers, accounts",
+                ).update()
         }
         events.clear()
         scenario.reset()

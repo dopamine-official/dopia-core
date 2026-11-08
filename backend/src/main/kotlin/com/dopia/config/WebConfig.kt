@@ -23,23 +23,34 @@ class WebConfig(
     private val storage: LocalDiskPhotoStorage,
     private val properties: AppProperties,
 ) : WebMvcConfigurer {
-
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
-        resolvers.add(object : HandlerMethodArgumentResolver {
-            override fun supportsParameter(parameter: MethodParameter) = parameter.parameterType == Identity::class.java
-            override fun resolveArgument(
-                parameter: MethodParameter, container: ModelAndViewContainer?, request: NativeWebRequest, binder: WebDataBinderFactory?,
-            ): Any = accounts.identify(request.getNativeRequest(HttpServletRequest::class.java)!!)
-        })
-        resolvers.add(object : HandlerMethodArgumentResolver {
-            override fun supportsParameter(parameter: MethodParameter) = parameter.parameterType == RequestLocale::class.java
-            override fun resolveArgument(
-                parameter: MethodParameter, container: ModelAndViewContainer?, request: NativeWebRequest, binder: WebDataBinderFactory?,
-            ): Any {
-                val region = i18n.region(request.getHeader("X-Region"))
-                return RequestLocale(i18n.resolveLocale(request.getHeader("X-Locale"), region), region)
-            }
-        })
+        resolvers.add(
+            object : HandlerMethodArgumentResolver {
+                override fun supportsParameter(parameter: MethodParameter) = parameter.parameterType == Identity::class.java
+
+                override fun resolveArgument(
+                    parameter: MethodParameter,
+                    container: ModelAndViewContainer?,
+                    request: NativeWebRequest,
+                    binder: WebDataBinderFactory?,
+                ): Any = accounts.identify(request.getNativeRequest(HttpServletRequest::class.java)!!)
+            },
+        )
+        resolvers.add(
+            object : HandlerMethodArgumentResolver {
+                override fun supportsParameter(parameter: MethodParameter) = parameter.parameterType == RequestLocale::class.java
+
+                override fun resolveArgument(
+                    parameter: MethodParameter,
+                    container: ModelAndViewContainer?,
+                    request: NativeWebRequest,
+                    binder: WebDataBinderFactory?,
+                ): Any {
+                    val region = i18n.region(request.getHeader("X-Region"))
+                    return RequestLocale(i18n.resolveLocale(request.getHeader("X-Locale"), region), region)
+                }
+            },
+        )
     }
 
     override fun addResourceHandlers(registry: ResourceHandlerRegistry) {

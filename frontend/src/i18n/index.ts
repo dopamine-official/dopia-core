@@ -11,10 +11,18 @@ export const localeNames: Record<Locale, string> = {
   "zh-TW": "繁體中文",
   "en-US": "English",
 };
-export function regionConfig(code = deployment.region, profile = deployment.profile) {
-  if (!regions.regions.includes(code) || code !== region.code || !region.enabled)
+export function regionConfig(
+  code = deployment.region,
+  profile = deployment.profile,
+) {
+  if (
+    !regions.regions.includes(code) ||
+    code !== region.code ||
+    !region.enabled
+  )
     throw new Error(`Unsupported region: ${code}`);
-  if (!Object.hasOwn(profiles, profile)) throw new Error(`Unknown profile: ${profile}`);
+  if (!Object.hasOwn(profiles, profile))
+    throw new Error(`Unknown profile: ${profile}`);
   const overlay = profiles[profile as keyof typeof profiles];
   return { ...region, ...overlay };
 }

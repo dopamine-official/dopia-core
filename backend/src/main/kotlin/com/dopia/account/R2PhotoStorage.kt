@@ -21,28 +21,41 @@ import java.util.UUID
 @Component
 @Primary
 @ConditionalOnProperty(prefix = "app.storage", name = ["mode"], havingValue = "r2")
-class R2PhotoStorage(private val properties: AppProperties) : PhotoStorage {
+class R2PhotoStorage(
+    private val properties: AppProperties,
+) : PhotoStorage {
     private val log = LoggerFactory.getLogger(R2PhotoStorage::class.java)
     private val storage = properties.storage
     private val publicBase = storage.r2PublicBaseUrl.trimEnd('/')
-    private val client: S3Client = S3Client.builder()
-        .region(Region.of("auto"))
-        .endpointOverride(URI("https://${storage.r2AccountId}.r2.cloudflarestorage.com"))
-        .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(storage.r2AccessKeyId, storage.r2SecretAccessKey)))
-        .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-        .httpClientBuilder(UrlConnectionHttpClient.builder())
-        .build()
+    private val client: S3Client =
+        S3Client
+            .builder()
+            .region(Region.of("auto"))
+            .endpointOverride(URI("https://${storage.r2AccountId}.r2.cloudflarestorage.com"))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(AwsBasicCredentials.create(storage.r2AccessKeyId, storage.r2SecretAccessKey)),
+            ).serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+            .httpClientBuilder(UrlConnectionHttpClient.builder())
+            .build()
 
     init {
         require(publicBase.isNotEmpty()) { "R2_PUBLIC_BASE_URL is required with R2_BUCKET" }
     }
 
-    override fun store(accountId: UUID, bytes: ByteArray, type: ImageType): String {
+    override fun store(
+        accountId: UUID,
+        bytes: ByteArray,
+        type: ImageType,
+    ): String {
         val key = "profiles/$accountId/${UUID.randomUUID()}.${type.extension}"
         client.putObject(
-            PutObjectRequest.builder().bucket(storage.r2Bucket).key(key)
+            PutObjectRequest
+                .builder()
+                .bucket(storage.r2Bucket)
+                .key(key)
                 .contentType("image/${if (type == ImageType.JPEG) "jpeg" else type.extension}")
-                .cacheControl("public, max-age=31536000, immutable").build(),
+                .cacheControl("public, max-age=31536000, immutable")
+                .build(),
             RequestBody.fromBytes(bytes),
         )
         return "$publicBase/$key"
@@ -51,7 +64,13 @@ class R2PhotoStorage(private val properties: AppProperties) : PhotoStorage {
     override fun delete(url: String) {
         if (!url.startsWith("$publicBase/")) return
         runCatching {
-            client.deleteObject(DeleteObjectRequest.builder().bucket(storage.r2Bucket).key(url.removePrefix("$publicBase/")).build())
+            client.deleteObject(
+                DeleteObjectRequest
+                    .builder()
+                    .bucket(storage.r2Bucket)
+                    .key(url.removePrefix("$publicBase/"))
+                    .build(),
+            )
         }.onFailure { log.warn("could not delete {}", url, it) }
     }
 }

@@ -65,16 +65,23 @@ class AuthController(
     ): ResponseEntity<Void> = callback("apple", code, state, error, user, request, response, HttpStatus.SEE_OTHER)
 
     private fun callback(
-        provider: String, code: String?, state: String?, error: String?, user: String?,
-        request: HttpServletRequest, response: HttpServletResponse, status: HttpStatus,
+        provider: String,
+        code: String?,
+        state: String?,
+        error: String?,
+        user: String?,
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        status: HttpStatus,
     ): ResponseEntity<Void> {
         cookies.clearLoginState(response, sameSiteNone = provider == "apple")
-        val saved = try {
-            oauth.verify(cookies.read(request, Cookies.LOGIN_STATE), provider)
-        } catch (failure: LoginFailed) {
-            log.info("{} login state rejected: {}", provider, failure.message)
-            return redirect(status, oauth.loginModalUrl("/", failed = true))
-        }
+        val saved =
+            try {
+                oauth.verify(cookies.read(request, Cookies.LOGIN_STATE), provider)
+            } catch (failure: LoginFailed) {
+                log.info("{} login state rejected: {}", provider, failure.message)
+                return redirect(status, oauth.loginModalUrl("/", failed = true))
+            }
         if (error != null) return redirect(status, oauth.loginModalUrl(saved.returnTo, failed = false))
         try {
             if (state != saved.state) throw LoginFailed("state mismatch")
@@ -88,6 +95,13 @@ class AuthController(
         return redirect(status, oauth.webUrl(saved.returnTo))
     }
 
-    private fun redirect(status: HttpStatus, location: String): ResponseEntity<Void> =
-        ResponseEntity.status(status).header(HttpHeaders.LOCATION, location).header(HttpHeaders.CACHE_CONTROL, "no-store").build()
+    private fun redirect(
+        status: HttpStatus,
+        location: String,
+    ): ResponseEntity<Void> =
+        ResponseEntity
+            .status(status)
+            .header(HttpHeaders.LOCATION, location)
+            .header(HttpHeaders.CACHE_CONTROL, "no-store")
+            .build()
 }

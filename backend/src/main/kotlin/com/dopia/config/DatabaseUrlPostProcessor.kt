@@ -1,7 +1,7 @@
 package com.dopia.config
 
-import org.springframework.boot.SpringApplication
 import org.springframework.boot.EnvironmentPostProcessor
+import org.springframework.boot.SpringApplication
 import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.env.MapPropertySource
 import java.net.URLDecoder
@@ -11,7 +11,10 @@ import java.net.URLDecoder
  * and turns it into the JDBC url, username and password the datasource needs.
  */
 class DatabaseUrlPostProcessor : EnvironmentPostProcessor {
-    override fun postProcessEnvironment(environment: ConfigurableEnvironment, application: SpringApplication) {
+    override fun postProcessEnvironment(
+        environment: ConfigurableEnvironment,
+        application: SpringApplication,
+    ) {
         // Cloudflare R2 is used as soon as a bucket is named, unless STORAGE_MODE says otherwise.
         if (!environment.getProperty("R2_BUCKET").isNullOrBlank() && environment.getProperty("STORAGE_MODE").isNullOrBlank()) {
             environment.propertySources.addFirst(MapPropertySource("storageMode", mapOf("app.storage.mode" to "r2")))

@@ -10,7 +10,12 @@ import {
 } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
-import { refreshSession, safeReturnTo, setApiContext, subscribeSession } from "@/lib/api";
+import {
+  refreshSession,
+  safeReturnTo,
+  setApiContext,
+  subscribeSession,
+} from "@/lib/api";
 import { type Account } from "@/lib/contracts";
 import { defaultLocale, resolveLocale, text, type Locale } from "@/i18n";
 import { messages } from "@/lib/translations";
@@ -53,9 +58,9 @@ export function Providers({ children }: { children: ReactNode }) {
     [],
   );
   const closeLogin = useCallback(() => setLogin(null), []);
-  useEffect(() => {
-    if (pathname === accountRedirect) setAccountRedirect(null);
-  }, [pathname, accountRedirect]);
+  // Arrived where the account change was heading: adjust during render, not in an effect.
+  if (accountRedirect !== null && pathname === accountRedirect)
+    setAccountRedirect(null);
   const [query] = useState(
     () =>
       new QueryClient({
@@ -94,8 +99,7 @@ export function Providers({ children }: { children: ReactNode }) {
       // Initial page loads must preserve this account's saved drafts and turns.
       if (changed && previousId) {
         for (const key of Object.keys(sessionStorage))
-          if (key.startsWith("dopia:draft:"))
-            sessionStorage.removeItem(key);
+          if (key.startsWith("dopia:draft:")) sessionStorage.removeItem(key);
       }
     },
     [query],
@@ -133,7 +137,9 @@ export function Providers({ children }: { children: ReactNode }) {
       }
       await refreshSession();
     })()
-      .catch((error) => setFailure(errorMessageKey(error, "common.load_failed")))
+      .catch((error) =>
+        setFailure(errorMessageKey(error, "common.load_failed")),
+      )
       .finally(() => {
         boot.current = null;
       });
@@ -146,7 +152,12 @@ export function Providers({ children }: { children: ReactNode }) {
     channel.current = broadcast;
     broadcast.onmessage = () => {
       void refreshSession().catch((error) => {
-        notify(text(messages[localeRef.current], errorMessageKey(error, "common.load_failed")));
+        notify(
+          text(
+            messages[localeRef.current],
+            errorMessageKey(error, "common.load_failed"),
+          ),
+        );
       });
     };
     return () => {
@@ -163,7 +174,8 @@ export function Providers({ children }: { children: ReactNode }) {
     const params = new URLSearchParams(window.location.search);
     if (params.get("login") !== "1") return;
     const target = params.get("return_to");
-    const error = params.get("error") === "login_failed" ? "account.login.failed" : "";
+    const error =
+      params.get("error") === "login_failed" ? "account.login.failed" : "";
     for (const key of ["login", "return_to", "error"]) params.delete(key);
     const here = pathname + (params.size ? `?${params}` : "");
     router.replace(here);

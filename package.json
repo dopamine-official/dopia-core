@@ -16,7 +16,9 @@
     "test:e2e": "npm --prefix frontend run test:e2e --",
     "check": "npm --prefix frontend run check --",
     "dev:server": "npm --prefix frontend run dev:server --",
-    "test:e2e:server": "npm --prefix frontend run test:e2e:server --"
+    "test:e2e:server": "npm --prefix frontend run test:e2e:server --",
+    "lint": "npm --prefix frontend run lint --",
+    "format": "npm --prefix frontend run format --"
   },
   "engines": {
     "node": ">=20.9"

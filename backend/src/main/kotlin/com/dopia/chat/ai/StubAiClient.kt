@@ -12,8 +12,9 @@ import java.util.UUID
  */
 @Component
 @ConditionalOnProperty(prefix = "app.ai", name = ["mode"], havingValue = "stub", matchIfMissing = true)
-class StubAiClient(private val scenario: PreviewScenario) : AiClient {
-
+class StubAiClient(
+    private val scenario: PreviewScenario,
+) : AiClient {
     override fun turn(
         requestId: String,
         accountId: UUID,
@@ -48,12 +49,16 @@ class StubAiClient(private val scenario: PreviewScenario) : AiClient {
         val now = System.currentTimeMillis()
         return AiTurnResult(
             output = reply,
-            meta = AiMeta(
-                model = "stub", provider = "stub", promptVersion = "stub_v1",
-                inputTokenCount = null, outputTokenCount = null,
-                ttftMs = (firstTokenAt - started).toInt().coerceAtLeast(0),
-                generationMs = (now - firstTokenAt).toInt().coerceAtLeast(0),
-            ),
+            meta =
+                AiMeta(
+                    model = "stub",
+                    provider = "stub",
+                    promptVersion = "stub_v1",
+                    inputTokenCount = null,
+                    outputTokenCount = null,
+                    ttftMs = (firstTokenAt - started).toInt().coerceAtLeast(0),
+                    generationMs = (now - firstTokenAt).toInt().coerceAtLeast(0),
+                ),
         )
     }
 }

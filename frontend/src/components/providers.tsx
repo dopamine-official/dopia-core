@@ -200,6 +200,8 @@ export function Providers({ children }: { children: ReactNode }) {
     setLogin({ returnTo: safeReturnTo(target ?? here), error });
   }, [ready, pathname, router]);
   function retrySession() {
+    // A click while the retry is still running would count one retry twice.
+    if (boot.current) return;
     trackBeforeSession("retry_clicked", { target: "session" });
     void initialize().then((loaded) =>
       trackBeforeSession("retry_finished", {

@@ -8,12 +8,15 @@
 
 | 브랜치 | 용도 | 규칙 |
 |---|---|---|
-| `main` | 배포 기준 | 직접 push 금지<br>`dev`에서 PR로만 머지함 |
-| `dev` | 개발 통합 | 작업 브랜치를 머지함 |
-| 작업 브랜치 | 기능 하나, 수정 하나 | `dev`에서 분기함<br>`종류/짧은-설명` 형식<br>`feat/posthog-web`, `fix/turn-drain` |
+| `main` | 배포 기준 | 직접 push 금지<br>`release` 브랜치에서 PR로만 머지함 |
+| `dev` | 개발 통합 | `feat`, `fix`, `docs` 브랜치를 머지함 |
+| `feat/짧은-설명` | 기능 추가 | `dev`에서 분기해 `dev`로 머지함<br>`feat/posthog-web` |
+| `fix/짧은-설명` | 버그 수정 | `dev`에서 분기해 `dev`로 머지함<br>`fix/turn-drain` |
+| `docs/짧은-설명` | 문서, 설정 변경 | `dev`에서 분기해 `dev`로 머지함<br>`docs/git-convention` |
+| `release/버전` | 배포 준비 | `dev`에서 분기해 `main`으로 머지함<br>`release/0.1.0` |
 
-- 작업 브랜치의 종류는 커밋 종류와 같은 값을 사용함.
-- 머지한 작업 브랜치는 삭제함.
+- 브랜치 종류는 위 네 가지만 사용함.
+- 머지한 브랜치는 삭제함.
 - `main` 직접 push는 로컬 `pre-push` 훅이 차단함. 비공개 저장소 무료 플랜은 GitHub 브랜치 보호를 지원하지 않음.
 
 <br>
@@ -71,11 +74,3 @@ fix(backend): 턴 중단 시 스트림을 끝까지 읽지 않음
 | `ai/` | ruff, mypy | `ruff format src tests` | `ruff check src tests && ruff format --check src tests && mypy` |
 
 - 웹의 `react-hooks/set-state-in-effect`, `react-hooks/refs` 규칙은 기존 코드 4곳 때문에 경고로 낮춤. 해당 코드를 고치면 `frontend/eslint.config.mjs`에서 예외를 삭제함.
-
-<br>
-
-## 5. 올리지 않는 파일
-
-- `.env.local` 등 비밀값 파일
-- API 키, 토큰, 비밀번호가 들어간 파일
-- 저장소를 나중에 공개로 바꾸면 커밋 기록 전체가 공개됨. 한 번 커밋한 비밀값은 키를 폐기하고 새로 발급함.

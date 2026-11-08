@@ -3,7 +3,7 @@ import type { Account } from "./contracts";
 
 // Product analytics (TRACKING-PLAN 1, 2). Off when no key is set, e.g. local mock runs and tests.
 const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-// Same-origin path that next.config.ts rewrites to PostHog, so ad blockers do not drop events.
+// Same-origin route (src/app/ingest) that forwards to PostHog, so ad blockers do not drop events.
 const API_HOST = "/ingest";
 const UI_HOST = "https://us.posthog.com";
 
@@ -11,7 +11,8 @@ let current: { id: string; member: boolean } | null = null;
 
 function superProperties() {
   return {
-    environment: process.env.NEXT_PUBLIC_APP_ENV ?? "dev",
+    // dev or prod; next.config.ts refuses to start without it when the key is set.
+    environment: process.env.NEXT_PUBLIC_APP_ENV,
     app_release: process.env.NEXT_PUBLIC_APP_RELEASE ?? "local",
   };
 }

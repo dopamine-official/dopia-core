@@ -159,7 +159,6 @@ test("a room deleted in another tab records the redirect when this tab reads it 
   // Back on the first tab: the app reads the room again when the tab shows and its data is
   // older than 10 s. Headless browsers may still report this tab as hidden, so say it is
   // visible, and keep signalling until the stale read happens (timing differs on CI).
-  await page.bringToFront();
   await expect
     .poll(
       async () => {
@@ -168,7 +167,8 @@ test("a room deleted in another tab records the redirect when this tab reads it 
             configurable: true,
             get: () => "visible",
           });
-          document.dispatchEvent(new Event("visibilitychange"));
+          // React Query listens on window, not document.
+          window.dispatchEvent(new Event("visibilitychange"));
         });
         return new URL(page.url()).pathname;
       },

@@ -393,7 +393,9 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const close = useRef(onClose);
-  close.current = onClose;
+  useLayoutEffect(() => {
+    close.current = onClose;
+  });
   useLayoutEffect(() => {
     const dialog = ref.current!;
     const opener = document.activeElement;

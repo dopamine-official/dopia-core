@@ -11,30 +11,48 @@ import { ErrorState, Icon, Loading, Modal, ProfileMenu } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 type Pending = { client_message_id: string; content: string };
+function readPending(key: string): Pending | null {
+  try {
+    const saved = JSON.parse(
+      sessionStorage.getItem(key) ?? "null",
+    ) as Pending | null;
+    if (saved?.client_message_id && typeof saved.content === "string")
+      return saved;
+  } catch {
+    sessionStorage.removeItem(key);
+  }
+  return null;
+}
 export function Chat({ roomId }: { roomId: string }) {
   const { account, locale, t, notice, openLogin } = useSession();
   const query = useQueryClient();
   const router = useRouter();
   const [menu, setMenu] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
-  const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState<Pending | null>(null);
+  const storageKey = `dopia:draft:${account.account_id}:${roomId}`;
+  const pendingKey = `${storageKey}:pending`;
+  // Chat is keyed by room and sits under a subtree keyed by account, so these keys never
+  // change for one instance: read what this tab saved once, at mount.
+  const [saved] = useState(() => ({
+    draft: sessionStorage.getItem(storageKey) ?? "",
+    pending: readPending(pendingKey),
+  }));
+  const [draft, setDraft] = useState(saved.draft);
+  const [pending, setPending] = useState<Pending | null>(saved.pending);
   const [partial, setPartial] = useState("");
   const [error, setError] = useState("");
   const [atBottom, setAtBottom] = useState(true);
-  const pendingRef = useRef<Pending | null>(null);
-  const draftRef = useRef("");
-  const sending = useRef(false);
+  const pendingRef = useRef<Pending | null>(saved.pending);
+  const draftRef = useRef(saved.draft);
+  const sending = useRef(saved.pending !== null);
   const disposed = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const follow = useRef(true);
   const firstScroll = useRef(true);
-  const restored = useRef(false);
+  const restored = useRef(saved.pending !== null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const scene = useRef<HTMLElement>(null);
   const composing = useRef(false);
-  const storageKey = `dopia:draft:${account.account_id}:${roomId}`;
-  const pendingKey = `${storageKey}:pending`;
   const key = ["room", account.account_id, roomId, locale];
   const result = useQuery({
     queryKey: key,
@@ -67,27 +85,11 @@ export function Chat({ roomId }: { roomId: string }) {
   useEffect(() => {
     disposed.current = false;
     firstScroll.current = true;
-    const value = sessionStorage.getItem(storageKey) ?? "";
-    draftRef.current = value;
-    setDraft(value);
-    try {
-      const saved = JSON.parse(
-        sessionStorage.getItem(pendingKey) ?? "null",
-      ) as Pending | null;
-      if (saved?.client_message_id && typeof saved.content === "string") {
-        pendingRef.current = saved;
-        restored.current = true;
-        sending.current = true;
-        setPending(saved);
-      }
-    } catch {
-      sessionStorage.removeItem(pendingKey);
-    }
     return () => {
       disposed.current = true;
       controller.current?.abort();
     };
-  }, [storageKey, pendingKey]);
+  }, []);
   useEffect(() => {
     const current = pendingRef.current;
     const user = result.data?.messages.find(

@@ -58,9 +58,9 @@ export function Providers({ children }: { children: ReactNode }) {
     [],
   );
   const closeLogin = useCallback(() => setLogin(null), []);
-  useEffect(() => {
-    if (pathname === accountRedirect) setAccountRedirect(null);
-  }, [pathname, accountRedirect]);
+  // Arrived where the account change was heading: adjust during render, not in an effect.
+  if (accountRedirect !== null && pathname === accountRedirect)
+    setAccountRedirect(null);
   const [query] = useState(
     () =>
       new QueryClient({

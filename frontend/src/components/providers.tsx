@@ -19,7 +19,12 @@ import {
 import { type Account } from "@/lib/contracts";
 import { defaultLocale, resolveLocale, text, type Locale } from "@/i18n";
 import { messages } from "@/lib/translations";
-import { syncAnalyticsAccount } from "@/lib/analytics";
+import {
+  errorCode,
+  setAnalyticsLocale,
+  syncAnalyticsAccount,
+  trackBeforeSession,
+} from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
 
 type Session = {
@@ -81,7 +86,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState("");
   const localeRef = useRef(locale);
   const accountRef = useRef(account);
-  const boot = useRef<Promise<void> | null>(null);
+  const boot = useRef<Promise<boolean> | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
   const notify = useCallback((message: string) => setToast(message), []);
   useEffect(() => {
@@ -129,6 +134,7 @@ export function Providers({ children }: { children: ReactNode }) {
           navigator.language,
       );
       localeRef.current = saved;
+      setAnalyticsLocale(saved);
       setLocaleState(saved);
       setApiContext(saved, accountRef.current?.account_id);
       // NEXT_PUBLIC_API_MODE=server talks to chat-server through /api/v1; otherwise
@@ -138,10 +144,16 @@ export function Providers({ children }: { children: ReactNode }) {
         await startMockApi();
       }
       await refreshSession();
+      return true;
     })()
-      .catch((error) =>
-        setFailure(errorMessageKey(error, "common.load_failed")),
-      )
+      .catch((error) => {
+        setFailure(errorMessageKey(error, "common.load_failed"));
+        trackBeforeSession("error_screen_viewed", {
+          target: "session",
+          code: errorCode(error),
+        });
+        return false;
+      })
       .finally(() => {
         boot.current = null;
       });
@@ -187,6 +199,17 @@ export function Providers({ children }: { children: ReactNode }) {
     }
     setLogin({ returnTo: safeReturnTo(target ?? here), error });
   }, [ready, pathname, router]);
+  function retrySession() {
+    // A click while the retry is still running would count one retry twice.
+    if (boot.current) return;
+    trackBeforeSession("retry_clicked", { target: "session" });
+    void initialize().then((loaded) =>
+      trackBeforeSession("retry_finished", {
+        target: "session",
+        result: loaded ? "loaded" : "failed",
+      }),
+    );
+  }
   useEffect(() => {
     document.documentElement.lang = locale;
     document.title = text(messages[locale], "common.brand");
@@ -196,6 +219,7 @@ export function Providers({ children }: { children: ReactNode }) {
     localStorage.setItem("dopia:locale", resolved);
     localeRef.current = resolved;
     setApiContext(resolved, accountRef.current?.account_id);
+    setAnalyticsLocale(resolved);
     setLocaleState(resolved);
   }
   const t = useCallback(
@@ -208,7 +232,7 @@ export function Providers({ children }: { children: ReactNode }) {
       {failure ? (
         <main className="bootstrap_state">
           <p role="alert">{t(failure)}</p>
-          <button className="button primary" onClick={() => void initialize()}>
+          <button className="button primary" onClick={retrySession}>
             {t("common.retry")}
           </button>
         </main>

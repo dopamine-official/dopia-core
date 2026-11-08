@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+
+// Tests always start their own server. Borrowing a dev server already running on the port
+// would run without the analytics settings below and fail the event checks for no reason;
+// with reuseExistingServer off, Playwright stops at once and says the port is in use.
+const port = 3000;
+const origin = `http://127.0.0.1:${port}`;
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 45_000,
@@ -7,7 +13,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: origin,
     // First visits follow the browser language; tests are written in Korean.
     locale: "ko-KR",
     trace: "retain-on-failure",
@@ -22,15 +28,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:3000",
+    command: `npm run dev -- --port ${port}`,
+    url: origin,
     // Analytics on, so tests can read events; tests/e2e/fixtures.ts keeps them in the browser.
     env: {
       ...process.env,
       NEXT_PUBLIC_POSTHOG_KEY: "phc_e2e",
       NEXT_PUBLIC_APP_ENV: "dev",
     } as Record<string, string>,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

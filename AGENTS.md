@@ -69,6 +69,7 @@ fix(backend): 턴 중단 시 스트림을 끝까지 읽지 않음
 |---|---|
 | 작업 브랜치 → `dev` | squash merge |
 | `release` → `main` | merge commit |
+| `release` → `dev` | merge commit<br>`main` 머지 후 release에서 고친 내용을 `dev`에 역류함 |
 
 <br>
 

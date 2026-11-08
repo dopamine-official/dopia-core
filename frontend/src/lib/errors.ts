@@ -16,7 +16,10 @@ const messages: Record<string, string> = {
   character_not_found: "character.not_found",
 };
 
-export function errorMessageKey(error: unknown, fallback = "common.action_failed"): string {
+export function errorMessageKey(
+  error: unknown,
+  fallback = "common.action_failed",
+): string {
   if (!(error instanceof ApiError)) return fallback;
   if (Object.hasOwn(messages, error.code)) return messages[error.code];
   if (error.status === 401) return "common.session_expired";

@@ -162,7 +162,10 @@ export function updateProfile(
   if (user.is_guest) throw new ApiError("forbidden", 403);
   if (values.nickname !== undefined) {
     const nickname = values.nickname.trim();
-    if (!nickname) throw new ApiError("invalid_input", 422, [{ field: "nickname", reason: "required" }]);
+    if (!nickname)
+      throw new ApiError("invalid_input", 422, [
+        { field: "nickname", reason: "required" },
+      ]);
     if (
       state.accounts.some(
         (other) =>

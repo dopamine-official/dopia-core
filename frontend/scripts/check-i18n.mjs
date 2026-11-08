@@ -51,7 +51,10 @@ assert.ok(regions.regions.includes(regions.default_region));
 assert.ok(bundles[regions.default_locale]);
 const deployment = read("deployment.json");
 assert.ok(regions.regions.includes(deployment.region));
-assert.ok(Object.hasOwn(profiles, deployment.profile), "Unknown deployment profile");
+assert.ok(
+  Object.hasOwn(profiles, deployment.profile),
+  "Unknown deployment profile",
+);
 for (const code of regions.regions) {
   const region = read(`regions/${code}.json`);
   assert.equal(region.code, code);
@@ -61,11 +64,17 @@ for (const code of regions.regions) {
     assert.ok(region.enabled);
     assert.equal(region.locale.default, regions.default_locale);
   }
-  for (const config of [region.locale, ...Object.values(profiles).map((profile) => profile.locale ?? region.locale)]) {
+  for (const config of [
+    region.locale,
+    ...Object.values(profiles).map(
+      (profile) => profile.locale ?? region.locale,
+    ),
+  ]) {
     assert.ok(Array.isArray(config.supported) && config.supported.length);
     assert.equal(new Set(config.supported).size, config.supported.length);
     assert.ok(config.supported.includes(config.default));
-    for (const locale of config.supported) assert.ok(bundles[locale], `Missing ${locale}`);
+    for (const locale of config.supported)
+      assert.ok(bundles[locale], `Missing ${locale}`);
   }
 }
 console.log(

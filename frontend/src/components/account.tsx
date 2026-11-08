@@ -18,9 +18,11 @@ export function Profile() {
     if (!account.is_guest) return;
     // Guests cannot see this page: show the login modal over home and return here after login.
     const failed =
-      new URLSearchParams(window.location.search).get("error") === "login_failed";
+      new URLSearchParams(window.location.search).get("error") ===
+      "login_failed";
     router.replace(
-      accountRedirect ?? `/?login=1&return_to=%2Fme${failed ? "&error=login_failed" : ""}`,
+      accountRedirect ??
+        `/?login=1&return_to=%2Fme${failed ? "&error=login_failed" : ""}`,
     );
   }, [account.is_guest, accountRedirect, router]);
   if (account.is_guest) return null;

@@ -51,10 +51,10 @@ npm run dev
 
 지역 목록과 기본값은 `src/i18n/regions/index.json`의 `default_region`, `default_locale`, `regions`에 있습니다. `regions/TW.json`은 `code`, `enabled`, `locale.default`, `locale.supported` 구조로 대만 배포 언어를 정의합니다. 개발 중 한국어를 추가하는 설정은 별도 `profiles.json`에 두고, 코드는 `regionConfig()`로 합쳐진 설정을 읽습니다. 가입 연령·법적 문서·운영 데이터 보존 정책은 이번 프로토타입에서 설정하지 않습니다.
 
-| profile | 기본 언어 | 지원 언어 |
-| --- | --- | --- |
-| `development` | 한국어 | 한국어, 대만 번체, 영어 |
-| `taiwan` | 대만 번체 | 대만 번체, 영어 |
+| profile       | 기본 언어 | 지원 언어               |
+| ------------- | --------- | ----------------------- |
+| `development` | 한국어    | 한국어, 대만 번체, 영어 |
+| `taiwan`      | 대만 번체 | 대만 번체, 영어         |
 
 대만 배포용 언어 설정:
 
@@ -80,18 +80,18 @@ tests/                계약 테스트와 브라우저 흐름 테스트
 
 화면은 `/api/v1/...` 요청과 명세의 JSON/SSE 계약을 사용합니다. MSW가 브라우저에서 요청을 처리하고 IndexedDB에 데이터를 저장합니다. 이후 `api.ts`와 초기화 부분에서 실제 서버로 연결할 수 있습니다. API 명세 출처는 별도 저장소의 `test-chat-spec/DOMAIN`입니다. 이미지와 배치의 원본은 그 저장소의 `REFERENCE/SCREEN`입니다. 스펙 원본은 이 모노레포에 포함하지 않습니다.
 
-| 경로 | 동작 |
-| --- | --- |
-| `POST /api/v1/account/guest` | 게스트 생성 또는 기존 사용자 ID 반환 |
-| `GET/PATCH /api/v1/account/me` | 프로필 조회/수정 |
-| `PATCH /api/v1/account/me/adult_mode` | 성인 인증된 회원의 SAFE 변경 |
-| `POST /api/v1/account/logout`, `/withdraw` | 로그아웃/탈퇴 후 새 게스트 ID 반환 |
-| `GET /api/v1/home` | 지역화된 홈 목록 |
-| `POST /api/v1/chats/open` | 기존 방 열기 또는 새 방 생성 |
-| `GET /api/v1/chats/recent` | 최근 대화 |
-| `GET/DELETE /api/v1/chats/:room_id` | 대화 조회/논리 삭제 |
-| `POST /api/v1/chats/:room_id/messages` | `accepted`, `token`, `completed`/`failed` SSE |
-| `/api/v1/mock/*` | 모의 로그인, 시나리오, 초기화, 로컬 이벤트 |
+| 경로                                       | 동작                                          |
+| ------------------------------------------ | --------------------------------------------- |
+| `POST /api/v1/account/guest`               | 게스트 생성 또는 기존 사용자 ID 반환          |
+| `GET/PATCH /api/v1/account/me`             | 프로필 조회/수정                              |
+| `PATCH /api/v1/account/me/adult_mode`      | 성인 인증된 회원의 SAFE 변경                  |
+| `POST /api/v1/account/logout`, `/withdraw` | 로그아웃/탈퇴 후 새 게스트 ID 반환            |
+| `GET /api/v1/home`                         | 지역화된 홈 목록                              |
+| `POST /api/v1/chats/open`                  | 기존 방 열기 또는 새 방 생성                  |
+| `GET /api/v1/chats/recent`                 | 최근 대화                                     |
+| `GET/DELETE /api/v1/chats/:room_id`        | 대화 조회/논리 삭제                           |
+| `POST /api/v1/chats/:room_id/messages`     | `accepted`, `token`, `completed`/`failed` SSE |
+| `/api/v1/mock/*`                           | 모의 로그인, 시나리오, 초기화, 로컬 이벤트    |
 
 실제 OAuth 리다이렉트·콜백 대신 `POST /api/v1/mock/login`을 사용합니다. 모의 요청 식별은 IndexedDB의 활성 계정과 `X-Preview-Account` 검증으로 구현했으며 HttpOnly 인증 쿠키를 구현한 것은 아닙니다. 일반 계약의 `X-Locale`, `X-Region`은 그대로 사용합니다. 모의 API가 시작되지 않은 직접 서버 호출에는 503이 반환됩니다.
 

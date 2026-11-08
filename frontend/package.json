@@ -11,9 +11,12 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check": "npm run check:i18n && npm run typecheck && npm test",
+    "check": "npm run check:i18n && npm run lint && npm run format:check && npm run typecheck && npm test",
     "dev:server": "NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_API_MODE=server NEXT_PUBLIC_LOGIN=oauth API_UPSTREAM=http://127.0.0.1:8080 next dev --hostname 127.0.0.1",
-    "test:e2e:server": "NEXT_PUBLIC_API_MODE=server API_UPSTREAM=http://127.0.0.1:8080 playwright test"
+    "test:e2e:server": "NEXT_PUBLIC_API_MODE=server API_UPSTREAM=http://127.0.0.1:8080 playwright test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@tanstack/react-query": "5.100.14",
@@ -29,6 +32,10 @@
     "@types/node": "20.19.41",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.6",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.9.10",
     "typescript": "5.9.3",
     "vitest": "3.2.6"
   },

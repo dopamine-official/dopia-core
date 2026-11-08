@@ -96,7 +96,10 @@ export function Chat({ roomId }: { roomId: string }) {
         value.role === "user",
     );
     if (user?.turn_status === "failed")
-      finishPending(true, errorMessageKey(new ApiError(user.error_code ?? "", 0), "chat.failed"));
+      finishPending(
+        true,
+        errorMessageKey(new ApiError(user.error_code ?? "", 0), "chat.failed"),
+      );
     else if (user?.turn_status === "completed") finishPending(false);
     else if (result.data && current && restored.current && !user)
       finishPending(true);
@@ -168,7 +171,10 @@ export function Chat({ roomId }: { roomId: string }) {
             queryKey: ["room", account.account_id, roomId],
           });
         } else if (event.event === "failed") {
-          finishPending(true, errorMessageKey(new ApiError(event.data.code, 0), "chat.failed"));
+          finishPending(
+            true,
+            errorMessageKey(new ApiError(event.data.code, 0), "chat.failed"),
+          );
           void query.invalidateQueries({
             queryKey: ["room", account.account_id, roomId],
           });
@@ -193,7 +199,8 @@ export function Chat({ roomId }: { roomId: string }) {
       }
       if (error instanceof ApiError && [409, 422, 429].includes(error.status)) {
         finishPending(true, message);
-        if (error.status === 409) void query.invalidateQueries({ queryKey: key });
+        if (error.status === 409)
+          void query.invalidateQueries({ queryKey: key });
         return;
       }
       try {
@@ -205,7 +212,8 @@ export function Chat({ roomId }: { roomId: string }) {
             message.client_message_id === current.client_message_id &&
             message.role === "user",
         );
-        if (!user || user.turn_status === "failed") finishPending(true, message);
+        if (!user || user.turn_status === "failed")
+          finishPending(true, message);
         else if (user.turn_status === "completed") finishPending(false);
         // A generating turn stays locked and is polled until its terminal state.
       } catch {
@@ -328,7 +336,10 @@ export function Chat({ roomId }: { roomId: string }) {
         {result.isPending ? (
           <Loading />
         ) : result.isError ? (
-          <ErrorState error={result.error} retry={() => void result.refetch()} />
+          <ErrorState
+            error={result.error}
+            retry={() => void result.refetch()}
+          />
         ) : (
           <>
             <p className="ai_notice">{t("chat.notice")}</p>

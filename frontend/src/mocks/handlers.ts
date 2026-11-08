@@ -38,9 +38,15 @@ function guarded(
           : status === 422
             ? "invalid_input"
             : "storage_unavailable";
-      const detail = error instanceof z.ZodError
-        ? error.issues.map((issue) => ({ field: issue.path.join("."), reason: issue.code }))
-        : error instanceof ApiError && Array.isArray(error.detail) ? error.detail : [];
+      const detail =
+        error instanceof z.ZodError
+          ? error.issues.map((issue) => ({
+              field: issue.path.join("."),
+              reason: issue.code,
+            }))
+          : error instanceof ApiError && Array.isArray(error.detail)
+            ? error.detail
+            : [];
       return HttpResponse.json({ code, message: code, detail }, { status });
     }
   };

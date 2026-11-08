@@ -75,7 +75,10 @@ export function Preview() {
           {scenario.isPending ? (
             <Loading />
           ) : scenario.isError ? (
-            <ErrorState error={scenario.error} retry={() => void scenario.refetch()} />
+            <ErrorState
+              error={scenario.error}
+              retry={() => void scenario.refetch()}
+            />
           ) : (
             <>
               <label className="field">
@@ -126,7 +129,10 @@ export function Preview() {
           <h2>{t("preview.events")}</h2>
           <p className="muted">{t("preview.events_help")}</p>
           {events.isError ? (
-            <ErrorState error={events.error} retry={() => void events.refetch()} />
+            <ErrorState
+              error={events.error}
+              retry={() => void events.refetch()}
+            />
           ) : events.isPending ? (
             <Loading />
           ) : events.data.length ? (

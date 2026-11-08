@@ -22,7 +22,9 @@ async function send(page: Page, value: string) {
 }
 async function scenario(page: Page, kind: string) {
   await page.goto("/preview");
-  await page.getByRole("combobox", { name: "다음 답변", exact: true }).selectOption(kind);
+  await page
+    .getByRole("combobox", { name: "다음 답변", exact: true })
+    .selectOption(kind);
   await expect(
     page.getByRole("status").filter({ hasText: "설정을 저장했어요." }),
   ).toBeVisible();
@@ -43,7 +45,9 @@ test("three locales, preserved messages, no external requests", async ({
   page.on("pageerror", (error) => errors.push(error.message));
   await openChat(page);
   const first = await page.locator(".message.assistant").first().innerText();
-  await page.getByRole("combobox", { name: "언어", exact: true }).selectOption("en-US");
+  await page
+    .getByRole("combobox", { name: "언어", exact: true })
+    .selectOption("en-US");
   await expect(
     page.getByRole("heading", { name: "Winter", exact: true }),
   ).toBeVisible();
@@ -56,7 +60,9 @@ test("three locales, preserved messages, no external requests", async ({
   await expect(page.locator(".message.assistant").last()).toContainText(
     "Let us walk together",
   );
-  await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("zh-TW");
+  await page
+    .getByRole("combobox", { name: "Language", exact: true })
+    .selectOption("zh-TW");
   await expect(
     page.getByRole("heading", { name: "冬", exact: true }),
   ).toBeVisible();
@@ -109,7 +115,9 @@ test("guest chat migrates on mock login, profile edits persist, logout isolates 
   await expect(page.locator(".message.user")).toContainText("나의 첫 대화");
 });
 
-test("401 recovery continues the same message ID and preserves the next draft", async ({ page }) => {
+test("401 recovery continues the same message ID and preserves the next draft", async ({
+  page,
+}) => {
   await openChat(page);
   const roomUrl = page.url();
   await page.evaluate(() => {
@@ -118,7 +126,10 @@ test("401 recovery continues the same message ID and preserves the next draft", 
     window.fetch = async (input, init) => {
       if (String(input).endsWith("/messages") && init?.method === "POST") {
         attempts.push(String(init.body));
-        sessionStorage.setItem("dopia:recovery-attempts", JSON.stringify(attempts));
+        sessionStorage.setItem(
+          "dopia:recovery-attempts",
+          JSON.stringify(attempts),
+        );
         if (attempts.length === 1)
           return Response.json({ code: "unauthorized" }, { status: 401 });
       }
@@ -132,8 +143,11 @@ test("401 recovery continues the same message ID and preserves the next draft", 
   await expect(page.locator(".message.user")).toHaveCount(1);
   await expect(input).toHaveValue("다음 메시지 초안");
   await expect(page).toHaveURL(roomUrl);
-  const attempts = await page.evaluate(() =>
-    JSON.parse(sessionStorage.getItem("dopia:recovery-attempts") ?? "[]") as string[],
+  const attempts = await page.evaluate(
+    () =>
+      JSON.parse(
+        sessionStorage.getItem("dopia:recovery-attempts") ?? "[]",
+      ) as string[],
   );
   expect(attempts).toHaveLength(2);
   expect(attempts[1]).toBe(attempts[0]);
@@ -198,14 +212,18 @@ test("empty list, one-shot load failure, retry and preview reset", async ({
 }) => {
   await home(page);
   await page.goto("/preview");
-  await page.getByRole("combobox", { name: "홈 목록", exact: true }).selectOption("empty");
+  await page
+    .getByRole("combobox", { name: "홈 목록", exact: true })
+    .selectOption("empty");
   await expect(
     page.getByRole("status").filter({ hasText: "설정을 저장했어요." }),
   ).toBeVisible();
   await page.goto("/");
   await expect(page.getByText("지금은 공개된 캐릭터가 없어요.")).toBeVisible();
   await page.goto("/preview");
-  await page.getByRole("combobox", { name: "홈 목록", exact: true }).selectOption("error");
+  await page
+    .getByRole("combobox", { name: "홈 목록", exact: true })
+    .selectOption("error");
   await expect(
     page.getByRole("status").filter({ hasText: "설정을 저장했어요." }),
   ).toBeVisible();
@@ -238,7 +256,10 @@ test("SAFE requires login and adult verification without sending a PATCH", async
   });
   const changes: string[] = [];
   page.on("request", (request) => {
-    if (request.method() === "PATCH" && request.url().endsWith("/account/me/adult_mode"))
+    if (
+      request.method() === "PATCH" &&
+      request.url().endsWith("/account/me/adult_mode")
+    )
       changes.push(request.url());
   });
   const safe = page.getByRole("switch", { name: "세이프 모드", exact: true });
@@ -249,12 +270,15 @@ test("SAFE requires login and adult verification without sending a PATCH", async
   await expect(login).toBeVisible();
   await expect(page).toHaveURL("/");
   expect(changes).toEqual([]);
-  await login.getByRole("button", { name: "Google로 로그인", exact: true }).click();
+  await login
+    .getByRole("button", { name: "Google로 로그인", exact: true })
+    .click();
   await expect(page).toHaveURL("/");
   await expect(safe).toBeChecked();
   await safe.click();
-  await expect(page.getByRole("status").filter({ hasText: "성인 인증이 필요해요." }))
-    .toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "성인 인증이 필요해요." }),
+  ).toBeVisible();
   await expect(safe).toBeChecked();
   await expect(adult).toHaveCount(0);
   expect(changes).toEqual([]);
@@ -268,12 +292,17 @@ test("dialog Escape restores focus", async ({ page }) => {
   });
   await menu.click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(menu).toBeFocused();
   await menu.click();
-  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .click();
   await expect(menu).toBeFocused();
   await menu.click();
   const dialog = page.getByRole("dialog");

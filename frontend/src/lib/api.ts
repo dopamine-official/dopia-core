@@ -10,7 +10,8 @@ let locale: Locale = defaultLocale;
 let identity: string | undefined;
 let identityVersion = 0;
 let recoveryVersion = 0;
-let recovery: { identityVersion: number; promise: Promise<Account> } | undefined;
+let recovery:
+  { identityVersion: number; promise: Promise<Account> } | undefined;
 const sessionListeners = new Set<(account: Account) => void>();
 export function setApiContext(nextLocale: Locale, accountId?: string) {
   locale = nextLocale;
@@ -26,7 +27,10 @@ export function subscribeSession(listener: (account: Account) => void) {
 function assertIdentity(version: number) {
   if (version !== identityVersion) throw new ApiError("account_changed", 401);
 }
-function requestOptions(options: RequestInit, accountId = identity): RequestInit {
+function requestOptions(
+  options: RequestInit,
+  accountId = identity,
+): RequestInit {
   const headers = new Headers(options.headers);
   headers.set("X-Locale", locale);
   headers.set("X-Region", regionCode);
@@ -47,7 +51,8 @@ async function send(
 ): Promise<Response> {
   const version = identityVersion;
   const method = (options.method ?? "GET").toUpperCase();
-  const canRetry = method === "GET" || (method === "POST" && path === "/account/guest");
+  const canRetry =
+    method === "GET" || (method === "POST" && path === "/account/guest");
   while (true) {
     options.signal?.throwIfAborted();
     assertIdentity(version);

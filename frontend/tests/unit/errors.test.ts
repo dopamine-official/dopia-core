@@ -12,7 +12,11 @@ describe("localized error guidance", () => {
     ["unknown", 401, "common.session_expired"],
     ["account_changed", 401, "common.session_changed"],
     ["unknown", 403, "common.forbidden"],
-    ["adult_verification_required", 403, "character.adult_verification_required"],
+    [
+      "adult_verification_required",
+      403,
+      "character.adult_verification_required",
+    ],
     ["unknown", 404, "common.not_found"],
     ["nickname_taken", 409, "account.me.nickname_taken"],
     ["unknown", 413, "account.me.photo_large"],
@@ -25,28 +29,44 @@ describe("localized error guidance", () => {
     ["toString", 400, "common.action_failed"],
   ])("maps %s (%s) to translated guidance", (code, status, key) => {
     expect(errorMessageKey(new ApiError(code, status))).toBe(key);
-    for (const locale of locales) expect(text(messages[locale], key)).not.toBe(key);
+    for (const locale of locales)
+      expect(text(messages[locale], key)).not.toBe(key);
   });
 
   it("distinguishes invalid nickname and photo fields in 422 responses", () => {
-    expect(errorMessageKey(new ApiError("invalid_input", 422, [{ field: "nickname", reason: "too_long" }])))
-      .toBe("account.me.nickname_invalid");
-    expect(errorMessageKey(new ApiError("invalid_input", 422, [{ field: "photo", reason: "invalid_type" }])))
-      .toBe("account.me.photo_type_invalid");
-    expect(errorMessageKey(new ApiError("invalid_input", 422, [null, "unexpected"])))
-      .toBe("common.invalid_input");
+    expect(
+      errorMessageKey(
+        new ApiError("invalid_input", 422, [
+          { field: "nickname", reason: "too_long" },
+        ]),
+      ),
+    ).toBe("account.me.nickname_invalid");
+    expect(
+      errorMessageKey(
+        new ApiError("invalid_input", 422, [
+          { field: "photo", reason: "invalid_type" },
+        ]),
+      ),
+    ).toBe("account.me.photo_type_invalid");
+    expect(
+      errorMessageKey(new ApiError("invalid_input", 422, [null, "unexpected"])),
+    ).toBe("common.invalid_input");
   });
 
   it("maps a reused message ID with different text to the conflict guidance", () => {
     const key = errorMessageKey(
-      new ApiError("invalid_input", 422, [{ field: "client_message_id", reason: "content_mismatch" }]),
+      new ApiError("invalid_input", 422, [
+        { field: "client_message_id", reason: "content_mismatch" },
+      ]),
     );
     expect(key).toBe("chat.message_conflict");
-    for (const locale of locales) expect(text(messages[locale], key)).not.toBe(key);
+    for (const locale of locales)
+      expect(text(messages[locale], key)).not.toBe(key);
   });
 
   it("keeps contextual fallback for unknown errors without showing raw details", () => {
-    expect(errorMessageKey(new Error("private server details"), "chat.failed"))
-      .toBe("chat.failed");
+    expect(
+      errorMessageKey(new Error("private server details"), "chat.failed"),
+    ).toBe("chat.failed");
   });
 });

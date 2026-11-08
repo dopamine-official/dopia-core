@@ -64,7 +64,9 @@ describe("mock HTTP boundary", () => {
     const guest = await call("/account/guest", { method: "POST" });
     const issued = await guest.json();
     expect(issued).toEqual({ account_id: expect.any(String) });
-    const profile = accountSchema.parse(await (await call("/account/me")).json());
+    const profile = accountSchema.parse(
+      await (await call("/account/me")).json(),
+    );
     expect(profile).toMatchObject({
       account_id: issued.account_id,
       is_guest: true,
@@ -132,14 +134,17 @@ describe("mock HTTP boundary", () => {
               : "adult_verification_required",
         });
       }
-      expect(accountSchema.parse(await (await call("/account/me")).json()))
-        .toMatchObject({ adult_mode: false, adult_verified: false });
+      expect(
+        accountSchema.parse(await (await call("/account/me")).json()),
+      ).toMatchObject({ adult_mode: false, adult_verified: false });
       const adult = characters.find((value) => value.is_adult)!;
       const home = homeSchema.parse(await (await call("/home")).json());
-      expect(home.sections[0].characters.some((value) => value.id === adult.id))
-        .toBe(false);
-      expect(store.state!.events.some((value) => value.name === "safe_mode_changed"))
-        .toBe(false);
+      expect(
+        home.sections[0].characters.some((value) => value.id === adult.id),
+      ).toBe(false);
+      expect(
+        store.state!.events.some((value) => value.name === "safe_mode_changed"),
+      ).toBe(false);
     },
   );
   it("persists verified member SAFE changes and filters home using the saved value", async () => {
@@ -150,8 +155,9 @@ describe("mock HTTP boundary", () => {
     });
     const member = accountSchema.parse(await response.json());
     // Verification is a test fixture; the app has no verification shortcut.
-    store.state!.accounts.find((value) => value.account_id === member.account_id)!
-      .adult_verified = true;
+    store.state!.accounts.find(
+      (value) => value.account_id === member.account_id,
+    )!.adult_verified = true;
     const adult = characters.find((value) => value.is_adult)!;
     for (const adult_mode of [true, false]) {
       const changed = await call("/account/me/adult_mode", {
@@ -163,11 +169,14 @@ describe("mock HTTP boundary", () => {
         adult_mode,
         adult_verified: true,
       });
-      expect(accountSchema.parse(await (await call("/account/me")).json()).adult_mode)
-        .toBe(adult_mode);
+      expect(
+        accountSchema.parse(await (await call("/account/me")).json())
+          .adult_mode,
+      ).toBe(adult_mode);
       const home = homeSchema.parse(await (await call("/home")).json());
-      expect(home.sections[0].characters.some((value) => value.id === adult.id))
-        .toBe(adult_mode);
+      expect(
+        home.sections[0].characters.some((value) => value.id === adult.id),
+      ).toBe(adult_mode);
     }
   });
   it("serves a real SSE stream, persists its result and replays the same send without duplication", async () => {

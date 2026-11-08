@@ -4,9 +4,15 @@ import { messages } from "@/lib/translations";
 import { readStream, safeReturnTo } from "@/lib/api";
 describe("localization and transport", () => {
   it("removes stored Korean preference when the Taiwan profile excludes Korean", () => {
-    expect(resolveLocale("ko-KR", regionConfig("TW", "taiwan").locale)).toBe("zh-TW");
-    expect(resolveLocale("en-GB", regionConfig("TW", "taiwan").locale)).toBe("en-US");
-    expect(resolveLocale(null, regionConfig("TW", "development").locale)).toBe("ko-KR");
+    expect(resolveLocale("ko-KR", regionConfig("TW", "taiwan").locale)).toBe(
+      "zh-TW",
+    );
+    expect(resolveLocale("en-GB", regionConfig("TW", "taiwan").locale)).toBe(
+      "en-US",
+    );
+    expect(resolveLocale(null, regionConfig("TW", "development").locale)).toBe(
+      "ko-KR",
+    );
   });
   it("resolves localized content and text placeholders", () => {
     expect(

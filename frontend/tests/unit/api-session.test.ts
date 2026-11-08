@@ -26,11 +26,14 @@ const calls = (path: string) =>
   fetchMock.mock.calls.filter(([url]) => url === `/api/v1${path}`);
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 function recover(url: RequestInfo | URL, next: Account = current) {
-  if (url === "/api/v1/account/guest") return json({ account_id: next.account_id });
+  if (url === "/api/v1/account/guest")
+    return json({ account_id: next.account_id });
   if (url === "/api/v1/account/me") return json(next);
   throw new Error(`Unexpected request: ${url}`);
 }
@@ -57,10 +60,14 @@ describe("session recovery and identity-only responses", () => {
       "/api/v1/account/guest",
       "/api/v1/account/me",
     ]);
-    expect(new Headers(calls("/account/guest")[0][1]?.headers).has("X-Preview-Account"))
-      .toBe(false);
-    expect(new Headers(calls("/account/me")[0][1]?.headers).get("X-Preview-Account"))
-      .toBe(current.account_id);
+    expect(
+      new Headers(calls("/account/guest")[0][1]?.headers).has(
+        "X-Preview-Account",
+      ),
+    ).toBe(false);
+    expect(
+      new Headers(calls("/account/me")[0][1]?.headers).get("X-Preview-Account"),
+    ).toBe(current.account_id);
     expect(updated).toHaveBeenCalledExactlyOnceWith(current);
   });
 
@@ -79,16 +86,23 @@ describe("session recovery and identity-only responses", () => {
       setApiContext("en-US", current.account_id);
       return recover(url);
     });
-    await expect(request("/chats/room/messages", {
-      method: "POST",
-      body,
-      signal,
-      headers: { "X-Request-ID": "original-request" },
-    })).resolves.toMatchObject({ status: 200 });
+    await expect(
+      request("/chats/room/messages", {
+        method: "POST",
+        body,
+        signal,
+        headers: { "X-Request-ID": "original-request" },
+      }),
+    ).resolves.toMatchObject({ status: 200 });
     const attempts = calls("/chats/room/messages");
     expect(attempts).toHaveLength(2);
     for (const [, options] of attempts) {
-      expect(options).toMatchObject({ method: "POST", body, signal, credentials: "same-origin" });
+      expect(options).toMatchObject({
+        method: "POST",
+        body,
+        signal,
+        credentials: "same-origin",
+      });
       const headers = new Headers(options?.headers);
       expect(headers.get("X-Locale")).toBe("ko-KR");
       expect(headers.get("X-Preview-Account")).toBe(current.account_id);
@@ -101,10 +115,13 @@ describe("session recovery and identity-only responses", () => {
   it("publishes a changed identity without resending the old user's request", async () => {
     const next = { ...current, account_id: "guest-2" };
     fetchMock.mockImplementation(async (url) =>
-      url === "/api/v1/chats/room/messages" ? unauthorized() : recover(url, next),
+      url === "/api/v1/chats/room/messages"
+        ? unauthorized()
+        : recover(url, next),
     );
-    await expect(request("/chats/room/messages", { method: "POST", body: "original" }))
-      .rejects.toMatchObject({ code: "account_changed", status: 401 });
+    await expect(
+      request("/chats/room/messages", { method: "POST", body: "original" }),
+    ).rejects.toMatchObject({ code: "account_changed", status: 401 });
     expect(calls("/chats/room/messages")).toHaveLength(1);
     expect(updated).toHaveBeenCalledExactlyOnceWith(next);
   });
@@ -113,7 +130,10 @@ describe("session recovery and identity-only responses", () => {
     fetchMock.mockImplementation(async (url) =>
       url === "/api/v1/home" ? unauthorized() : recover(url),
     );
-    await expect(request("/home")).rejects.toMatchObject({ code: "unauthorized", status: 401 });
+    await expect(request("/home")).rejects.toMatchObject({
+      code: "unauthorized",
+      status: 401,
+    });
     expect(calls("/home")).toHaveLength(2);
     expect(calls("/account/guest")).toHaveLength(1);
     expect(calls("/account/me")).toHaveLength(1);
@@ -128,7 +148,8 @@ describe("session recovery and identity-only responses", () => {
         return recover(url);
       });
       await expect(request("/home")).rejects.toMatchObject({
-        code: "session_recovery_failed", status: 401,
+        code: "session_recovery_failed",
+        status: 401,
       });
       expect(calls("/home")).toHaveLength(1);
       expect(calls("/account/guest")).toHaveLength(1);
@@ -153,8 +174,14 @@ describe("session recovery and identity-only responses", () => {
     abort.abort();
     gate.resolve(json({ account_id: current.account_id }));
     const [first, second] = await outcomes;
-    expect(first).toMatchObject({ status: "rejected", reason: { name: "AbortError" } });
-    expect(second).toMatchObject({ status: "fulfilled", value: { status: 200 } });
+    expect(first).toMatchObject({
+      status: "rejected",
+      reason: { name: "AbortError" },
+    });
+    expect(second).toMatchObject({
+      status: "fulfilled",
+      value: { status: 200 },
+    });
     expect(calls("/home")).toHaveLength(1);
     expect(calls("/chats/recent")).toHaveLength(2);
     expect(calls("/account/guest")).toHaveLength(1);
@@ -164,9 +191,13 @@ describe("session recovery and identity-only responses", () => {
     const delayed = deferred<Response>();
     fetchMock.mockImplementation(async (url) => {
       if (url === "/api/v1/home")
-        return calls("/home").length === 1 ? unauthorized() : json({ ok: true });
+        return calls("/home").length === 1
+          ? unauthorized()
+          : json({ ok: true });
       if (url === "/api/v1/chats/recent")
-        return calls("/chats/recent").length === 1 ? delayed.promise : json({ chats: [] });
+        return calls("/chats/recent").length === 1
+          ? delayed.promise
+          : json({ chats: [] });
       return recover(url);
     });
     const first = request("/home");
@@ -185,7 +216,9 @@ describe("session recovery and identity-only responses", () => {
       if (url === "/api/v1/account/me") return delayed.promise;
       return recover(url);
     });
-    const outcome = expect(request("/home")).rejects.toMatchObject({ code: "account_changed" });
+    const outcome = expect(request("/home")).rejects.toMatchObject({
+      code: "account_changed",
+    });
     await vi.waitFor(() => expect(calls("/account/me")).toHaveLength(1));
     setApiContext("ko-KR", "new-login");
     delayed.resolve(json(current));
@@ -197,8 +230,9 @@ describe("session recovery and identity-only responses", () => {
   it("rejects a stale successful response after the account changes", async () => {
     const delayed = deferred<Response>();
     fetchMock.mockReturnValue(delayed.promise);
-    const outcome = expect(api("/account/me", accountSchema))
-      .rejects.toMatchObject({ code: "account_changed" });
+    const outcome = expect(
+      api("/account/me", accountSchema),
+    ).rejects.toMatchObject({ code: "account_changed" });
     setApiContext("ko-KR", "new-login");
     delayed.resolve(json(current));
     await outcome;
@@ -209,8 +243,9 @@ describe("session recovery and identity-only responses", () => {
     const next = { ...current, account_id: "logout-guest" };
     fetchMock.mockResolvedValue(json(next));
     await expect(readAccount(next.account_id)).resolves.toEqual(next);
-    expect(new Headers(calls("/account/me")[0][1]?.headers).get("X-Preview-Account"))
-      .toBe(next.account_id);
+    expect(
+      new Headers(calls("/account/me")[0][1]?.headers).get("X-Preview-Account"),
+    ).toBe(next.account_id);
     expect(calls("/account/guest")).toHaveLength(0);
   });
 
@@ -220,20 +255,26 @@ describe("session recovery and identity-only responses", () => {
         ? json({ account_id: current.account_id })
         : json({ ...current, account_id: "unexpected" }),
     );
-    await expect(refreshSession()).rejects.toMatchObject({ code: "account_changed" });
+    await expect(refreshSession()).rejects.toMatchObject({
+      code: "account_changed",
+    });
     expect(updated).not.toHaveBeenCalled();
   });
 
-  it.each([403, 404, 409, 422, 429])("does not recover or retry a client error (%s)", async (status) => {
-    fetchMock.mockResolvedValue(json({ code: "failed" }, status));
-    await expect(request("/home")).rejects.toMatchObject({ status });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+  it.each([403, 404, 409, 422, 429])(
+    "does not recover or retry a client error (%s)",
+    async (status) => {
+      fetchMock.mockResolvedValue(json({ code: "failed" }, status));
+      await expect(request("/home")).rejects.toMatchObject({ status });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("does not recursively recover a direct guest issuance request", async () => {
     fetchMock.mockResolvedValue(unauthorized());
-    await expect(request("/account/guest", { method: "POST" }))
-      .rejects.toMatchObject({ code: "unauthorized", status: 401 });
+    await expect(
+      request("/account/guest", { method: "POST" }),
+    ).rejects.toMatchObject({ code: "unauthorized", status: 401 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
@@ -241,22 +282,33 @@ describe("session recovery and identity-only responses", () => {
 describe("bounded transient retries", () => {
   it("retries a failed read once with the original headers and signal", async () => {
     const signal = new AbortController().signal;
-    fetchMock.mockResolvedValueOnce(json({ code: "unavailable" }, 503))
+    fetchMock
+      .mockResolvedValueOnce(json({ code: "unavailable" }, 503))
       .mockResolvedValueOnce(json({ ok: true }));
-    await expect(request("/home", { signal })).resolves.toMatchObject({ status: 200 });
+    await expect(request("/home", { signal })).resolves.toMatchObject({
+      status: 200,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]).toEqual(fetchMock.mock.calls[1]);
   });
 
   it("stops after two failed reads and exposes the server error", async () => {
-    fetchMock.mockImplementation(async () => json({ code: "unavailable" }, 503));
-    await expect(request("/home")).rejects.toMatchObject({ status: 503, code: "unavailable" });
+    fetchMock.mockImplementation(async () =>
+      json({ code: "unavailable" }, 503),
+    );
+    await expect(request("/home")).rejects.toMatchObject({
+      status: 503,
+      code: "unavailable",
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("retries network failures once and normalizes the final failure", async () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
-    await expect(request("/home")).rejects.toMatchObject({ code: "network_error", status: 0 });
+    await expect(request("/home")).rejects.toMatchObject({
+      code: "network_error",
+      status: 0,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -280,14 +332,17 @@ describe("bounded transient retries", () => {
     ["DELETE", "/chats/room"],
   ])("does not retry a server failure for %s %s", async (method, path) => {
     fetchMock.mockResolvedValue(json({}, 500));
-    await expect(request(path, { method })).rejects.toMatchObject({ status: 500 });
+    await expect(request(path, { method })).rejects.toMatchObject({
+      status: 500,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not resend a message after a network failure", async () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
-    await expect(request("/chats/room/messages", { method: "POST" }))
-      .rejects.toMatchObject({ code: "network_error" });
+    await expect(
+      request("/chats/room/messages", { method: "POST" }),
+    ).rejects.toMatchObject({ code: "network_error" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -297,14 +352,17 @@ describe("bounded transient retries", () => {
       controller.abort();
       return json({}, 503);
     });
-    await expect(request("/home", { signal: controller.signal }))
-      .rejects.toMatchObject({ name: "AbortError" });
+    await expect(
+      request("/home", { signal: controller.signal }),
+    ).rejects.toMatchObject({ name: "AbortError" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     fetchMock.mockImplementationOnce(async () => {
       setApiContext("ko-KR", "changed");
       return json({}, 503);
     });
-    await expect(request("/home")).rejects.toMatchObject({ code: "account_changed" });
+    await expect(request("/home")).rejects.toMatchObject({
+      code: "account_changed",
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -322,8 +380,9 @@ describe("bounded transient retries", () => {
   it("keeps validation details for field-specific guidance", async () => {
     const detail = [{ field: "nickname", reason: "too_long" }];
     fetchMock.mockResolvedValue(json({ code: "invalid_input", detail }, 422));
-    await expect(request("/account/me", { method: "PATCH" }))
-      .rejects.toMatchObject({ code: "invalid_input", status: 422, detail });
+    await expect(
+      request("/account/me", { method: "PATCH" }),
+    ).rejects.toMatchObject({ code: "invalid_input", status: 422, detail });
   });
 
   it("reports offline without issuing requests", async () => {
@@ -333,8 +392,13 @@ describe("bounded transient retries", () => {
   });
 
   it("preserves the HTTP status for an error without a JSON body", async () => {
-    fetchMock.mockImplementation(async () => new Response("Service unavailable", { status: 503 }));
-    await expect(request("/home")).rejects.toMatchObject({ code: "http_error", status: 503 });
+    fetchMock.mockImplementation(
+      async () => new Response("Service unavailable", { status: 503 }),
+    );
+    await expect(request("/home")).rejects.toMatchObject({
+      code: "http_error",
+      status: 503,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

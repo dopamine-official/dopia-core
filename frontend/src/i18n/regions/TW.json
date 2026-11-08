@@ -3,10 +3,7 @@
   "enabled": true,
   "locale": {
     "default": "zh-TW",
-    "supported": [
-      "zh-TW",
-      "en-US"
-    ]
+    "supported": ["zh-TW", "en-US"]
   },
   "content": {
     "adult_mode_available": true

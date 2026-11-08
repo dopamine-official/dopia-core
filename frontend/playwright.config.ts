@@ -24,6 +24,12 @@ export default defineConfig({
   webServer: {
     command: "npm run dev",
     url: "http://127.0.0.1:3000",
+    // Analytics on, so tests can read events; tests/e2e/fixtures.ts keeps them in the browser.
+    env: {
+      ...process.env,
+      NEXT_PUBLIC_POSTHOG_KEY: "phc_e2e",
+      NEXT_PUBLIC_APP_ENV: "dev",
+    } as Record<string, string>,
     reuseExistingServer: true,
     timeout: 60_000,
   },

@@ -44,10 +44,14 @@ test("three locales, preserved messages, no external requests", async ({
   });
   page.on("pageerror", (error) => errors.push(error.message));
   await openChat(page);
+  const roomUrl = page.url();
   const first = await page.locator(".message.assistant").first().innerText();
+  // The chat room has no language selector; change it on home and come back.
+  await home(page);
   await page
     .getByRole("combobox", { name: "언어", exact: true })
     .selectOption("en-US");
+  await page.goto(roomUrl);
   await expect(
     page.getByRole("heading", { name: "Winter", exact: true }),
   ).toBeVisible();
@@ -60,9 +64,11 @@ test("three locales, preserved messages, no external requests", async ({
   await expect(page.locator(".message.assistant").last()).toContainText(
     "Let us walk together",
   );
+  await page.goto("/");
   await page
     .getByRole("combobox", { name: "Language", exact: true })
     .selectOption("zh-TW");
+  await page.goto(roomUrl);
   await expect(
     page.getByRole("heading", { name: "冬", exact: true }),
   ).toBeVisible();
@@ -88,13 +94,19 @@ test("guest chat migrates on mock login, profile edits persist, logout isolates 
   const roomUrl = page.url();
   await send(page, "나의 첫 대화");
   await expect(page.locator(".message.assistant")).toHaveCount(2);
-  await page.getByRole("link", { name: "로그인", exact: true }).click();
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
   await page
+    .getByRole("dialog", { name: "이야기를 이어가세요" })
     .getByRole("button", { name: "Google로 로그인", exact: true })
     .click();
   await expect(page).toHaveURL(roomUrl);
   await expect(page.locator(".message.user")).toContainText("나의 첫 대화");
-  await page.getByRole("link", { name: "마이페이지", exact: true }).click();
+  await page.getByRole("button", { name: "내 프로필", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "내 메뉴", exact: true })
+    .getByRole("link")
+    .first()
+    .click();
   await page.getByRole("button", { name: "프로필 수정", exact: true }).click();
   await page.getByLabel("닉네임", { exact: true }).fill("테스트 여행자");
   await page.getByRole("button", { name: "저장", exact: true }).click();
@@ -111,6 +123,10 @@ test("guest chat migrates on mock login, profile edits persist, logout isolates 
     .getByRole("button", { name: "Google로 로그인", exact: true })
     .click();
   await expect(page).toHaveURL("/");
+  // Already on "/", so wait for the login itself before opening the room.
+  await expect(
+    page.getByRole("button", { name: "내 프로필", exact: true }),
+  ).toBeVisible();
   await page.goto(roomUrl);
   await expect(page.locator(".message.user")).toContainText("나의 첫 대화");
 });
@@ -242,7 +258,7 @@ test("empty list, one-shot load failure, retry and preview reset", async ({
     .click();
   await expect(page).toHaveURL("/");
   await expect(
-    page.getByRole("link", { name: "로그인", exact: true }),
+    page.getByRole("button", { name: "로그인", exact: true }),
   ).toBeVisible();
 });
 
@@ -309,9 +325,9 @@ test("dialog Escape restores focus", async ({ page }) => {
   const box = await dialog.boundingBox();
   const viewport = page.viewportSize()!;
   expect(box!.x + box!.width).toBeLessThan(viewport.width);
+  // A click outside the sidebar does not close it.
   await page.mouse.click(viewport.width - 1, viewport.height / 2);
-  await expect(dialog).toHaveCount(0);
-  await expect(menu).toBeFocused();
+  await expect(dialog).toBeVisible();
 });
 
 test("composition Enter does not send, Shift+Enter inserts newline, action button wraps selection", async ({

@@ -1,0 +1,46 @@
+name: Check ai
+on:
+  push:
+    paths: ["ai/**", ".github/workflows/ai.yml"]
+  pull_request:
+    paths: ["ai/**", ".github/workflows/ai.yml"]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests && ruff format --check src tests
+      - run: mypy
+      - run: pytest -q
+      - name: Prompt template changes must bump the frontmatter version
+        if: github.event_name == 'pull_request'
+        run: |
+          base="origin/${{ github.base_ref }}"
+          # Same parser as the app (YAML), so a trailing comment or new quotes is not a bump.
+          version() { python -c 'import sys; from chat_ai.prompt.assembler import split_frontmatter as f; print(f("t", sys.stdin.read())[0])' 2>/dev/null; }
+          for f in $(git diff --name-only "$base"...HEAD -- prompt/ | sed 's#^ai/##'); do
+            [ -f "$f" ] || continue
+            git cat-file -e "$base:ai/$f" 2>/dev/null || continue
+            old=$(git show "$base:ai/$f" | version)
+            new=$(version < "$f")
+            if [ -z "$new" ] || [ "$old" = "$new" ]; then
+              echo "::error file=ai/$f::$f changed but its frontmatter version stayed '$old' (or is unreadable). Bump version (e.g. chat_v2)."
+              exit 1
+            fi
+          done
+      - name: Image boots and answers /health
+        run: |
+          docker build -t chat-ai:ci .
+          docker run -d --name chat-ai -p 8100:8100 -e ANTHROPIC_API_KEY=ci-dummy -e PORT=8100 chat-ai:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8100/health && exit 0; sleep 1; done
+          docker logs chat-ai; exit 1

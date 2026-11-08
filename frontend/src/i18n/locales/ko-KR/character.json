@@ -1,0 +1,23 @@
+{
+  "original": "오리지널",
+  "tagline": "당신의 하루에, 새로운 이야기",
+  "start": "{name} 대화 시작",
+  "safe": "세이프 모드",
+  "adult_verification_required": "SAFE를 끄려면 성인 인증이 필요해요.",
+  "empty": "지금은 공개된 캐릭터가 없어요.",
+  "opening": "대화를 여는 중…",
+  "open_failed": "대화를 열지 못했어요. 다시 선택해 주세요.",
+  "footer": {
+    "customer_support": "고객센터",
+    "terms_of_service": "이용약관",
+    "privacy_policy": "개인정보처리방침",
+    "youth_protection_policy": "청소년 보호정책",
+    "character_creation_policy": "캐릭터 생성 정책",
+    "company": "회사 정보 · 고객 문의",
+    "policy_placeholder": "[정책 내용]",
+    "policy_close": "정책 닫기"
+  },
+  "adult": "성인 캐릭터",
+  "adult_mode_unavailable": "현재 성인 모드를 사용할 수 없어요.",
+  "not_found": "이 캐릭터는 현재 대화할 수 없어요."
+}

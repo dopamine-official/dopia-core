@@ -1,0 +1,41 @@
+{
+  "login": {
+    "title": "Keep your story going",
+    "description": "Sign in to continue your conversations.",
+    "google": "Continue with Google",
+    "apple": "Continue with Apple",
+    "note": "Preview uses test accounts without connecting to a sign-in service.",
+    "failed": "Sign-in failed. Please try again.",
+    "button": "Sign in"
+  },
+  "me": {
+    "title": "My account",
+    "subtitle": "Your profile and conversations, together",
+    "edit": "Edit profile",
+    "photo": "Profile photo",
+    "photo_help": "PNG, JPEG, WebP · up to 2 MB",
+    "nickname": "Nickname",
+    "nickname_required": "Please enter a nickname.",
+    "nickname_taken": "That nickname is already taken.",
+    "photo_type_invalid": "Choose a PNG, JPEG, or WebP image.",
+    "photo_large": "Choose a photo smaller than 2 MB.",
+    "saved": "Profile saved.",
+    "my_chats": "My conversations",
+    "logout": "Sign out",
+    "withdraw": "Delete account",
+    "withdraw_notice": "Delete this account’s profile and conversations.",
+    "withdraw_title": "Delete your account?",
+    "withdraw_body": "This account and its conversations in this browser will be deleted. This cannot be undone.",
+    "nickname_invalid": "Check that your nickname meets the input requirements."
+  },
+  "menu": {
+    "name": "My menu",
+    "profile_button": "My profile",
+    "credit": "Credits",
+    "charge": "Top up",
+    "my_characters": "My characters",
+    "create_character": "Create",
+    "charge_title": "Top up credits",
+    "charge_placeholder": "[Top-up content]"
+  }
+}

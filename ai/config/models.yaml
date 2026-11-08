@@ -1,0 +1,34 @@
+# Model routes. Code refers to routes by name only; what each route calls lives here.
+# Changing a model = edit this file, commit, redeploy. No code change.
+#
+# provider: an adapter name (anthropic, fake). API keys come from environment variables.
+# params:   provider-specific options the adapter passes to the SDK as-is.
+
+routes:
+  chat_general:
+    provider: anthropic
+    model: claude-sonnet-5-5
+    max_output_tokens: 1024
+    timeout_seconds: 60
+    params:
+      output_config:
+        effort: low
+
+  # TBD: a provider that allows adult content. Same model as general until then.
+  chat_adult:
+    provider: anthropic
+    model: claude-sonnet-5-5
+    max_output_tokens: 1024
+    timeout_seconds: 60
+    params:
+      output_config:
+        effort: low
+
+  compact:
+    provider: anthropic
+    model: claude-haiku-5-5
+    max_output_tokens: 1024
+    timeout_seconds: 30
+    params:
+      output_config:
+        effort: low

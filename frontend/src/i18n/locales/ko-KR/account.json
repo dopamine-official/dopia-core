@@ -1,0 +1,41 @@
+{
+  "login": {
+    "title": "이야기를 이어가세요",
+    "description": "로그인하고 나만의 대화를 이어가세요.",
+    "google": "Google로 로그인",
+    "apple": "Apple로 로그인",
+    "note": "미리보기에서는 외부 인증 없이 테스트 계정으로 로그인해요.",
+    "failed": "로그인하지 못했어요. 다시 시도해 주세요.",
+    "button": "로그인"
+  },
+  "me": {
+    "title": "마이페이지",
+    "subtitle": "내 정보와 대화를 한곳에서",
+    "edit": "프로필 수정",
+    "photo": "프로필 사진",
+    "photo_help": "PNG, JPEG, WebP · 최대 2MB",
+    "nickname": "닉네임",
+    "nickname_required": "닉네임을 입력해 주세요.",
+    "nickname_taken": "이미 사용 중인 닉네임이에요.",
+    "photo_type_invalid": "PNG, JPEG, WebP 이미지를 선택해 주세요.",
+    "photo_large": "사진은 2MB 이하로 선택해 주세요.",
+    "saved": "프로필을 저장했어요.",
+    "my_chats": "내 채팅",
+    "logout": "로그아웃",
+    "withdraw": "회원 탈퇴",
+    "withdraw_notice": "이 계정의 프로필과 대화를 삭제해요.",
+    "withdraw_title": "계정을 삭제할까요?",
+    "withdraw_body": "이 브라우저에 저장된 계정과 대화가 삭제됩니다. 되돌릴 수 없어요.",
+    "nickname_invalid": "닉네임 입력 조건을 확인해 주세요."
+  },
+  "menu": {
+    "name": "내 메뉴",
+    "profile_button": "내 프로필",
+    "credit": "크레딧",
+    "charge": "충전",
+    "my_characters": "내 캐릭터 목록",
+    "create_character": "만들기",
+    "charge_title": "크레딧 충전",
+    "charge_placeholder": "[충전 내용]"
+  }
+}

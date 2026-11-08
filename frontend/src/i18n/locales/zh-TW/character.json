@@ -1,0 +1,23 @@
+{
+  "original": "原創角色",
+  "tagline": "為你的日常，添一段新故事",
+  "start": "和{name}開始聊天",
+  "safe": "安全模式",
+  "adult_verification_required": "關閉安全模式前，需要先完成成人驗證。",
+  "empty": "目前沒有公開的角色。",
+  "opening": "正在開啟對話…",
+  "open_failed": "無法開啟對話，請再選一次。",
+  "footer": {
+    "customer_support": "客服中心",
+    "terms_of_service": "使用條款",
+    "privacy_policy": "隱私權政策",
+    "youth_protection_policy": "青少年保護政策",
+    "character_creation_policy": "角色建立政策",
+    "company": "公司資訊 · 聯絡我們",
+    "policy_placeholder": "[政策內容]",
+    "policy_close": "關閉政策"
+  },
+  "adult": "成人角色",
+  "adult_mode_unavailable": "目前無法使用成人模式。",
+  "not_found": "目前無法與這個角色對話。"
+}

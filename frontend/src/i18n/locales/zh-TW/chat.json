@@ -1,0 +1,21 @@
+{
+  "notice": "預覽中的角色回覆為預先準備的範例。",
+  "setting": "初始設定 1",
+  "messages": "對話訊息",
+  "input": "訊息",
+  "placeholder": "輸入訊息…",
+  "send": "傳送訊息",
+  "action": "插入動作描述",
+  "generating": "正在回覆…",
+  "failed": "訊息傳送失敗，已還原輸入內容。",
+  "bottom": "捲動至底部",
+  "count": "{count} / {limit}",
+  "delete": "刪除對話",
+  "delete_title": "要刪除對話嗎？",
+  "delete_body": "對話將從列表中移除。再次選擇角色會開始新的對話。",
+  "not_found": "找不到對話。",
+  "generation_in_progress": "回覆正在生成中，請等候完成後再傳送。",
+  "message_conflict": "傳送資料與既有訊息不同，請確認已還原的內容後重新傳送。",
+  "more": "{name} 對話設定",
+  "menu_delete": "刪除"
+}

@@ -1,0 +1,25 @@
+{
+  "name": "dopia",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm --prefix frontend run dev --",
+    "build": "npm --prefix frontend run build --",
+    "start": "npm --prefix frontend run start --",
+    "typecheck": "npm --prefix frontend run typecheck --",
+    "check:i18n": "npm --prefix frontend run check:i18n --",
+    "test": "npm --prefix frontend run test --",
+    "test:e2e": "npm --prefix frontend run test:e2e --",
+    "check": "npm --prefix frontend run check --",
+    "dev:server": "npm --prefix frontend run dev:server --",
+    "test:e2e:server": "npm --prefix frontend run test:e2e:server --"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "packageManager": "pnpm@10.28.2"
+}

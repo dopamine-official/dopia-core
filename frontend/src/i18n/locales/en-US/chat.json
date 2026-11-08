@@ -1,0 +1,21 @@
+{
+  "notice": "Character replies in this preview are prepared examples.",
+  "setting": "Starting setting 1",
+  "messages": "Conversation messages",
+  "input": "Message",
+  "placeholder": "Write a message…",
+  "send": "Send message",
+  "action": "Add an action",
+  "generating": "Writing a reply…",
+  "failed": "Message failed to send. Your text has been restored.",
+  "bottom": "Scroll to bottom",
+  "count": "{count} / {limit}",
+  "delete": "Delete conversation",
+  "delete_title": "Delete this conversation?",
+  "delete_body": "This conversation will leave your list. Selecting the character again starts a new one.",
+  "not_found": "Conversation not found.",
+  "generation_in_progress": "A reply is already being generated. Wait until it finishes before sending.",
+  "message_conflict": "This request differs from the existing message. Check the restored text and send it again.",
+  "more": "{name} chat settings",
+  "menu_delete": "Delete"
+}

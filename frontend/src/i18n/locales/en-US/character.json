@@ -1,0 +1,23 @@
+{
+  "original": "Original characters",
+  "tagline": "A new story in your everyday",
+  "start": "Chat with {name}",
+  "safe": "Safe mode",
+  "adult_verification_required": "Adult verification is required to turn off SAFE mode.",
+  "empty": "No characters available right now.",
+  "opening": "Opening conversation…",
+  "open_failed": "Could not open the conversation. Try again.",
+  "footer": {
+    "customer_support": "Help center",
+    "terms_of_service": "Terms of service",
+    "privacy_policy": "Privacy policy",
+    "youth_protection_policy": "Youth protection policy",
+    "character_creation_policy": "Character creation policy",
+    "company": "Company info · Contact us",
+    "policy_placeholder": "[Policy content]",
+    "policy_close": "Close policy"
+  },
+  "adult": "Adult character",
+  "adult_mode_unavailable": "Adult mode is currently unavailable.",
+  "not_found": "This character is currently unavailable."
+}

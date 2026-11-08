@@ -1,0 +1,41 @@
+{
+  "login": {
+    "title": "讓故事繼續",
+    "description": "登入，繼續屬於你的對話。",
+    "google": "使用 Google 登入",
+    "apple": "使用 Apple 登入",
+    "note": "預覽模式使用測試帳號，不會連接外部登入服務。",
+    "failed": "登入失敗，請再試一次。",
+    "button": "登入"
+  },
+  "me": {
+    "title": "我的帳號",
+    "subtitle": "個人資料與對話，都在這裡",
+    "edit": "編輯個人資料",
+    "photo": "個人照片",
+    "photo_help": "PNG、JPEG、WebP · 最大 2MB",
+    "nickname": "暱稱",
+    "nickname_required": "請輸入暱稱。",
+    "nickname_taken": "這個暱稱已有人使用。",
+    "photo_type_invalid": "請選擇 PNG、JPEG 或 WebP 圖片。",
+    "photo_large": "請選擇 2MB 以下的照片。",
+    "saved": "已儲存個人資料。",
+    "my_chats": "我的對話",
+    "logout": "登出",
+    "withdraw": "刪除帳號",
+    "withdraw_notice": "刪除此帳號的個人資料與對話。",
+    "withdraw_title": "要刪除帳號嗎？",
+    "withdraw_body": "此瀏覽器中儲存的帳號與對話將被刪除，無法復原。",
+    "nickname_invalid": "請確認暱稱符合輸入規則。"
+  },
+  "menu": {
+    "name": "我的選單",
+    "profile_button": "我的個人檔案",
+    "credit": "點數",
+    "charge": "儲值",
+    "my_characters": "我的角色",
+    "create_character": "建立",
+    "charge_title": "儲值點數",
+    "charge_placeholder": "[儲值內容]"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "development": {
+    "locale": {
+      "default": "ko-KR",
+      "supported": ["ko-KR", "zh-TW", "en-US"]
+    }
+  },
+  "taiwan": {}
+}

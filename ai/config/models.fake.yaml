@@ -1,0 +1,19 @@
+# Local run without any API key: every route answers with canned text.
+# MODELS_CONFIG_PATH=config/models.fake.yaml
+
+routes:
+  chat_general:
+    provider: fake
+    model: fake-general
+    max_output_tokens: 1024
+    timeout_seconds: 10
+  chat_adult:
+    provider: fake
+    model: fake-adult
+    max_output_tokens: 1024
+    timeout_seconds: 10
+  compact:
+    provider: fake
+    model: fake-compact
+    max_output_tokens: 1024
+    timeout_seconds: 10

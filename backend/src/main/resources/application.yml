@@ -1,0 +1,94 @@
+spring:
+  application:
+    name: chat-server
+  config:
+    # Secrets for local runs live in backend/.env.local (ignored by git).
+    import: optional:file:./.env.local[.properties]
+  datasource:
+    # Local: Docker PostgreSQL from compose.yaml. Supabase: set these three variables only.
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/dopia}
+    username: ${DB_USERNAME:dopia}
+    password: ${DB_PASSWORD:dopia}
+  flyway:
+    locations: classpath:db/migration
+    # Supabase ships a non-empty public schema; start our history from version 0.
+    baseline-on-migrate: true
+    baseline-version: 0
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 9MB
+  lifecycle:
+    timeout-per-shutdown-phase: 120s
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  instance_id: ${INSTANCE_ID:${HOSTNAME:local}}
+  region_profile: ${REGION_PROFILE:development}
+  cookie:
+    secure: ${COOKIE_SECURE:true}
+    domain: ${COOKIE_DOMAIN:}
+  session:
+    ttl: ${SESSION_TTL:30d}
+  photo:
+    max_bytes: ${PHOTO_MAX_BYTES:2097152}
+  storage:
+    # r2 when R2_BUCKET is set, otherwise local disk
+    mode: ${STORAGE_MODE:local}
+    local_dir: ${STORAGE_DIR:./data/photos}
+    public_base_url: ${STORAGE_PUBLIC_BASE_URL:/files}
+    r2_account_id: ${R2_ACCOUNT_ID:}
+    r2_access_key_id: ${R2_ACCESS_KEY_ID:}
+    r2_secret_access_key: ${R2_SECRET_ACCESS_KEY:}
+    r2_bucket: ${R2_BUCKET:}
+    r2_public_base_url: ${R2_PUBLIC_BASE_URL:}
+  ai:
+    mode: ${AI_MODE:stub}
+    base_url: ${AI_BASE_URL:http://127.0.0.1:8100}
+    timeout: ${AI_TIMEOUT:90s}
+  turns:
+    max_concurrent: ${TURN_MAX_CONCURRENT:64}
+    heartbeat: 5s
+    lost_after: 45s
+  home:
+    cache_ttl: ${HOME_CACHE_TTL:60s}
+  oauth:
+    redirect_base_url: ${OAUTH_REDIRECT_BASE_URL:http://127.0.0.1:3000}
+    web_base_url: ${WEB_BASE_URL:http://127.0.0.1:3000}
+    state_key: ${LOGIN_STATE_KEY:dev-only-login-state-key}
+    google:
+      client_id: ${GOOGLE_CLIENT_ID:}
+      client_secret: ${GOOGLE_CLIENT_SECRET:}
+    apple:
+      client_id: ${APPLE_CLIENT_ID:}
+      team_id: ${APPLE_TEAM_ID:}
+      key_id: ${APPLE_KEY_ID:}
+      private_key: ${APPLE_PRIVATE_KEY:}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  flyway:
+    # Dev adds the sample characters the web prototype expects.
+    locations: classpath:db/migration,classpath:db/dev
+
+app:
+  cookie:
+    # http://127.0.0.1 cannot receive Secure cookies.
+    secure: false

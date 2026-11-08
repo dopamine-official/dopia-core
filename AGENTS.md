@@ -12,7 +12,7 @@
 | `dev` | 개발 통합 | `feat`, `fix`, `docs` 브랜치를 머지함 |
 | `feat` | 기능 추가 | `dev`에서 분기해 `dev`로 머지함<br>`feat/posthog-web` |
 | `fix` | 버그 수정 | `dev`에서 분기해 `dev`로 머지함<br>`fix/turn-drain` |
-| `docs` | 문서, 설정 변경 | `dev`에서 분기해 `dev`로 머지함<br>`docs/git-convention` |
+| `docs` | 문서 변경 | `dev`에서 분기해 `dev`로 머지함<br>`docs/git-convention` |
 | `release` | 배포 준비 | `dev`에서 분기해 `main`으로 머지함<br>`release/0.1.0` |
 
 - 브랜치 종류는 위 네 가지만 사용함.

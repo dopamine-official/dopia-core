@@ -63,7 +63,12 @@ fix(backend): 턴 중단 시 스트림을 끝까지 읽지 않음
 - 본문에는 무엇을 왜 바꿨는지, 어떻게 확인했는지 작성함.
 - 본문에 `Generated with Claude Code` 등 AI 도구 서명을 붙이지 않음.
 - CI가 통과한 뒤 머지함.
-- `dev`로는 squash merge, `main`으로는 merge commit을 사용함.
+- 머지는 사람이 함. AI 도구는 PR 생성까지만 하고 머지하지 않음.
+
+| 방향 | 머지 방식 |
+|---|---|
+| 작업 브랜치 → `dev` | squash merge |
+| `dev` → `main` | merge commit |
 
 <br>
 

@@ -422,7 +422,8 @@ export function Modal({
         close.current();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
+        // A click outside closes a modal; the sidebar drawer stays open until closed on purpose.
+        if (!drawer && e.target === e.currentTarget) {
           const box = e.currentTarget.getBoundingClientRect();
           if (
             e.clientX < box.left ||

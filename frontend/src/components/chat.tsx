@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { api, readStream, request } from "@/lib/api";
@@ -75,11 +75,14 @@ export function Chat({ roomId }: { roomId: string }) {
       query.state.data?.generating || pendingRef.current ? 600 : false,
   });
   /** Sent once however the room turns out gone: first read, a later refetch, or a send. */
-  function recordRedirect(code: string) {
-    if (redirected.current) return;
-    redirected.current = true;
-    track("chat_room_redirected", "chat_room", { room_id: roomId, code });
-  }
+  const recordRedirect = useCallback(
+    (code: string) => {
+      if (redirected.current) return;
+      redirected.current = true;
+      track("chat_room_redirected", "chat_room", { room_id: roomId, code });
+    },
+    [roomId],
+  );
   function updateDraft(value: string) {
     draftRef.current = value;
     setDraft(value);
@@ -178,7 +181,7 @@ export function Chat({ roomId }: { roomId: string }) {
       notice(t(errorMessageKey(result.error)));
       router.replace("/");
     }
-  }, [result.error, router, storageKey, pendingKey, notice, t]);
+  }, [result.error, router, storageKey, pendingKey, notice, t, recordRedirect]);
   useEffect(() => {
     const element = scene.current;
     if (element && result.data && (follow.current || firstScroll.current)) {

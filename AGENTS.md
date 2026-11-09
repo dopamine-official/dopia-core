@@ -9,14 +9,15 @@
 | 브랜치 | 용도 | 규칙 |
 |---|---|---|
 | `main` | 배포 기준 | 직접 push 금지<br>`release` 브랜치에서 PR로만 머지함 |
-| `dev` | 개발 통합 | `feat`, `fix`, `docs`, `chore` 브랜치를 머지함 |
+| `dev` | 개발 통합 | `feat`, `fix`, `refactor`, `docs`, `chore` 브랜치를 머지함 |
 | `feat` | 기능 추가 | `dev`에서 분기해 `dev`로 머지함<br>`feat/posthog-web` |
 | `fix` | 버그 수정 | `dev`에서 분기해 `dev`로 머지함<br>`fix/turn-drain` |
+| `refactor` | 동작 변화 없는 구조 변경 | `dev`에서 분기해 `dev`로 머지함<br>`refactor/turn-is-adult-column` |
 | `docs` | 문서 변경 | `dev`에서 분기해 `dev`로 머지함<br>`docs/git-convention` |
 | `chore` | 설정, 의존성, 빌드, CI 변경 | `dev`에서 분기해 `dev`로 머지함<br>`chore/lint-tools` |
 | `release` | 배포 준비 | `dev`에서 분기해 `main`으로 머지함<br>`release/0.1.0` |
 
-- 브랜치 종류는 위 다섯 가지만 사용함.
+- 브랜치 종류는 위 여섯 가지만 사용함.
 - 브랜치명은 작업 내용을 바로 알 수 있게, 간결하고 직관적으로 지음.
 - 머지하면 로컬과 원격 브랜치는 삭제함.
 - `main` 직접 push는 로컬 `pre-push` 훅이 차단함. 비공개 저장소 무료 플랜은 GitHub 브랜치 보호를 지원하지 않음.

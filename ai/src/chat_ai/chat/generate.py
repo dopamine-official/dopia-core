@@ -110,7 +110,7 @@ async def generate_turn(
     except LlmError as error:
         final = _failed(error.code, error.message)
     except Exception as exc:  # noqa: BLE001
-        errors.report(exc, request_id=turn.request_id, subtask="chat")
+        errors.report(exc, request_id=turn.request_id, account_id=turn.account_id, subtask="chat")
         log.exception("request_id=%s subtask=chat internal error", turn.request_id)
         final = _failed(INTERNAL_ERROR, "internal error")
 

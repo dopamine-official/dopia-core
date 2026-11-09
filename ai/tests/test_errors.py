@@ -113,6 +113,8 @@ async def test_err_03_internal_error_before_and_after_sse(harness_factory, monke
         r = await client.post("/api/v1/chat/turn", json=chat_body(), headers=ids("r"))
     assert r.status_code == 500 and r.json() == {"code": "internal_error", "message": "internal error"}
     assert len(h.errors.reported) == 1
+    # Reported under the requesting account, with the request it belongs to.
+    assert h.errors.reported[0][1:] == ("r", "acct-1", "chat")
 
     class Exploding(FakeAdapter):
         async def stream(self, request):  # noqa: ANN001
@@ -127,6 +129,7 @@ async def test_err_03_internal_error_before_and_after_sse(harness_factory, monke
     assert b"event: failed" in text and b'"code": "internal_error"' in text
     assert b"explosion" not in text
     assert len(h2.errors.reported) == 1
+    assert h2.errors.reported[0][1:] == ("r", "acct-1", "chat")
     # The llm_call record is closed even though the adapter died unexpectedly.
     assert h2.tracer.records[0].generation_error is not None
     assert h2.tracer.records[0].generation_output == "a"

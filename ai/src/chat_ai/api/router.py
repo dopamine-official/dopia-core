@@ -115,7 +115,7 @@ async def chat_turn(
     try:
         prompt = assemble_chat_prompt(state.assembler, turn, trace)
     except Exception as exc:  # noqa: BLE001
-        state.errors.report(exc, request_id=turn.request_id, subtask="chat")
+        state.errors.report(exc, request_id=turn.request_id, account_id=turn.account_id, subtask="chat")
         trace.finish(outcome="failed", output={"code": INTERNAL_ERROR}, error_code=INTERNAL_ERROR)
         log.exception("request_id=%s subtask=chat prompt assembly failed", turn.request_id)
         return failure_response(500, INTERNAL_ERROR, "internal error")
@@ -174,7 +174,7 @@ async def chat_compact(
     except CompactFailure as failure:
         return failure_response(502, failure.code, failure.message)
     except Exception as exc:  # noqa: BLE001
-        state.errors.report(exc, request_id=data.request_id, subtask="compact")
+        state.errors.report(exc, request_id=data.request_id, account_id=data.account_id, subtask="compact")
         trace.finish(outcome="failed", output={"code": INTERNAL_ERROR}, error_code=INTERNAL_ERROR)
         log.exception("request_id=%s subtask=compact internal error", data.request_id)
         return failure_response(500, INTERNAL_ERROR, "internal error")

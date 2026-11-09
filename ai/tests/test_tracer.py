@@ -156,12 +156,12 @@ async def test_one_shared_client_for_records_and_errors(monkeypatch) -> None:
 
     trace = app.state.tracer.start(name="chat_turn", request_id="r1", distinct_id="acct", input={}, metadata={})
     trace.finish(outcome="completed", output="ok", error_code=None)
-    app.state.errors.report(RuntimeError("boom"), request_id="r1", subtask="chat")
+    app.state.errors.report(RuntimeError("boom"), request_id="r1", account_id="acct", subtask="chat")
     assert client.ai[0][2]["app_release"] == "test-release" and "release" not in client.ai[0][2]
     distinct_id, props = client.exceptions[0]
-    # An error report is not a person.
-    assert props["$process_person_profile"] is False and props["app_release"] == "test-release"
-    assert distinct_id == "chat-ai:r1"
+    # On the requesting account's timeline, linked to the trace by request_id.
+    assert distinct_id == "acct" and props["request_id"] == "r1" and props["app_release"] == "test-release"
+    assert "$process_person_profile" not in props
 
     async with app.router.lifespan_context(app):
         pass

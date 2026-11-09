@@ -29,29 +29,33 @@ export default function ErrorPage({
       }, 0);
     };
   }, []);
+  // No dependency list: a retry that fails puts this screen back even when the same error
+  // is thrown again, and that commit is the only sign of it.
   useEffect(() => {
-    // Once per error shown, as the session failure screen does (TRACKING-PLAN 7-3).
-    if (shown.has(error)) return;
-    shown.add(error);
     if (retrying) {
       retrying = false;
       track("retry_finished", "error", { target: "app", result: "failed" });
+    } else if (shown.has(error)) {
+      return;
     }
+    // Once per notice shown, as the session failure screen does (TRACKING-PLAN 7-3).
+    shown.add(error);
     track("error_screen_viewed", "error", {
       target: "app",
       code: errorCode(error),
     });
-  }, [error]);
+  });
   return (
     <main id="main" className="bootstrap_state">
       <p role="alert">{t("common.action_failed")}</p>
       <button
         className="button"
         onClick={() => {
-          // A click while the retry is still running would count one retry twice.
-          if (retrying) return;
-          retrying = true;
-          track("retry_clicked", "error", { target: "app" });
+          // The retry always runs; only a click before the last one settles goes unrecorded.
+          if (!retrying) {
+            retrying = true;
+            track("retry_clicked", "error", { target: "app" });
+          }
           reset();
         }}
       >

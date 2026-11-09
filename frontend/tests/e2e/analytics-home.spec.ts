@@ -554,3 +554,33 @@ test("app error screen and its retry", async ({ page, analytics }) => {
   // Shown first, then again after the retry that failed.
   expect(count(analytics, "error_screen_viewed")).toBe(2);
 });
+
+test("app error screen retry when the same error is thrown again", async ({
+  page,
+  analytics,
+}) => {
+  await page.addInitScript(() => {
+    (window as unknown as { e2eCrash: string }).e2eCrash = "same";
+  });
+  await page.goto("/e2e/crash");
+  const retry = page.getByRole("button", {
+    name: "다시 불러오기",
+    exact: true,
+  });
+  await expect(retry).toBeVisible();
+  await sent(analytics, "error_screen_viewed", { target: "app" });
+
+  await retry.click();
+  await sent(analytics, "retry_finished", { target: "app", result: "failed" });
+  // The button still works after a retry that failed the same way.
+  await page.evaluate(() => {
+    (window as unknown as { e2eCrash: boolean }).e2eCrash = false;
+  });
+  await retry.click();
+  await expect(page.locator("main#main")).toHaveText("recovered");
+  await sent(analytics, "retry_finished", { target: "app", result: "loaded" });
+  await settle(page);
+  expect(count(analytics, "retry_clicked")).toBe(2);
+  expect(count(analytics, "retry_finished")).toBe(2);
+  expect(count(analytics, "error_screen_viewed")).toBe(2);
+});

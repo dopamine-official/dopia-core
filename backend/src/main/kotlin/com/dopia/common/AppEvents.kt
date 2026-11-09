@@ -28,9 +28,12 @@ class AppEvents(
         name: String,
         properties: Map<String, Any?> = emptyMap(),
     ) {
-        val event = AppEvent(name, Instant.now(), accountId, properties)
+        // An unknown value (e.g. token counts the AI did not report) is left out, not sent as
+        // null; the dev preview's event list accepts only strings, numbers and booleans.
+        val known = properties.filterValues { it != null }
+        val event = AppEvent(name, Instant.now(), accountId, known)
         keep(event)
-        posthog.capture(accountId, name, properties, event.at)
+        posthog.capture(accountId, name, known, event.at)
     }
 
     /** Dev preview only: shown on the preview page, never sent. */

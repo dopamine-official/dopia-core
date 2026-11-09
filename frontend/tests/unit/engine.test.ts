@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { characters } from "@/mocks/characters";
 import {
   account,
+  updateProfile,
   guest,
   home,
   initialState,
@@ -22,6 +23,22 @@ function setup() {
   guest(state);
   const opened = openRoom(state, characters[0].id, "ko-KR");
   return { state, roomId: opened.room_id };
+}
+/** A member who signed up earlier on another device: the mock logs in one member per provider. */
+function otherMember(state: ReturnType<typeof initialState>) {
+  const member = {
+    account_id: crypto.randomUUID(),
+    is_guest: false,
+    nickname: "다른 회원",
+    photo_url: null,
+    adult_mode: false,
+    adult_verified: false,
+    adult_verification_rejected: false,
+    consent_required: false,
+    consent_items: [],
+  };
+  state.accounts.push(member);
+  return member;
 }
 const input = (content = "안녕!") => ({
   content,
@@ -199,10 +216,25 @@ describe("account and conversation contracts", () => {
     expect(() => ownedRoom(state, roomId)).toThrow("room_not_found");
     expect(recent(state, "ko-KR").chats).toEqual([]);
   });
-  it("creates a new identity when a withdrawn member joins again", () => {
+  it("rejects a nickname another member uses", () => {
     const { state } = setup();
+    const other = otherMember(state);
+    login(state, "google");
+    expect(() => updateProfile(state, { nickname: other.nickname! })).toThrow(
+      "nickname_taken",
+    );
+  });
+  it("deletes only the withdrawing member and creates a new identity on rejoin", () => {
+    const { state } = setup();
+    const other = otherMember(state);
     const google = login(state, "google");
     logout(state, true);
+    expect(
+      state.accounts.some((value) => value.account_id === google.account_id),
+    ).toBe(false);
+    expect(
+      state.accounts.some((value) => value.account_id === other.account_id),
+    ).toBe(true);
     expect(login(state, "google").account_id).not.toBe(google.account_id);
     expect(recent(state, "ko-KR").chats).toEqual([]);
   });

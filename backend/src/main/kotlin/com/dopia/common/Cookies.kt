@@ -55,7 +55,6 @@ class Cookies(
         value: String,
         maxAge: Duration,
         path: String = "/",
-        sameSite: String = "Lax",
         withDomain: Boolean = true,
     ) {
         val cookie =
@@ -63,9 +62,8 @@ class Cookies(
                 .from(name, value)
                 .path(path)
                 .httpOnly(true)
-                // SameSite=None is only accepted together with Secure.
-                .secure(properties.cookie.secure || sameSite == "None")
-                .sameSite(sameSite)
+                .secure(properties.cookie.secure)
+                .sameSite("Lax")
                 .maxAge(maxAge)
                 .apply { if (withDomain && properties.cookie.domain.isNotBlank()) domain(properties.cookie.domain) }
                 .build()

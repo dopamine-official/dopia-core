@@ -37,13 +37,13 @@ class AuthController(
         val returnTo = oauth.safeReturnTo(returnToParam)
         val current = accounts.identifyOrNull(request)
         if (current != null && !current.isGuest) return redirect(HttpStatus.FOUND, oauth.webUrl(returnTo))
-        if (!oauth.isConfigured(provider)) {
-            log.warn("{} login requested but not configured", provider)
+        if (!oauth.isConfigured()) {
+            log.warn("google login requested but not configured")
             return redirect(HttpStatus.FOUND, oauth.loginModalUrl(returnTo, failed = true))
         }
-        val state = oauth.newState(provider, returnTo, current?.id)
+        val state = oauth.newState(returnTo, current?.id)
         cookies.setLoginState(response, oauth.sign(state))
-        return redirect(HttpStatus.FOUND, oauth.authorizeUrl(provider, state.state))
+        return redirect(HttpStatus.FOUND, oauth.authorizeUrl(state.state))
     }
 
     @GetMapping("/google/callback")
@@ -53,23 +53,15 @@ class AuthController(
         @RequestParam(required = false) error: String?,
         request: HttpServletRequest,
         response: HttpServletResponse,
-    ): ResponseEntity<Void> = callback("google", code, state, error, request, response, HttpStatus.FOUND)
-
-    private fun callback(
-        provider: String,
-        code: String?,
-        state: String?,
-        error: String?,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        status: HttpStatus,
     ): ResponseEntity<Void> {
+        val provider = OAuthService.PROVIDER
+        val status = HttpStatus.FOUND
         cookies.clearLoginState(response)
         // Recorded under the guest that started the login; with no guest there is no one to record.
         val visitor = { guest: java.util.UUID? -> guest ?: accounts.identifyOrNull(request)?.id }
         val saved =
             try {
-                oauth.verify(cookies.read(request, Cookies.LOGIN_STATE), provider)
+                oauth.verify(cookies.read(request, Cookies.LOGIN_STATE))
             } catch (failure: LoginFailed) {
                 log.info("{} login state rejected: {}", provider, failure.message)
                 visitor(null)?.let { loginFailed(it, provider, "state_mismatch") }
@@ -86,7 +78,7 @@ class AuthController(
             if (state != saved.state) throw LoginFailed("state mismatch")
             stage = "token_invalid"
             if (code.isNullOrBlank()) throw LoginFailed("code missing")
-            val profile = oauth.exchange(provider, code)
+            val profile = oauth.exchange(code)
             stage = "transaction_failed"
             accounts.completeLogin(profile, saved.guestAccountId, response)
         } catch (failure: Exception) {

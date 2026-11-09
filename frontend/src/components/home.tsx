@@ -8,7 +8,14 @@ import { errorMessageKey } from "@/lib/errors";
 import { errorCode, track } from "@/lib/analytics";
 import { Screen, useRetry } from "./page";
 import { useSession } from "./providers";
-import { ErrorState, Footer, Loading, Modal, SiteHeader } from "./ui";
+import {
+  ErrorState,
+  Footer,
+  Loading,
+  Modal,
+  SiteHeader,
+  useSidebarShortcut,
+} from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 export function Home() {
@@ -114,24 +121,7 @@ function HomeScreen() {
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  const toggleRef = useRef(toggleSidebar);
-  useEffect(() => {
-    toggleRef.current = toggleSidebar;
-  });
-  const sidebarOpenRef = useRef(sidebarOpen);
-  useEffect(() => {
-    sidebarOpenRef.current = sidebarOpen;
-  }, [sidebarOpen]);
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        toggleRef.current(!sidebarOpenRef.current);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  useSidebarShortcut(() => toggleSidebar(!sidebarOpen));
   async function open(characterId: string, source: "banner" | "card") {
     if (openingRef.current) return;
     const controller = new AbortController();

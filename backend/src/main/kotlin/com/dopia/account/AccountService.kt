@@ -204,8 +204,9 @@ class AccountService(
                 throw ApiException("adult_verification_required", HttpStatus.FORBIDDEN, message = "adult verification incomplete")
             }
         }
-        tx.execute { accounts.updateAdultMode(identity.accountId, adultMode) }
-        events.record(identity.accountId, "server_safe_mode_changed", mapOf("adult_mode" to adultMode))
+        val changed = tx.execute { accounts.updateAdultMode(identity.accountId, adultMode) }!!
+        // A request for the value already set (a second, stale tab) changes nothing to record.
+        if (changed) events.record(identity.accountId, "server_safe_mode_changed", mapOf("adult_mode" to adultMode))
         return me(identity)
     }
 

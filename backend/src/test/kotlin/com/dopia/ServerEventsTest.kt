@@ -122,8 +122,28 @@ class ServerEventsTest(
         assertEquals(1, merged["room_count"])
         assertEquals(1, merged["attempt"])
 
-        browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
-        assertEquals(false, only(member, "server_safe_mode_changed").properties["adult_mode"])
+        // Other tests share this member: start from on, so turning it off is a change.
+        try {
+            jdbc
+                .sql(
+                    "UPDATE accounts SET adult_verified_at = coalesce(adult_verified_at, now()), adult_mode = true WHERE id = :id",
+                ).param("id", UUID.fromString(member))
+                .update()
+            val before = named(member, "server_safe_mode_changed").size
+            browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
+            assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
+            assertEquals(false, named(member, "server_safe_mode_changed").first().properties["adult_mode"])
+            // The same value again (a stale second tab) changes nothing.
+            browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
+            assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
+        } finally {
+            // Back to unverified for the other tests that share this member, even on failure.
+            jdbc
+                .sql(
+                    "UPDATE accounts SET adult_mode = false, adult_verified_at = null WHERE id = :id",
+                ).param("id", UUID.fromString(member))
+                .update()
+        }
 
         assertTrue(browser.call("DELETE", "/chats/$room").statusCode() in 200..299)
         val deleted = only(member, "server_room_deleted").properties
@@ -262,6 +282,18 @@ class ServerEventsTest(
         assertEquals("worker_lost", failed["error_code"])
         assertEquals(room, failed["room_id"])
         assertEquals(2, failed["user_message_length"])
+    }
+
+    @Test
+    fun `a merge counts only the rooms the guest still has`() {
+        val browser = Browser()
+        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
+        val gone = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
+        assertTrue(browser.call("DELETE", "/chats/$gone").statusCode() in 200..299)
+        val kept = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
+        assertTrue(kept != gone)
+        val member = browser.json("POST", "/mock/login", """{"provider":"apple"}""").get("account_id").asString()
+        assertEquals(1, mergedFrom(member, guest)["room_count"])
     }
 
     @Test

@@ -17,6 +17,7 @@ import {
   clearLoginStart,
   pageForPath,
   saveLoginStart,
+  type LoginPage,
   type LoginProvider,
 } from "@/lib/login";
 import { useSession, type LoginRequest } from "./providers";
@@ -169,15 +170,16 @@ export function SiteHeader({
 /** Records a login event on the screen under the modal (TRACKING-PLAN 4). */
 function useLoginTrack() {
   const page = pageForPath(usePathname());
-  return (event: string, properties: EventProperties) => {
+  const send = (event: string, properties: EventProperties) => {
     if (page) track(event, page, properties);
   };
+  return { page, send };
 }
 // Showings already recorded; React's dev double mount must not count one twice.
 const viewedLogins = new Set<number>();
 export function LoginHost() {
   const { t, login, closeLogin } = useSession();
-  const send = useLoginTrack();
+  const { page, send } = useLoginTrack();
   const sendRef = useRef(send);
   useLayoutEffect(() => {
     sendRef.current = send;
@@ -186,11 +188,16 @@ export function LoginHost() {
     if (!login || viewedLogins.has(login.id)) return;
     viewedLogins.add(login.id);
     sendRef.current("login_modal_viewed", { trigger: login.trigger });
-    if (login.failed)
-      sendRef.current("login_failed", {
+    if (login.failed) {
+      // On the screen the modal was opened from, like the click it answers.
+      const properties = {
         provider: login.failed.provider,
         trigger: login.failed.trigger,
-      });
+      };
+      if (login.failed.page)
+        track("login_failed", login.failed.page, properties);
+      else sendRef.current("login_failed", properties);
+    }
   }, [login]);
   if (!login) return null;
   return (
@@ -203,15 +210,17 @@ export function LoginHost() {
       }}
     >
       <p className="muted">{t("account.login.description")}</p>
-      <LoginOptions login={login} send={send} />
+      <LoginOptions login={login} page={page} send={send} />
     </Modal>
   );
 }
 function LoginOptions({
   login,
+  page,
   send,
 }: {
   login: LoginRequest;
+  page: LoginPage | null;
   send: (event: string, properties: EventProperties) => void;
 }) {
   const { t, changeAccount } = useSession();
@@ -237,7 +246,7 @@ function LoginOptions({
     send("login_provider_clicked", { provider, trigger });
     if (process.env.NEXT_PUBLIC_LOGIN === "oauth") {
       // The result is known only on the way back (src/lib/login.ts).
-      saveLoginStart(provider, trigger);
+      saveLoginStart(provider, trigger, page);
       // The server starts the provider flow and returns here by redirect.
       window.location.assign(
         `/api/v1/account/auth/${provider}/start?return_to=${encodeURIComponent(returnTo)}`,
@@ -471,6 +480,27 @@ function SafeToggle({ onLogin }: { onLogin: () => void }) {
 }
 /** How a modal was closed: its close button, a click outside, or `Esc`. */
 export type CloseReason = "button" | "outside" | "escape";
+/**
+ * Cmd+B on a Mac, Ctrl+B elsewhere, toggles the sidebar. Read by key position so a Korean
+ * layout works too; a held key toggles once, and another dialog on top keeps it closed.
+ */
+export function useSidebarShortcut(toggle: () => void) {
+  const latest = useRef(toggle);
+  useLayoutEffect(() => {
+    latest.current = toggle;
+  });
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.code !== "KeyB") return;
+      e.preventDefault();
+      if (e.repeat) return;
+      if (document.querySelector("dialog[open]:not(.drawer)")) return;
+      latest.current();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+}
 export function Modal({
   title,
   titleContent,

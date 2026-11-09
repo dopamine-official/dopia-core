@@ -9,7 +9,14 @@ import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
 import { Screen } from "./page";
 import { useSession } from "./providers";
-import { ErrorState, Icon, Loading, Modal, ProfileMenu } from "./ui";
+import {
+  ErrorState,
+  Icon,
+  Loading,
+  Modal,
+  ProfileMenu,
+  useSidebarShortcut,
+} from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 type Pending = { client_message_id: string; content: string };
@@ -47,6 +54,12 @@ function ChatRoom({ roomId }: { roomId: string }) {
   const query = useQueryClient();
   const router = useRouter();
   const [menu, setMenu] = useState(false);
+  /** A change the visitor asked for: the menu button, the shortcut, or the drawer's close. */
+  function toggleMenu(open: boolean) {
+    track("sidebar_toggled", "chat_room", { open });
+    setMenu(open);
+  }
+  useSidebarShortcut(() => toggleMenu(!menu));
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
   const storageKey = `dopia:draft:${account.account_id}:${roomId}`;
   const pendingKey = `${storageKey}:pending`;
@@ -353,10 +366,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
           className="icon_button"
           aria-label={t("common.menu")}
           aria-expanded={menu}
-          onClick={() => {
-            track("sidebar_toggled", "chat_room", { open: true });
-            setMenu(true);
-          }}
+          onClick={() => toggleMenu(true)}
         >
           <Icon name="menu" />
         </button>
@@ -403,10 +413,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
               {t("common.brand")}
             </Link>
           }
-          onClose={() => {
-            track("sidebar_toggled", "chat_room", { open: false });
-            setMenu(false);
-          }}
+          onClose={() => toggleMenu(false)}
         >
           <RecentChats
             currentId={roomId}

@@ -142,7 +142,8 @@ export function Providers({ children }: { children: ReactNode }) {
           window.location.search,
         );
         if (returned?.outcome === "succeeded") {
-          const page = pageForPath(window.location.pathname);
+          // On the screen the modal was opened from, not the one the provider returned to.
+          const page = returned.page ?? pageForPath(window.location.pathname);
           if (page)
             track("login_succeeded", page, {
               provider: returned.provider,

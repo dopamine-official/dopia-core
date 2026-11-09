@@ -9,12 +9,16 @@ export type LoginTrigger =
   | "login_failed"
   | "login_cancelled";
 export type LoginProvider = "google" | "apple";
+/** Screens a login modal can be on. */
+export type LoginPage = Exclude<Page, "error">;
 
 /** How the provider round trip that started on this tab ended, known on the way back. */
 export type LoginReturn = {
   provider: LoginProvider;
   // Why the modal had opened before leaving for the provider.
   trigger: LoginTrigger;
+  // The screen the modal was on; the provider may return to another one.
+  page: LoginPage | null;
   outcome: "succeeded" | "failed" | "cancelled";
 };
 
@@ -23,6 +27,7 @@ const KEY = "dopia:login";
 // An older note is from a round trip that never came back here.
 const MAX_AGE = 30 * 60_000;
 const providers: readonly string[] = ["google", "apple"];
+const pages: readonly string[] = ["home", "chat_room", "me", "not_found"];
 const triggers: readonly string[] = [
   "login_button",
   "safe_toggle",
@@ -32,12 +37,16 @@ const triggers: readonly string[] = [
   "login_cancelled",
 ];
 
-/** Notes the provider and trigger just before leaving for the provider. */
-export function saveLoginStart(provider: LoginProvider, trigger: LoginTrigger) {
+/** Notes the provider, trigger and screen just before leaving for the provider. */
+export function saveLoginStart(
+  provider: LoginProvider,
+  trigger: LoginTrigger,
+  page: LoginPage | null,
+) {
   try {
     sessionStorage.setItem(
       KEY,
-      JSON.stringify({ provider, trigger, at: Date.now() }),
+      JSON.stringify({ provider, trigger, page, at: Date.now() }),
     );
   } catch {
     // Without storage the result is not recorded; login itself still works.
@@ -70,7 +79,12 @@ export function takeLoginReturn(
     return null;
   }
   if (!raw) return null;
-  let saved: { provider?: unknown; trigger?: unknown; at?: unknown };
+  let saved: {
+    provider?: unknown;
+    trigger?: unknown;
+    page?: unknown;
+    at?: unknown;
+  };
   try {
     saved = JSON.parse(raw);
   } catch {
@@ -88,6 +102,10 @@ export function takeLoginReturn(
   const base = {
     provider: saved.provider as LoginProvider,
     trigger: saved.trigger as LoginTrigger,
+    page:
+      typeof saved.page === "string" && pages.includes(saved.page)
+        ? (saved.page as LoginPage)
+        : null,
   };
   if (isMember) return { ...base, outcome: "succeeded" };
   const params = new URLSearchParams(search);
@@ -99,7 +117,7 @@ export function takeLoginReturn(
 }
 
 /** The screen under the login modal, for `page`; null where nothing is recorded. */
-export function pageForPath(path: string): Page | null {
+export function pageForPath(path: string): LoginPage | null {
   if (path === "/") return "home";
   if (path === "/me") return "me";
   if (/^\/chats\/[^/]+$/.test(path)) return "chat_room";

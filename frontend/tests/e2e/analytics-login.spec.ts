@@ -23,7 +23,7 @@ const google = (page: Page) =>
 /** Leaves the note the modal writes before going to the provider. */
 const leaveNote = (
   page: Page,
-  note: { provider: string; trigger: string; at?: number },
+  note: { provider: string; trigger: string; page?: string; at?: number },
 ) =>
   page.evaluate((value) => {
     sessionStorage.setItem(
@@ -110,16 +110,22 @@ test("coming back from the provider: failed, cancelled, succeeded", async ({
   analytics,
 }) => {
   await home(page);
-  await leaveNote(page, { provider: "apple", trigger: "safe_toggle" });
+  await leaveNote(page, {
+    provider: "apple",
+    trigger: "safe_toggle",
+    page: "chat_room",
+  });
   await page.goto("/?login=1&error=login_failed");
   await expect(dialog(page).getByRole("alert")).toBeVisible();
   await sent(analytics, "login_modal_viewed", {
     trigger: "login_failed",
     page: "home",
   });
+  // On the screen the modal was opened from, not the one it reopened on.
   await sent(analytics, "login_failed", {
     provider: "apple",
     trigger: "safe_toggle",
+    page: "chat_room",
   });
 
   // Cancelled from My Page: the server returns there, which sends a guest on to home.
@@ -193,9 +199,14 @@ test("a login that returns to My Page is recorded before the screen's view", asy
   await expect(
     page.getByRole("button", { name: "내 프로필", exact: true }),
   ).toBeVisible();
-  await leaveNote(page, { provider: "apple", trigger: "members_only" });
+  // Opened on home for My Page; the provider returns to My Page.
+  await leaveNote(page, {
+    provider: "apple",
+    trigger: "members_only",
+    page: "home",
+  });
   await page.goto("/me");
-  await sent(analytics, "login_succeeded", { provider: "apple" });
+  await sent(analytics, "login_succeeded", { provider: "apple", page: "home" });
   await sent(analytics, "me_viewed");
   const order = analytics.map((item) => item.event);
   const succeeded = order.findLastIndex((event) => event === "login_succeeded");

@@ -328,6 +328,51 @@ test("sidebar toggles", async ({ page, analytics, isMobile }) => {
   expect(count(analytics, "sidebar_toggled")).toBe(2);
 });
 
+test("sidebar toggles in the chat room, shortcut included", async ({
+  page,
+  analytics,
+}) => {
+  await home(page);
+  await card(page, "겨울").click();
+  await expect(page).toHaveURL(/\/chats\//);
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(dialog(page)).toBeVisible();
+  await sent(analytics, "sidebar_toggled", { open: true, page: "chat_room" });
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(dialog(page)).toHaveCount(0);
+  await sent(analytics, "sidebar_toggled", { open: false, page: "chat_room" });
+
+  // A held key toggles once.
+  await page.keyboard.down("ControlOrMeta");
+  await page.keyboard.down("b");
+  await page.keyboard.down("b");
+  await page.keyboard.down("b");
+  await page.keyboard.up("b");
+  await page.keyboard.up("ControlOrMeta");
+  await expect(dialog(page)).toBeVisible();
+  // A Korean layout reports the key as ㅠ; its position is still B.
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ㅠ",
+        code: "KeyB",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  await expect(dialog(page)).toHaveCount(0);
+
+  // With another dialog on top, the shortcut does nothing.
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(dialog(page)).toHaveCount(1);
+  await page.keyboard.press("ControlOrMeta+b");
+  await settle(page);
+  await expect(dialog(page)).toHaveCount(1);
+  expect(count(analytics, "sidebar_toggled")).toBe(4);
+});
+
 test("recent chats: menu, delete outcomes and the room on screen", async ({
   page,
   analytics,

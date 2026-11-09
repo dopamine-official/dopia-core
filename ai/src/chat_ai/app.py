@@ -16,6 +16,7 @@ from chat_ai.api.router import failure_response, router
 from chat_ai.llm.adapters import build_adapters
 from chat_ai.llm.client import LlmClient
 from chat_ai.llm.types import INPUT_INVALID, Adapter
+from chat_ai.observe import posthog
 from chat_ai.observe.errors import ErrorReporter, NoopErrorReporter, PostHogErrorReporter
 from chat_ai.observe.shutdown import shutdown_within
 from chat_ai.observe.tracer import NoopTracer, PostHogTracer, Tracer
@@ -56,26 +57,24 @@ def create_app(
     assembler = PromptAssembler(resolved_settings.prompt_dir)
     llm = LlmClient(resolved_settings.routes, adapters if adapters is not None else build_adapters(resolved_settings))
 
+    # One PostHog client for AI call records and error reports, closed once at shutdown.
+    client = (
+        posthog.connect(api_key=resolved_settings.posthog_api_key, host=resolved_settings.posthog_host)
+        if resolved_settings.posthog_api_key and (tracer is None or errors is None)
+        else None
+    )
     if tracer is None:
-        if resolved_settings.posthog_api_key:
-            tracer = PostHogTracer(
-                api_key=resolved_settings.posthog_api_key,
-                host=resolved_settings.posthog_host,
-                environment=resolved_settings.app_env,
-                release=resolved_settings.app_release,
-            )
-        else:
-            tracer = NoopTracer()
+        tracer = (
+            PostHogTracer(client, environment=resolved_settings.app_env, release=resolved_settings.app_release)
+            if client is not None
+            else NoopTracer()
+        )
     if errors is None:
-        if resolved_settings.posthog_api_key:
-            errors = PostHogErrorReporter(
-                api_key=resolved_settings.posthog_api_key,
-                host=resolved_settings.posthog_host,
-                environment=resolved_settings.app_env,
-                release=resolved_settings.app_release,
-            )
-        else:
-            errors = NoopErrorReporter()
+        errors = (
+            PostHogErrorReporter(client, environment=resolved_settings.app_env, release=resolved_settings.app_release)
+            if client is not None
+            else NoopErrorReporter()
+        )
     resolved_tracer: Tracer = tracer
     resolved_errors: ErrorReporter = errors
 
@@ -91,7 +90,10 @@ def create_app(
             yield
         finally:
             await llm.close()
-            await shutdown_within([resolved_tracer.shutdown, resolved_errors.shutdown], OBSERVE_SHUTDOWN_SECONDS)
+            closers = [resolved_tracer.shutdown, resolved_errors.shutdown]
+            if client is not None:
+                closers.append(lambda: posthog.close(client))
+            await shutdown_within(closers, OBSERVE_SHUTDOWN_SECONDS)
 
     app = FastAPI(title="chat-ai", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.state.settings = resolved_settings

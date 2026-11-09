@@ -25,7 +25,7 @@ def _trace(client: FakeClient) -> PostHogTrace:
         request_id="req-1",
         distinct_id="acct-1",
         input={"user_input": "hi"},
-        base={"release": "rel", "environment": "test", "model_route": "general"},
+        base={"app_release": "rel", "environment": "test", "model_route": "general"},
     )
 
 
@@ -45,7 +45,7 @@ def test_completed_turn_sends_span_generation_and_trace() -> None:
     assert [e[0] for e in client.events] == ["$ai_span", "$ai_generation", "$ai_trace"]
     assert {e[1] for e in client.events} == {"acct-1"}
     span, generation, root = (e[2] for e in client.events)
-    assert all(p["$ai_trace_id"] == "req-1" and p["release"] == "rel" for p in (span, generation, root))
+    assert all(p["$ai_trace_id"] == "req-1" and p["app_release"] == "rel" for p in (span, generation, root))
     assert span["$ai_span_name"] == "prompt_assembly" and span["$ai_parent_id"] == "req-1"
     assert generation["$ai_parent_id"] == "req-1" and generation["$ai_span_name"] == "llm_call"
     assert generation["$ai_input"] == [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}]
@@ -118,3 +118,51 @@ async def test_shutdown_gives_up_after_the_limit() -> None:
     assert await shutdown_within([lambda: release.wait(5)], 0.2) is False
     assert asyncio.get_running_loop().time() - started < 1.0
     release.set()
+
+
+async def test_one_shared_client_for_records_and_errors(monkeypatch) -> None:
+    """Both observers write through one PostHog client, closed once when the app stops."""
+    from dataclasses import replace
+
+    from chat_ai.app import create_app
+    from chat_ai.observe import posthog
+    from tests.conftest import make_settings
+
+    class Client:
+        def __init__(self) -> None:
+            self.ai: list[tuple[str, str, dict[str, Any]]] = []
+            self.exceptions: list[tuple[str, dict[str, Any]]] = []
+            self.closed = 0
+
+        def capture_ai(self, event: str, *, distinct_id: str, properties: dict[str, Any]) -> None:
+            self.ai.append((event, distinct_id, properties))
+
+        def capture_exception(self, exc: BaseException, *, distinct_id: str, properties: dict[str, Any]) -> None:
+            self.exceptions.append((distinct_id, properties))
+
+        def shutdown(self) -> None:
+            self.closed += 1
+
+    made: list[Client] = []
+
+    def connect(*, api_key: str, host: str | None) -> Client:
+        made.append(Client())
+        return made[-1]
+
+    monkeypatch.setattr(posthog, "connect", connect)
+    app = create_app(replace(make_settings(), posthog_api_key="phc_test"))
+    assert len(made) == 1
+    client = made[0]
+
+    trace = app.state.tracer.start(name="chat_turn", request_id="r1", distinct_id="acct", input={}, metadata={})
+    trace.finish(outcome="completed", output="ok", error_code=None)
+    app.state.errors.report(RuntimeError("boom"), request_id="r1", subtask="chat")
+    assert client.ai[0][2]["app_release"] == "test-release" and "release" not in client.ai[0][2]
+    distinct_id, props = client.exceptions[0]
+    # An error report is not a person.
+    assert props["$process_person_profile"] is False and props["app_release"] == "test-release"
+    assert distinct_id == "chat-ai:r1"
+
+    async with app.router.lifespan_context(app):
+        pass
+    assert client.closed == 1

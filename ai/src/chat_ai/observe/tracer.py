@@ -189,7 +189,7 @@ class PostHogTrace:
         self._trace_id = request_id
         self._distinct_id = distinct_id
         self._input = input
-        self._base = base  # metadata + release + environment, added to every event
+        self._base = base  # metadata + app_release + environment, added to every event
         self._started = time.monotonic()
         self._generation: dict[str, Any] | None = None
 
@@ -310,13 +310,14 @@ class PostHogTrace:
 
 
 class PostHogTracer:
-    """PostHog LLM analytics. The trace id is the request id so backend logs and DB rows can find it."""
+    """PostHog LLM analytics. The trace id is the request id so backend logs and DB rows can find it.
 
-    def __init__(self, *, api_key: str, host: str | None, environment: str, release: str) -> None:
-        from posthog import Posthog
+    Records on the shared client (observe/posthog.py), which the app closes.
+    """
 
-        self._client = Posthog(project_api_key=api_key, host=host) if host else Posthog(project_api_key=api_key)
-        self._props = {"environment": environment, "release": release}
+    def __init__(self, client: Any, *, environment: str, release: str) -> None:
+        self._client = client
+        self._props = {"environment": environment, "app_release": release}
 
     def start(self, *, name: str, request_id: str, distinct_id: str, input: Any, metadata: dict[str, Any]) -> Trace:
         base = {**self._props, **{k: v for k, v in metadata.items() if v is not None}}
@@ -325,7 +326,4 @@ class PostHogTracer:
         )
 
     def shutdown(self) -> None:
-        try:
-            self._client.shutdown()
-        except Exception as exc:  # noqa: BLE001
-            log.warning("posthog shutdown failed: %s", exc)
+        return None

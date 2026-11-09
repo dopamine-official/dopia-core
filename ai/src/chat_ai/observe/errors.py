@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Protocol
+from typing import Any, Protocol
 
 log = logging.getLogger("chat_ai.observe")
 
@@ -26,24 +26,27 @@ class NoopErrorReporter:
 
 
 class PostHogErrorReporter:
-    def __init__(self, *, api_key: str, host: str | None, environment: str, release: str) -> None:
-        from posthog import Posthog
+    """Reports on the shared client (observe/posthog.py), which the app closes."""
 
-        self._client = Posthog(project_api_key=api_key, host=host) if host else Posthog(project_api_key=api_key)
-        self._props = {"service": "chat-ai", "environment": environment, "release": release}
+    def __init__(self, client: Any, *, environment: str, release: str) -> None:
+        self._client = client
+        self._props = {"service": "chat-ai", "environment": environment, "app_release": release}
 
     def report(self, exc: BaseException, *, request_id: str, subtask: str) -> None:
         try:
             self._client.capture_exception(
                 exc,
                 distinct_id=f"chat-ai:{request_id}",
-                properties={**self._props, "request_id": request_id, "subtask": subtask},
+                # A report is not a person: without this every error would add one to PostHog.
+                properties={
+                    **self._props,
+                    "request_id": request_id,
+                    "subtask": subtask,
+                    "$process_person_profile": False,
+                },
             )
         except Exception as e:  # noqa: BLE001
             log.warning("posthog capture failed: %s", e)
 
     def shutdown(self) -> None:
-        try:
-            self._client.shutdown()
-        except Exception as e:  # noqa: BLE001
-            log.warning("posthog shutdown failed: %s", e)
+        return None

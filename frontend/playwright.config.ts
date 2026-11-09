@@ -9,7 +9,9 @@ export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 45_000,
   expect: { timeout: 12_000 },
-  fullyParallel: false,
+  // One test at a time against one dev server. Tests do not depend on each other, so CI can
+  // split them evenly by test, not by file (.github/workflows/check.yml).
+  fullyParallel: true,
   workers: 1,
   reporter: "list",
   use: {
@@ -35,6 +37,8 @@ export default defineConfig({
       ...process.env,
       NEXT_PUBLIC_POSTHOG_KEY: "phc_e2e",
       NEXT_PUBLIC_APP_ENV: "dev",
+      // PostHog's shortest batch interval; tests/e2e/fixtures.ts `settle` waits a few of them.
+      NEXT_PUBLIC_POSTHOG_FLUSH_MS: "250",
     } as Record<string, string>,
     reuseExistingServer: false,
     timeout: 60_000,

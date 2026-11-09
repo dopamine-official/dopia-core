@@ -23,6 +23,15 @@ const BASE_CONFIG: Partial<PostHogConfig> = {
   // PostHog drops automated browsers as bots. In dev, keep them so e2e can check events;
   // PostHog hides `dev` records from every chart anyway.
   opt_out_useragent_filter: process.env.NEXT_PUBLIC_APP_ENV === "dev",
+  // e2e sends each batch sooner so its checks wait less (playwright.config.ts). Unset, the
+  // PostHog default (3 seconds) applies.
+  ...(process.env.NEXT_PUBLIC_POSTHOG_FLUSH_MS
+    ? {
+        request_queue_config: {
+          flush_interval_ms: Number(process.env.NEXT_PUBLIC_POSTHOG_FLUSH_MS),
+        },
+      }
+    : {}),
 };
 
 function releaseProperties() {

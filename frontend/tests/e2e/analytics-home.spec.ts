@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { type Captured, expect, sent, test } from "./fixtures";
+import { type Captured, expect, sent, settle, test } from "./fixtures";
 
 // TRACKING-PLAN 3: home screen events and the shared header, sidebar and footer.
 
@@ -78,8 +78,6 @@ async function home(page: Page) {
     page.getByRole("heading", { name: "오리지널", exact: true }),
   ).toBeVisible();
 }
-/** posthog-js sends in batches: wait past one flush so a late duplicate is counted. */
-const settle = (page: Page) => page.waitForTimeout(4_000);
 const count = (events: Captured[], event: string) =>
   events.filter((item) => item.event === event).length;
 const card = (page: Page, name: string) =>

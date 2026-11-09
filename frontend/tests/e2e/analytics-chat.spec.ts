@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { expect, sent, test } from "./fixtures";
+import { expect, sent, settle, test } from "./fixtures";
 
 // TRACKING-PLAN 5: chat room events.
 async function openChat(page: Page) {
@@ -93,7 +93,7 @@ test("a failed reply is recorded once with its code", async ({
   });
   expect(failed.properties.code).toEqual(expect.any(String));
   expect(failed.properties.code).not.toBe("");
-  await page.waitForTimeout(2000);
+  await settle(page);
   expect(
     analytics.filter((item) => item.event === "message_reply_failed"),
   ).toHaveLength(1);

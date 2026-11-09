@@ -480,6 +480,27 @@ function SafeToggle({ onLogin }: { onLogin: () => void }) {
 }
 /** How a modal was closed: its close button, a click outside, or `Esc`. */
 export type CloseReason = "button" | "outside" | "escape";
+/**
+ * Cmd+B on a Mac, Ctrl+B elsewhere, toggles the sidebar. Read by key position so a Korean
+ * layout works too; a held key toggles once, and another dialog on top keeps it closed.
+ */
+export function useSidebarShortcut(toggle: () => void) {
+  const latest = useRef(toggle);
+  useLayoutEffect(() => {
+    latest.current = toggle;
+  });
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.code !== "KeyB") return;
+      e.preventDefault();
+      if (e.repeat) return;
+      if (document.querySelector("dialog[open]:not(.drawer)")) return;
+      latest.current();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+}
 export function Modal({
   title,
   titleContent,

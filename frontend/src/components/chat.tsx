@@ -9,7 +9,14 @@ import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
 import { Screen } from "./page";
 import { useSession } from "./providers";
-import { ErrorState, Icon, Loading, Modal, ProfileMenu } from "./ui";
+import {
+  ErrorState,
+  Icon,
+  Loading,
+  Modal,
+  ProfileMenu,
+  useSidebarShortcut,
+} from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 type Pending = { client_message_id: string; content: string };
@@ -52,24 +59,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
     track("sidebar_toggled", "chat_room", { open });
     setMenu(open);
   }
-  const menuRef = useRef(menu);
-  useEffect(() => {
-    menuRef.current = menu;
-  }, [menu]);
-  useEffect(() => {
-    // Cmd+B on a Mac, Ctrl+B elsewhere, as on home.
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
-        e.preventDefault();
-        const open = !menuRef.current;
-        menuRef.current = open;
-        track("sidebar_toggled", "chat_room", { open });
-        setMenu(open);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  useSidebarShortcut(() => toggleMenu(!menu));
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
   const storageKey = `dopia:draft:${account.account_id}:${roomId}`;
   const pendingKey = `${storageKey}:pending`;

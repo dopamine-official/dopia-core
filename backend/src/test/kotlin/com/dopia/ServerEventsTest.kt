@@ -122,10 +122,10 @@ class ServerEventsTest(
         assertNotNull(completed["ai_request_id"])
         assertTrue((completed["assistant_message_length"] as Int) > 0)
 
-        val member = browser.json("POST", "/mock/login", """{"provider":"apple"}""").get("account_id").asString()
+        val member = browser.json("POST", "/mock/login", """{"provider":"google"}""").get("account_id").asString()
         // Other tests log in as the same mock member: the newest is this login.
         val login = named(member, "server_login_succeeded").first().properties
-        assertEquals("apple", login["provider"])
+        assertEquals("google", login["provider"])
         assertEquals(true, login["had_guest"])
         assertEquals(true, login["merge_scheduled"])
         val merged = mergedFrom(member, guest)
@@ -264,7 +264,7 @@ class ServerEventsTest(
                     .build(),
                 HttpResponse.BodyHandlers.ofString(),
             )
-        assertEquals(200, withCookie("POST", "/mock/login", """{"provider":"apple"}""").statusCode())
+        assertEquals(200, withCookie("POST", "/mock/login", """{"provider":"google"}""").statusCode())
         // The same guest cookie again, without the member's session.
         val again = withCookie("POST", "/account/guest", null)
         val next = mapper.readTree(again.body()).get("account_id").asString()
@@ -303,7 +303,7 @@ class ServerEventsTest(
         assertTrue(browser.call("DELETE", "/chats/$gone").statusCode() in 200..299)
         val kept = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
         assertTrue(kept != gone)
-        val member = browser.json("POST", "/mock/login", """{"provider":"apple"}""").get("account_id").asString()
+        val member = browser.json("POST", "/mock/login", """{"provider":"google"}""").get("account_id").asString()
         assertEquals(1, mergedFrom(member, guest)["room_count"])
     }
 
@@ -325,7 +325,7 @@ class ServerEventsTest(
             ).update()
         jdbc.sql("CREATE TRIGGER test_block BEFORE UPDATE ON chat_rooms FOR EACH ROW EXECUTE FUNCTION test_block_transfer()").update()
         try {
-            val member = browser.json("POST", "/mock/login", """{"provider":"apple"}""").get("account_id").asString()
+            val member = browser.json("POST", "/mock/login", """{"provider":"google"}""").get("account_id").asString()
             runCatching { accounts.merge(UUID.fromString(guest)) }
             val failures = named(member, "server_merge_failed").filter { it.properties["guest_account_id"] == guest }
             assertTrue(failures.size >= 2, failures.toString())

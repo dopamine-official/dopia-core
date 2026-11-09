@@ -802,14 +802,6 @@ p {
   width: 20px;
   height: 20px;
 }
-.provider.apple {
-  background: #111;
-  color: #fff;
-  border-color: #111;
-}
-.provider.apple:hover:not(:disabled) {
-  background: #292929;
-}
 .google_mark {
   font-size: 20px;
   font-family: Arial, sans-serif;

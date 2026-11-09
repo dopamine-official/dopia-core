@@ -3,7 +3,6 @@
     "title": "Keep your story going",
     "description": "Sign in to continue your conversations.",
     "google": "Continue with Google",
-    "apple": "Continue with Apple",
     "note": "Preview uses test accounts without connecting to a sign-in service.",
     "failed": "Sign-in failed. Please try again.",
     "button": "Sign in"

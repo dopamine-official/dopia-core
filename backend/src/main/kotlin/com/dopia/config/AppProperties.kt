@@ -78,7 +78,6 @@ data class AppProperties(
         /** HMAC key for the login_state cookie. */
         val stateKey: String = "dev-only-login-state-key",
         val google: Google = Google(),
-        val apple: Apple = Apple(),
     )
 
     data class Google(
@@ -87,15 +86,5 @@ data class AppProperties(
         val authorizeUrl: String = "https://accounts.google.com/o/oauth2/v2/auth",
         val tokenUrl: String = "https://oauth2.googleapis.com/token",
         val jwksUrl: String = "https://www.googleapis.com/oauth2/v3/certs",
-    )
-
-    data class Apple(
-        val clientId: String = "",
-        val teamId: String = "",
-        val keyId: String = "",
-        val privateKey: String = "",
-        val authorizeUrl: String = "https://appleid.apple.com/auth/authorize",
-        val tokenUrl: String = "https://appleid.apple.com/auth/token",
-        val jwksUrl: String = "https://appleid.apple.com/auth/keys",
     )
 }

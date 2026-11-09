@@ -166,7 +166,7 @@ export const handlers = [
     "/api/v1/mock/login",
     guarded(async (req) => {
       const { provider } = z
-        .object({ provider: z.enum(["google", "apple"]) })
+        .object({ provider: z.enum(["google"]) })
         .parse(await req.json());
       return json(await run(req, (state) => engine.login(state, provider)));
     }),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { characters } from "@/mocks/characters";
 import {
   account,
+  updateProfile,
   guest,
   home,
   initialState,
@@ -14,7 +15,6 @@ import {
   settle,
   startTurn,
   updateAdultMode,
-  updateProfile,
 } from "@/mocks/engine";
 import { sendSchema } from "@/lib/contracts";
 
@@ -23,6 +23,22 @@ function setup() {
   guest(state);
   const opened = openRoom(state, characters[0].id, "ko-KR");
   return { state, roomId: opened.room_id };
+}
+/** A member who signed up earlier on another device: the mock logs in one member per provider. */
+function otherMember(state: ReturnType<typeof initialState>) {
+  const member = {
+    account_id: crypto.randomUUID(),
+    is_guest: false,
+    nickname: "다른 회원",
+    photo_url: null,
+    adult_mode: false,
+    adult_verified: false,
+    adult_verification_rejected: false,
+    consent_required: false,
+    consent_items: [],
+  };
+  state.accounts.push(member);
+  return member;
 }
 const input = (content = "안녕!") => ({
   content,
@@ -192,28 +208,34 @@ describe("account and conversation contracts", () => {
     );
     expect(ownedRoom(state, secondRoom).owner_id).toBe(user.account_id);
   });
-  it("keeps Google and Apple independent and denies another account’s rooms", () => {
+  it("denies the next guest the member's rooms after logout", () => {
     const { state, roomId } = setup();
     const google = login(state, "google");
     logout(state);
-    const apple = login(state, "apple");
-    expect(google.account_id).not.toBe(apple.account_id);
+    expect(account(state).account_id).not.toBe(google.account_id);
     expect(() => ownedRoom(state, roomId)).toThrow("room_not_found");
     expect(recent(state, "ko-KR").chats).toEqual([]);
-    expect(() => updateProfile(state, { nickname: google.nickname! })).toThrow(
+  });
+  it("rejects a nickname another member uses", () => {
+    const { state } = setup();
+    const other = otherMember(state);
+    login(state, "google");
+    expect(() => updateProfile(state, { nickname: other.nickname! })).toThrow(
       "nickname_taken",
     );
   });
   it("deletes only the withdrawing member and creates a new identity on rejoin", () => {
     const { state } = setup();
+    const other = otherMember(state);
     const google = login(state, "google");
-    logout(state);
-    const apple = login(state, "apple");
     logout(state, true);
     expect(
       state.accounts.some((value) => value.account_id === google.account_id),
+    ).toBe(false);
+    expect(
+      state.accounts.some((value) => value.account_id === other.account_id),
     ).toBe(true);
-    expect(login(state, "apple").account_id).not.toBe(apple.account_id);
+    expect(login(state, "google").account_id).not.toBe(google.account_id);
     expect(recent(state, "ko-KR").chats).toEqual([]);
   });
   it("soft deletion blocks new turns while already accepted work finishes", () => {

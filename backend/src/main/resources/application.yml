@@ -79,11 +79,6 @@ app:
     google:
       client_id: ${GOOGLE_CLIENT_ID:}
       client_secret: ${GOOGLE_CLIENT_SECRET:}
-    apple:
-      client_id: ${APPLE_CLIENT_ID:}
-      team_id: ${APPLE_TEAM_ID:}
-      key_id: ${APPLE_KEY_ID:}
-      private_key: ${APPLE_PRIVATE_KEY:}
 
 ---
 spring:

@@ -62,7 +62,7 @@ test("an underage submission is refused and SAFE stays on", async ({
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "로그인" }).first().click();
-  await page.getByRole("button", { name: "Apple로 로그인" }).click();
+  await page.getByRole("button", { name: "Google로 로그인" }).click();
   const toggle = page.getByRole("switch", { name: "세이프 모드" });
   await toggle.click();
   const dialog = page.getByRole("dialog", { name: "성인 인증" });

@@ -74,7 +74,7 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
     ]
     system = request.prompt.system
     assert "Name: 林語彤\n" in system and "Personality: calm\n" in system
-    assert "we met yesterday" in system and "Summary of the conversation so far" in system
+    assert "we met yesterday" in system and "## Story So Far" in system
     assert "This chat is not rated adult" in system and "This chat is rated adult" not in system
     assert "{{" not in system
     assert body["history"][0]["content"] == " one "  # request object untouched
@@ -88,7 +88,7 @@ async def test_chat_03_summary_omitted_and_adult_block(harness) -> None:
             headers=ids("r"),
         )
     system = harness.adapter.calls[0].prompt.system
-    assert "Summary of the conversation so far" not in system
+    assert "## Story So Far" not in system
     assert "This chat is rated adult" in system and "not rated adult" not in system
 
 

@@ -16,6 +16,7 @@ data class AppProperties(
     val turns: Turns = Turns(),
     val home: Home = Home(),
     val oauth: OAuth = OAuth(),
+    val posthog: PostHog = PostHog(),
 ) {
     data class Cookie(
         val secure: Boolean = true,
@@ -54,6 +55,15 @@ data class AppProperties(
         val maxConcurrent: Int = 64,
         val heartbeat: Duration = Duration.ofSeconds(5),
         val lostAfter: Duration = Duration.ofSeconds(45),
+    )
+
+    /** Server events (TRACKING-PLAN 8). Off when apiKey is blank. */
+    data class PostHog(
+        val apiKey: String = "",
+        val host: String = "https://us.i.posthog.com",
+        /** dev or prod; required when apiKey is set, because PostHog hides `dev` from charts. */
+        val environment: String = "",
+        val release: String = "local",
     )
 
     data class Home(

@@ -73,6 +73,8 @@ class TurnRunner(
         stream.send("accepted", AcceptedEvent(started.userMessageId))
         val wanted = AtomicBoolean(true)
         val beating = AtomicBoolean(false)
+        // A failure before the first token is before_ai; after it, stream (TRACKING-PLAN 8-3-3).
+        val streaming = AtomicBoolean(false)
         val beat =
             heartbeats.scheduleAtFixedRate(
                 {
@@ -123,28 +125,32 @@ class TurnRunner(
                     request,
                     started.characterId,
                     object : AiTurnListener {
-                        override fun onToken(text: String) = stream.send("token", TokenEvent(text))
+                        override fun onToken(text: String) {
+                            streaming.set(true)
+                            stream.send("token", TokenEvent(text))
+                        }
 
                         override fun onWebDisconnectRequested() = stream.close()
 
                         override fun stillWanted() = wanted.get()
                     },
                 )
-            val assistantId = chat.complete(started, result.output, result.meta)
+            val assistantId =
+                chat.complete(started, result.output, result.meta, AiInputShape(history.size, summary.isNotEmpty()))
             if (assistantId != null) {
                 stream.send("completed", CompletedEvent(assistantId, result.output))
             } else {
                 sendStoredFailure(started, stream)
             }
         } catch (error: AiFailure) {
-            if (chat.fail(started, error.code)) {
+            if (chat.fail(started, error.code, stage(streaming))) {
                 stream.send("failed", ErrorBody(error.code, error.message, emptyList()))
             } else {
                 sendStoredFailure(started, stream)
             }
         } catch (error: Exception) {
             log.error("turn {} failed", started.turnId, error)
-            if (chat.fail(started, "ai_unavailable")) {
+            if (chat.fail(started, "ai_unavailable", stage(streaming))) {
                 stream.send("failed", ErrorBody("ai_unavailable", "ai request failed", emptyList()))
             } else {
                 sendStoredFailure(started, stream)
@@ -154,6 +160,8 @@ class TurnRunner(
             stream.close()
         }
     }
+
+    private fun stage(streaming: AtomicBoolean) = if (streaming.get()) "stream" else "before_ai"
 
     /** The turn was finished by someone else (recovery, another instance): tell the web why before closing. */
     private fun sendStoredFailure(

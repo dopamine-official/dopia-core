@@ -51,6 +51,14 @@ class AccountRepository(
             .optional()
             .orElse(null)
 
+    fun createdAt(id: UUID): java.time.Instant? =
+        jdbc
+            .sql("SELECT created_at FROM accounts WHERE id = :id")
+            .param("id", id)
+            .query(java.time.Instant::class.java)
+            .optional()
+            .orElse(null)
+
     fun lock(id: UUID): AccountRow? =
         jdbc
             .sql("SELECT $columns FROM accounts WHERE id = :id FOR UPDATE")

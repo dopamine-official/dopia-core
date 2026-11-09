@@ -58,6 +58,15 @@ data class RoomView(
     val generating: Boolean,
 )
 
+/** What the AI request carried besides the input, for `server_turn_completed`. */
+data class AiInputShape(
+    val historyCount: Int,
+    val hasSummary: Boolean,
+)
+
+/** Characters as people count them (code points), for message lengths in events. */
+fun textLength(text: String): Int = text.codePointCount(0, text.length)
+
 /** Outcome of a send request before the stream opens. */
 sealed interface TurnStart {
     /** A new generating turn that the runner must execute. */
@@ -73,6 +82,9 @@ sealed interface TurnStart {
         val isAdult: Boolean,
         val locale: String,
         val accountId: UUID,
+        // The sender's adult mode and charge kind, for `server_turn_completed`.
+        val adultMode: Boolean,
+        val chargeType: String,
     ) : TurnStart
 
     /** Same client_message_id as a finished turn: replay the stored result. */
@@ -105,26 +117,34 @@ class ChatService(
         identity: Identity,
         locale: RequestLocale,
         characterId: UUID,
-    ): OpenResponse =
-        tx.execute {
-            accounts.assertGuestWritable(identity)
-            val character =
-                try {
-                    characters.forChat(characterId, locale.locale, characters.adultAllowed(identity, locale))
-                } catch (error: CharacterNotFound) {
-                    throw notFound()
-                }
-            repository.latestRoom(identity.accountId, characterId)?.let { return@execute OpenResponse(it.id, false) }
-            if (!character.canOpenNewRoom) throw notFound()
-            val roomId = repository.insertRoom(identity.accountId, characterId, character.isAdult)
-            repository.insertMessage(roomId, null, 1, "assistant", character.firstMessage)
+    ): OpenResponse {
+        var isAdult = false
+        val opened =
+            tx.execute {
+                accounts.assertGuestWritable(identity)
+                val character =
+                    try {
+                        characters.forChat(characterId, locale.locale, characters.adultAllowed(identity, locale))
+                    } catch (error: CharacterNotFound) {
+                        throw notFound()
+                    }
+                repository.latestRoom(identity.accountId, characterId)?.let { return@execute OpenResponse(it.id, false) }
+                if (!character.canOpenNewRoom) throw notFound()
+                val roomId = repository.insertRoom(identity.accountId, characterId, character.isAdult)
+                repository.insertMessage(roomId, null, 1, "assistant", character.firstMessage)
+                isAdult = character.isAdult
+                OpenResponse(roomId, true)
+            }!!
+        // A room opened again is not a new room (TRACKING-PLAN 8-3-1).
+        if (opened.created) {
             events.record(
                 identity.accountId,
-                "chat_room_opened",
-                mapOf("character_id" to characterId.toString(), "room_id" to roomId.toString()),
+                "server_room_created",
+                mapOf("room_id" to opened.roomId.toString(), "character_id" to characterId.toString(), "is_adult" to isAdult),
             )
-            OpenResponse(roomId, true)
-        }!!
+        }
+        return opened
+    }
 
     // 4-1-2 read
 
@@ -180,12 +200,19 @@ class ChatService(
         identity: Identity,
         roomId: UUID,
     ) {
-        tx.execute {
-            accounts.assertGuestWritable(identity)
-            val room = repository.lockRoom(roomId)?.takeIf { !it.deleted && it.ownerAccountId == identity.accountId } ?: throw notFound()
-            repository.deleteRoom(room.id)
-            events.record(identity.accountId, "chat_deleted", mapOf("room_id" to roomId.toString()))
-        }
+        val characterId =
+            tx.execute {
+                accounts.assertGuestWritable(identity)
+                val room =
+                    repository.lockRoom(roomId)?.takeIf { !it.deleted && it.ownerAccountId == identity.accountId } ?: throw notFound()
+                repository.deleteRoom(room.id)
+                room.characterId
+            }!!
+        events.record(
+            identity.accountId,
+            "server_room_deleted",
+            mapOf("room_id" to roomId.toString(), "character_id" to characterId.toString()),
+        )
     }
 
     // 4-1-3 send, steps 1 to 5
@@ -196,12 +223,15 @@ class ChatService(
         roomId: UUID,
         content: String,
         clientMessageId: UUID,
-    ): TurnStart =
-        try {
+    ): TurnStart {
+        // Known once the room is found, so a refusal after that can say which character.
+        var characterId: UUID? = null
+        return try {
             tx.execute {
                 accounts.assertGuestWritable(identity)
                 val room =
                     repository.lockRoom(roomId)?.takeIf { !it.deleted && it.ownerAccountId == identity.accountId } ?: throw notFound()
+                characterId = room.characterId
                 repository.findTurn(roomId, clientMessageId)?.let { existing ->
                     val userMessage = repository.findMessage(existing.userMessageId)!!
                     if (userMessage.content != content) {
@@ -240,7 +270,7 @@ class ChatService(
                     )
                 repository.linkMessageTurn(userMessageId, turnId)
                 repository.touchRoom(roomId)
-                events.record(
+                events.note(
                     identity.accountId,
                     "message_sent",
                     mapOf(
@@ -260,12 +290,48 @@ class ChatService(
                     room.isAdult,
                     locale.locale,
                     identity.accountId,
+                    identity.adultMode,
+                    chargeType,
                 )
             }!!
         } catch (error: DuplicateKeyException) {
             // Another request won the one-generating-turn or idempotency race.
+            characterId?.let { rejected(identity.accountId, roomId, it, "generation_in_progress") }
             throw inProgress()
+        } catch (error: ApiException) {
+            if (error.code == "generation_in_progress") characterId?.let { rejected(identity.accountId, roomId, it, error.code) }
+            throw error
         }
+    }
+
+    /** `server_turn_rejected` (TRACKING-PLAN 8-3-5): refused before any reply was generated. */
+    private fun rejected(
+        accountId: UUID,
+        roomId: UUID,
+        characterId: UUID,
+        code: String,
+    ) = events.record(
+        accountId,
+        "server_turn_rejected",
+        mapOf("room_id" to roomId.toString(), "character_id" to characterId.toString(), "code" to code),
+    )
+
+    /**
+     * No room to run the turn (server_busy): the turn ends at once and the send is refused.
+     * Recorded as a refusal, not a failed reply.
+     */
+    fun reject(
+        started: TurnStart.Started,
+        code: String,
+    ) {
+        val ended =
+            tx.execute {
+                val turn = repository.lockTurn(started.turnId) ?: return@execute false
+                if (turn.status != "generating" || turn.workerId != properties.instanceId) return@execute false
+                repository.failTurn(started.turnId, code)
+            } ?: false
+        if (ended) rejected(started.accountId, started.roomId, started.characterId, code)
+    }
 
     // Steps 10 to 13: completion and failure, confirmed only for this worker's generating turn.
 
@@ -273,6 +339,7 @@ class ChatService(
         started: TurnStart.Started,
         output: String,
         meta: AiMeta,
+        sent: AiInputShape,
     ): UUID? {
         val assistantId =
             tx.execute {
@@ -288,19 +355,36 @@ class ChatService(
         if (assistantId != null) {
             events.record(
                 started.accountId,
-                "turn_completed",
+                "server_turn_completed",
                 mapOf(
+                    "ai_request_id" to started.aiRequestId,
                     "room_id" to started.roomId.toString(),
-                    "client_message_id" to started.clientMessageId.toString(),
+                    "character_id" to started.characterId.toString(),
+                    "turn_id" to started.turnId.toString(),
+                    "user_message_length" to textLength(started.userInput),
+                    "assistant_message_length" to textLength(output),
+                    "adult_mode" to started.adultMode,
+                    "charge_type" to started.chargeType,
+                    "model" to meta.model,
+                    "model_provider" to meta.provider,
+                    "prompt_version" to meta.promptVersion,
+                    "input_token_count" to meta.inputTokenCount,
+                    "output_token_count" to meta.outputTokenCount,
+                    "ttft_ms" to meta.ttftMs,
+                    "generation_ms" to meta.generationMs,
+                    "history_count" to sent.historyCount,
+                    "has_summary" to sent.hasSummary,
                 ),
             )
         }
         return assistantId
     }
 
+    /** [stage]: before_ai until the first token arrives, stream after (TRACKING-PLAN 8-3-3). */
     fun fail(
         started: TurnStart.Started,
         code: String,
+        stage: String,
     ): Boolean {
         val failed =
             tx.execute {
@@ -309,14 +393,15 @@ class ChatService(
                 repository.failTurn(started.turnId, code)
             } ?: false
         if (failed) {
-            events.record(
+            turnFailed(
                 started.accountId,
-                "turn_failed",
-                mapOf(
-                    "room_id" to started.roomId.toString(),
-                    "client_message_id" to started.clientMessageId.toString(),
-                    "code" to code,
-                ),
+                started.aiRequestId,
+                started.roomId,
+                started.characterId,
+                started.turnId,
+                textLength(started.userInput),
+                code,
+                stage,
             )
         }
         return failed
@@ -339,9 +424,7 @@ class ChatService(
     fun transferOwner(
         guestAccountId: UUID,
         memberAccountId: UUID,
-    ) {
-        repository.transferRooms(guestAccountId, memberAccountId)
-    }
+    ): Int = repository.transferRooms(guestAccountId, memberAccountId)
 
     // 4-1-5 lost turn recovery
 
@@ -350,6 +433,43 @@ class ChatService(
         runCatching {
             val lost = repository.failLostTurns(properties.turns.lostAfter.seconds)
             if (lost.isNotEmpty()) log.warn("marked {} generating turn(s) as worker_lost", lost.size)
+            for (turn in repository.turnFacts(lost)) {
+                turnFailed(
+                    turn.ownerAccountId,
+                    turn.aiRequestId,
+                    turn.roomId,
+                    turn.characterId,
+                    turn.turnId,
+                    turn.userMessageLength,
+                    "worker_lost",
+                    "worker_lost",
+                )
+            }
         }.onFailure { log.warn("lost turn recovery failed", it) }
     }
+
+    /** `server_turn_failed` (TRACKING-PLAN 8-3-3). PAYMENT is not built, so nothing is refunded yet. */
+    private fun turnFailed(
+        accountId: UUID,
+        aiRequestId: String,
+        roomId: UUID,
+        characterId: UUID,
+        turnId: UUID,
+        userMessageLength: Int,
+        code: String,
+        stage: String,
+    ) = events.record(
+        accountId,
+        "server_turn_failed",
+        mapOf(
+            "ai_request_id" to aiRequestId,
+            "room_id" to roomId.toString(),
+            "character_id" to characterId.toString(),
+            "turn_id" to turnId.toString(),
+            "user_message_length" to userMessageLength,
+            "error_code" to code,
+            "stage" to stage,
+            "refunded" to false,
+        ),
+    )
 }

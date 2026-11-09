@@ -1,9 +1,11 @@
 package com.dopia
 
+import com.dopia.common.AppEvents
 import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
@@ -24,6 +26,7 @@ import java.security.Signature
 import java.security.interfaces.RSAPublicKey
 import java.time.Instant
 import java.util.Base64
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -33,6 +36,7 @@ import kotlin.test.assertTrue
 @ActiveProfiles("dev")
 class GoogleLoginTest(
     @LocalServerPort private val port: Int,
+    @Autowired private val events: AppEvents,
 ) {
     private val mapper = ObjectMapper()
 
@@ -195,7 +199,7 @@ class GoogleLoginTest(
     @Test
     fun `wrong state, bad code and cancellation never create a session`() {
         val browser = Browser()
-        browser.post("/account/guest", "")
+        val guest = UUID.fromString(mapper.readTree(browser.post("/account/guest", "").body()).get("account_id").asString())
         val start = browser.get("/account/auth/google/start?return_to=%2Fchats%2Fx")
         val state = stateOf(start.headers().firstValue("location").get())
 
@@ -228,5 +232,13 @@ class GoogleLoginTest(
 
         assertEquals(true, mapper.readTree(browser.get("/account/me").body()).get("is_guest").asBoolean())
         assertEquals(404, browser.get("/account/auth/github/start").statusCode())
+
+        // Server events under the guest that tried (TRACKING-PLAN 8-1-3, 8-1-4).
+        val recorded = events.forAccount(guest).asReversed()
+        assertEquals(
+            listOf("state_mismatch", "token_invalid"),
+            recorded.filter { it.name == "server_login_failed" }.map { it.properties["reason"] },
+        )
+        assertEquals(1, recorded.count { it.name == "server_login_cancelled" && it.properties["provider"] == "google" })
     }
 }

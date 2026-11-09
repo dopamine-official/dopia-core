@@ -52,6 +52,9 @@ curl http://127.0.0.1:8080/actuator/health
 | `OAUTH_REDIRECT_BASE_URL` | `http://127.0.0.1:3000` | 브라우저가 이 API에 닿는 origin. 콜백 주소 `{여기}/api/v1/account/auth/{provider}/callback` |
 | `WEB_BASE_URL` | `http://127.0.0.1:3000` | 로그인 뒤 돌아갈 웹 origin |
 | `LOGIN_STATE_KEY` | dev용 고정값 | `login_state` 쿠키 서명 키. 운영에서는 반드시 교체 |
+| `POSTHOG_API_KEY`, `POSTHOG_HOST` | 없음, `https://us.i.posthog.com` | 서버 이벤트(TRACKING-PLAN 8)를 PostHog로 보냄. 키가 없으면 보내지 않음. chat-ai와 같은 변수 |
+| `APP_ENV` | 없음 | `dev` 또는 `prod`. `POSTHOG_API_KEY`가 있으면 필수. PostHog는 `dev` 기록을 차트에서 숨김 |
+| `APP_RELEASE` | `RAILWAY_GIT_COMMIT_SHA` 또는 `local` | 서버 이벤트의 `app_release` |
 
 ## Google 로그인 설정
 

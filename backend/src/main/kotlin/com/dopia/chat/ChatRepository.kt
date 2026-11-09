@@ -313,13 +313,13 @@ class ChatRepository(
         aiRequestId: String,
         userMessageId: UUID,
         chargeType: String,
-        adultMode: Boolean,
+        isAdult: Boolean,
         workerId: String,
     ): UUID =
         jdbc
             .sql(
                 """
-            INSERT INTO chat_turns (room_id, client_message_id, ai_request_id, status, user_message_id, charge_type, adult_mode, worker_id)
+            INSERT INTO chat_turns (room_id, client_message_id, ai_request_id, status, user_message_id, charge_type, is_adult, worker_id)
             VALUES (:room, :client, :request, 'generating', :user, :charge, :adult, :worker) RETURNING id
             """,
             ).param("room", roomId)
@@ -327,7 +327,7 @@ class ChatRepository(
             .param("request", aiRequestId)
             .param("user", userMessageId)
             .param("charge", chargeType)
-            .param("adult", adultMode)
+            .param("adult", isAdult)
             .param("worker", workerId)
             .query(UUID::class.java)
             .single()

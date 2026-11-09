@@ -6,16 +6,16 @@ import { api } from "@/lib/api";
 import { homeSchema, openSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
 import { errorCode, track } from "@/lib/analytics";
-import { PageContext, useRetry } from "./page";
+import { Screen, useRetry } from "./page";
 import { useSession } from "./providers";
 import { ErrorState, Footer, Loading, Modal, SiteHeader } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 export function Home() {
   return (
-    <PageContext value="home">
+    <Screen page="home">
       <HomeScreen />
-    </PageContext>
+    </Screen>
   );
 }
 

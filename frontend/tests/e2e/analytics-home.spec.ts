@@ -236,8 +236,17 @@ test("a failed recent list is recorded when shown, on each screen", async ({
   await settle(page);
   // A retry that fails again leaves the same notice up: no second failure.
   expect(count(analytics, "recent_chats_load_failed")).toBe(1);
-  if (isMobile)
+  if (isMobile) {
     await dialog(page).getByRole("button", { name: "닫기" }).click();
+    // Opening the drawer again shows the same failure: still one.
+    await menuButton(page).click();
+    await expect(
+      dialog(page).getByRole("button", { name: "다시 불러오기", exact: true }),
+    ).toBeVisible();
+    await settle(page);
+    expect(count(analytics, "recent_chats_load_failed")).toBe(1);
+    await dialog(page).getByRole("button", { name: "닫기" }).click();
+  }
 
   // Another screen showing the failure records it with its own page.
   await card(page, "겨울").click();

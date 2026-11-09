@@ -7,9 +7,10 @@ import { recentSchema, type RecentResponse } from "@/lib/contracts";
 import { useSession } from "./providers";
 import { errorMessageKey } from "@/lib/errors";
 import { errorCode } from "@/lib/analytics";
-import { useRetry, useTrack } from "./page";
+import { useRetry, useScreenOnce, useTrack } from "./page";
 import { ErrorState, Icon, Loading, Modal, type CloseReason } from "./ui";
 export type RecentChat = RecentResponse["chats"][number];
+const FAILED = "recent_chats_load_failed";
 export function RecentChats({
   currentId,
   onNavigate,
@@ -29,12 +30,13 @@ export function RecentChats({
     refetchInterval: (query) => (query.state.status === "error" ? false : 3000),
   });
   const retry = useRetry("recent_chats", () => result.refetch());
-  // Once per failure shown by this list, until it loads again. A later read that fails
-  // again (window focus, a failed retry) leaves the same notice up and is not counted.
-  const reported = useRef(false);
+  // Once per failure shown on this screen, until the list loads again. A later read that
+  // fails again (window focus, a failed retry) or the mobile drawer opened again shows the
+  // same failure and is not counted.
+  const once = useScreenOnce();
   useEffect(() => {
-    if (result.isSuccess) reported.current = false;
-  }, [result.isSuccess]);
+    if (result.isSuccess) once?.delete(FAILED);
+  }, [result.isSuccess, once]);
   if (result.isPending) return <Loading />;
   if (result.isError)
     return (
@@ -42,9 +44,9 @@ export function RecentChats({
         error={result.error}
         retry={retry}
         onShown={() => {
-          if (reported.current) return;
-          reported.current = true;
-          send("recent_chats_load_failed");
+          if (!once || once.has(FAILED)) return;
+          once.add(FAILED);
+          send(FAILED);
         }}
       />
     );

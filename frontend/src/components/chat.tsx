@@ -7,7 +7,7 @@ import { api, readStream, request } from "@/lib/api";
 import { ApiError, roomSchema, type Message, type Room } from "@/lib/contracts";
 import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
-import { PageContext } from "./page";
+import { Screen } from "./page";
 import { useSession } from "./providers";
 import { ErrorState, Icon, Loading, Modal, ProfileMenu } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
@@ -37,9 +37,9 @@ function turnIndex(room: Room | undefined, clientMessageId: string) {
 }
 export function Chat({ roomId }: { roomId: string }) {
   return (
-    <PageContext value="chat_room">
+    <Screen page="chat_room">
       <ChatRoom roomId={roomId} />
-    </PageContext>
+    </Screen>
   );
 }
 function ChatRoom({ roomId }: { roomId: string }) {

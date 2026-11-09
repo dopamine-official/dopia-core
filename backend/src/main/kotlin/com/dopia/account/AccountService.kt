@@ -340,8 +340,7 @@ class AccountService(
                     accounts.revokeSession(Tokens.sha256(sessionToken))
                 }
                 val guestId = accounts.insertGuest(Tokens.sha256(guestToken))
-                // A logout keeps this browser's agreement; a withdrawal starts over (4-1-10).
-                if (!withdraw) accounts.copyConsents(identity.accountId, guestId)
+                // The next person on this browser agrees for themselves (4-1-10): no consent copy.
                 guestId
             }!!
         cookies.clearSession(response)

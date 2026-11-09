@@ -237,8 +237,7 @@ export function logout(state: State, withdraw = false) {
     );
   } else event(state, "logout_succeeded");
   state.active_account_id = null;
-  const next = guest(state);
-  if (!withdraw) copyConsents(state, previous.account_id, next.account_id);
+  guest(state);
   return account(state);
 }
 export function updateProfile(

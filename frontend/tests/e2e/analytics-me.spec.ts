@@ -1,10 +1,9 @@
 import { type Page } from "@playwright/test";
-import { type Captured, expect, sent, test } from "./fixtures";
+import { type Captured, expect, sent, settle, test } from "./fixtures";
 import { installStubs, setStubs } from "./stubs";
 
 // TRACKING-PLAN 6: My Page events. Logout and withdrawal success are server events.
 
-const settle = (page: Page) => page.waitForTimeout(4_000);
 const count = (events: Captured[], event: string) =>
   events.filter((item) => item.event === event).length;
 const dialog = (page: Page) => page.getByRole("dialog");

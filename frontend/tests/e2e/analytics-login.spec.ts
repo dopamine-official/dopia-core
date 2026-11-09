@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { type Captured, expect, sent, test } from "./fixtures";
+import { type Captured, expect, sent, settle, test } from "./fixtures";
 
 // TRACKING-PLAN 4: login modal events. e2e logs in through the mock API, which answers at
 // once; the provider round trip is played by the note the modal leaves before leaving
@@ -11,7 +11,6 @@ async function home(page: Page) {
     page.getByRole("heading", { name: "오리지널", exact: true }),
   ).toBeVisible();
 }
-const settle = (page: Page) => page.waitForTimeout(4_000);
 const count = (events: Captured[], event: string) =>
   events.filter((item) => item.event === event).length;
 const dialog = (page: Page) => page.getByRole("dialog");

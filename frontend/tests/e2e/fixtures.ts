@@ -1,4 +1,4 @@
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 import { gunzipSync } from "node:zlib";
 
 export type Captured = { event: string; properties: Record<string, unknown> };
@@ -37,6 +37,12 @@ export const test = base.extend<{ analytics: Captured[] }>({
   ],
 });
 export { expect };
+
+/**
+ * Waits past a few PostHog batches (sent every 250 ms in e2e, playwright.config.ts), so a
+ * late duplicate is counted before a test checks how many were sent.
+ */
+export const settle = (page: Page) => page.waitForTimeout(1_000);
 
 /** Waits until an event with these properties was sent, and returns it. */
 export async function sent(

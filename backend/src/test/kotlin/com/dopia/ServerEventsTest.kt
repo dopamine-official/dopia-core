@@ -123,20 +123,27 @@ class ServerEventsTest(
         assertEquals(1, merged["attempt"])
 
         // Other tests share this member: start from on, so turning it off is a change.
-        jdbc
-            .sql(
-                "UPDATE accounts SET adult_verified_at = coalesce(adult_verified_at, now()), adult_mode = true WHERE id = :id",
-            ).param("id", UUID.fromString(member))
-            .update()
-        val before = named(member, "server_safe_mode_changed").size
-        browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
-        assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
-        assertEquals(false, named(member, "server_safe_mode_changed").first().properties["adult_mode"])
-        // The same value again (a stale second tab) changes nothing.
-        browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
-        assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
-        // Back to unverified for the other tests that share this member.
-        jdbc.sql("UPDATE accounts SET adult_verified_at = null WHERE id = :id").param("id", UUID.fromString(member)).update()
+        try {
+            jdbc
+                .sql(
+                    "UPDATE accounts SET adult_verified_at = coalesce(adult_verified_at, now()), adult_mode = true WHERE id = :id",
+                ).param("id", UUID.fromString(member))
+                .update()
+            val before = named(member, "server_safe_mode_changed").size
+            browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
+            assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
+            assertEquals(false, named(member, "server_safe_mode_changed").first().properties["adult_mode"])
+            // The same value again (a stale second tab) changes nothing.
+            browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
+            assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
+        } finally {
+            // Back to unverified for the other tests that share this member, even on failure.
+            jdbc
+                .sql(
+                    "UPDATE accounts SET adult_mode = false, adult_verified_at = null WHERE id = :id",
+                ).param("id", UUID.fromString(member))
+                .update()
+        }
 
         assertTrue(browser.call("DELETE", "/chats/$room").statusCode() in 200..299)
         val deleted = only(member, "server_room_deleted").properties

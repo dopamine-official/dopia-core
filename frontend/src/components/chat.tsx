@@ -47,6 +47,29 @@ function ChatRoom({ roomId }: { roomId: string }) {
   const query = useQueryClient();
   const router = useRouter();
   const [menu, setMenu] = useState(false);
+  /** A change the visitor asked for: the menu button, the shortcut, or the drawer's close. */
+  function toggleMenu(open: boolean) {
+    track("sidebar_toggled", "chat_room", { open });
+    setMenu(open);
+  }
+  const menuRef = useRef(menu);
+  useEffect(() => {
+    menuRef.current = menu;
+  }, [menu]);
+  useEffect(() => {
+    // Cmd+B on a Mac, Ctrl+B elsewhere, as on home.
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        const open = !menuRef.current;
+        menuRef.current = open;
+        track("sidebar_toggled", "chat_room", { open });
+        setMenu(open);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
   const storageKey = `dopia:draft:${account.account_id}:${roomId}`;
   const pendingKey = `${storageKey}:pending`;
@@ -353,10 +376,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
           className="icon_button"
           aria-label={t("common.menu")}
           aria-expanded={menu}
-          onClick={() => {
-            track("sidebar_toggled", "chat_room", { open: true });
-            setMenu(true);
-          }}
+          onClick={() => toggleMenu(true)}
         >
           <Icon name="menu" />
         </button>
@@ -403,10 +423,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
               {t("common.brand")}
             </Link>
           }
-          onClose={() => {
-            track("sidebar_toggled", "chat_room", { open: false });
-            setMenu(false);
-          }}
+          onClose={() => toggleMenu(false)}
         >
           <RecentChats
             currentId={roomId}

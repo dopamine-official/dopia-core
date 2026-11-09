@@ -328,6 +328,23 @@ test("sidebar toggles", async ({ page, analytics, isMobile }) => {
   expect(count(analytics, "sidebar_toggled")).toBe(2);
 });
 
+test("sidebar toggles in the chat room, shortcut included", async ({
+  page,
+  analytics,
+}) => {
+  await home(page);
+  await card(page, "겨울").click();
+  await expect(page).toHaveURL(/\/chats\//);
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(dialog(page)).toBeVisible();
+  await sent(analytics, "sidebar_toggled", { open: true, page: "chat_room" });
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(dialog(page)).toHaveCount(0);
+  await sent(analytics, "sidebar_toggled", { open: false, page: "chat_room" });
+  await settle(page);
+  expect(count(analytics, "sidebar_toggled")).toBe(2);
+});
+
 test("recent chats: menu, delete outcomes and the room on screen", async ({
   page,
   analytics,

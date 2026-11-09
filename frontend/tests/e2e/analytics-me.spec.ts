@@ -191,3 +191,15 @@ test("closing the edit modal while it saves is not a close", async ({
   await settle(page);
   expect(count(analytics, "profile_edit_closed")).toBe(0);
 });
+
+test("a successful logout still sends its click", async ({
+  page,
+  analytics,
+}) => {
+  await profile(page);
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await expect(page).toHaveURL("/");
+  // Sent as the member, though PostHog starts over right after.
+  const clicked = await sent(analytics, "logout_clicked", { page: "me" });
+  expect(clicked.properties.is_member).toBe(true);
+});

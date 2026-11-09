@@ -376,7 +376,10 @@ function ChatRoom({ roomId }: { roomId: string }) {
               aria-haspopup="dialog"
               onClick={() => {
                 track("login_link_clicked", "chat_room");
-                openLogin({ returnTo: `/chats/${roomId}` });
+                openLogin({
+                  trigger: "login_button",
+                  returnTo: `/chats/${roomId}`,
+                });
               }}
             >
               {t("account.login.button")}

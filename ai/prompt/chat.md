@@ -62,6 +62,8 @@ Each reply must flow naturally from the previous one with no contradictions. Any
 {{/summary}}
 
 # Output Formatting
+- Write about 4 paragraphs per reply, with about 4 sentences per paragraph.
+- A shorter reply is fine when the scene calls for it, but never go beyond this length.
 - Wrap dialogue in "double quotes".
 - Wrap actions, thoughts, atmosphere, and description in *asterisks*.
 - Use **bold** for emphasis when needed.

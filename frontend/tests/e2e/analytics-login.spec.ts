@@ -182,3 +182,22 @@ test("back from the provider page without finishing", async ({ page }) => {
   ).toBeNull();
   await expect(google(page)).toBeEnabled();
 });
+
+test("a login that returns to My Page is recorded before the screen's view", async ({
+  page,
+  analytics,
+}) => {
+  await home(page);
+  await headerLogin(page).click();
+  await google(page).click();
+  await expect(
+    page.getByRole("button", { name: "내 프로필", exact: true }),
+  ).toBeVisible();
+  await leaveNote(page, { provider: "apple", trigger: "members_only" });
+  await page.goto("/me");
+  await sent(analytics, "login_succeeded", { provider: "apple" });
+  await sent(analytics, "me_viewed");
+  const order = analytics.map((item) => item.event);
+  const succeeded = order.findLastIndex((event) => event === "login_succeeded");
+  expect(succeeded).toBeLessThan(order.lastIndexOf("me_viewed"));
+});

@@ -199,7 +199,8 @@ export const handlers = [
   http.patch(
     "/api/v1/account/me",
     guarded(async (req) => {
-      const form = await req.formData();
+      // A save with no fields sends an empty multipart body, which does not parse.
+      const form = await req.formData().catch(() => new FormData());
       const nickname = form.get("nickname");
       const photo = form.get("photo");
       let photo_url: string | undefined;

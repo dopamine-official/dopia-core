@@ -160,6 +160,9 @@ export function updateProfile(
 ) {
   const user = account(state);
   if (user.is_guest) throw new ApiError("forbidden", 403);
+  // Same as chat-server: a save with nothing to change is invalid input.
+  if (values.nickname === undefined && values.photo_url === undefined)
+    throw new ApiError("invalid_input", 422);
   if (values.nickname !== undefined) {
     const nickname = values.nickname.trim();
     if (!nickname)

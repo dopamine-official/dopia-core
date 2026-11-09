@@ -76,6 +76,7 @@ export function Providers({ children }: { children: ReactNode }) {
   // A failed or cancelled provider round trip: the modal it reopens, even through the
   // members-only redirect, says so until the visitor closes it or opens another one.
   const loginReturn = useRef<LoginReturn | null>(null);
+  const returnChecked = useRef(false);
   const openLogin = useCallback(
     (request: { trigger: LoginTrigger; returnTo?: string; error?: string }) => {
       loginReturn.current = null;
@@ -132,6 +133,23 @@ export function Providers({ children }: { children: ReactNode }) {
       accountRef.current = next;
       setApiContext(localeRef.current, next.account_id);
       syncAnalyticsAccount(next);
+      if (!returnChecked.current) {
+        // The first page after a provider round trip: how it ended (TRACKING-PLAN 4-3,
+        // 4-4). Here, before any screen shows, so a success comes before the screen's view.
+        returnChecked.current = true;
+        const returned = takeLoginReturn(
+          !next.is_guest,
+          window.location.search,
+        );
+        if (returned?.outcome === "succeeded") {
+          const page = pageForPath(window.location.pathname);
+          if (page)
+            track("login_succeeded", page, {
+              provider: returned.provider,
+              trigger: returned.trigger,
+            });
+        } else if (returned) loginReturn.current = returned;
+      }
       setAccount(next);
       if (changed) query.clear();
       // Initial page loads must preserve this account's saved drafts and turns.
@@ -212,24 +230,6 @@ export function Providers({ children }: { children: ReactNode }) {
     };
   }, [applyAccount, initialize, notify]);
   const ready = !!account;
-  const returnChecked = useRef(false);
-  useEffect(() => {
-    // The first page after a provider round trip: how it ended (TRACKING-PLAN 4-3, 4-4).
-    if (!ready || returnChecked.current) return;
-    returnChecked.current = true;
-    const returned = takeLoginReturn(
-      accountRef.current?.is_guest === false,
-      window.location.search,
-    );
-    if (returned?.outcome === "succeeded") {
-      const page = pageForPath(window.location.pathname);
-      if (page)
-        track("login_succeeded", page, {
-          provider: returned.provider,
-          trigger: returned.trigger,
-        });
-    } else if (returned) loginReturn.current = returned;
-  }, [ready]);
   useEffect(() => {
     // `?login=1` (plus optional `return_to` and `error`) opens the login modal on arrival,
     // e.g. after a redirect for a members-only page or a failed provider round trip.

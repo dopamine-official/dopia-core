@@ -1,7 +1,22 @@
 name: Check frontend
 on:
+  # Only when the frontend or what it builds from changes: backend and AI changes have their
+  # own checks. Branch pushes are checked by their PR, so push runs only on dev and main.
   push:
+    branches: [dev, main]
+    paths:
+      - "frontend/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/check.yml"
   pull_request:
+    paths:
+      - "frontend/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/check.yml"
 jobs:
   check:
     runs-on: ubuntu-latest

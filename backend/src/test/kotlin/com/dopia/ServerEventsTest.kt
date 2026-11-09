@@ -290,7 +290,9 @@ class ServerEventsTest(
             jdbc.sql("DROP TRIGGER test_block ON chat_rooms").update()
             accounts.merge(UUID.fromString(guest))
             val completed = mergedFrom(member, guest)
-            assertEquals(failures.size + 1, completed["attempt"])
+            // Counted after the fact: the scheduled retry may have added a failed attempt meanwhile.
+            val allFailures = named(member, "server_merge_failed").count { it.properties["guest_account_id"] == guest }
+            assertEquals(allFailures + 1, completed["attempt"])
             assertEquals(1, completed["room_count"])
         } finally {
             jdbc.sql("DROP TRIGGER IF EXISTS test_block ON chat_rooms").update()

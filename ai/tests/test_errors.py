@@ -141,7 +141,7 @@ async def test_err_04_trace_records_fields_and_no_prompt_text_in_logs(harness_fa
         await client.post("/api/v1/chat/compact", json=compact_body(), headers=ids("trace-2"))
     chat, comp = h.tracer.records
     assert chat.request_id == "trace-1" and chat.name == "chat_turn"
-    assert chat.model == "fake-general" and chat.provider == "fake" and chat.prompt_version == "chat_v2"
+    assert chat.model == "fake-general" and chat.provider == "fake" and chat.prompt_version == "v0.1"
     assert chat.usage is not None and chat.usage.input_tokens == 120
     assert chat.outcome == "completed" and chat.duration_ms is not None and chat.first_token_at is not None
     assert chat.distinct_id == "acct-1" and chat.metadata["model_route"] == "general"

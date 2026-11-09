@@ -116,7 +116,7 @@ async def test_chat_05_normal_stream_and_int_01(harness_factory) -> None:
         completed = events[3][1]
         assert completed["output"] == "*她抬起頭，合上手中的書。*\n你今天來得真早呢。"
         meta = completed["meta"]
-        assert meta["model"] == "fake-general" and meta["provider"] == "fake" and meta["prompt_version"] == "chat_v2"
+        assert meta["model"] == "fake-general" and meta["provider"] == "fake" and meta["prompt_version"] == "v0.1"
         assert meta["input_token_count"] == usage.input_tokens and meta["output_token_count"] == usage.output_tokens
         assert isinstance(meta["ttft_ms"], int) and isinstance(meta["generation_ms"], int)
         assert meta["finish_reason"] == "stop"

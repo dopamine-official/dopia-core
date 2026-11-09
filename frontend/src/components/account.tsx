@@ -1,12 +1,20 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, readAccount } from "@/lib/api";
 import { accountIdentitySchema, accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
-import { Screen } from "./page";
+import { errorCode } from "@/lib/analytics";
+import { Screen, useTrack } from "./page";
 import { useSession } from "./providers";
-import { Avatar, Footer, Icon, Modal, SiteHeader } from "./ui";
+import {
+  Avatar,
+  Footer,
+  Icon,
+  Modal,
+  SiteHeader,
+  type CloseReason,
+} from "./ui";
 import { RecentChats } from "./recent-chats";
 
 export function Profile() {
@@ -22,6 +30,14 @@ function ProfileScreen() {
   const [edit, setEdit] = useState(false);
   const [withdraw, setWithdraw] = useState(false);
   const [busy, setBusy] = useState(false);
+  const send = useTrack();
+  const viewed = useRef(false);
+  useEffect(() => {
+    // Members only: a guest is sent on to the login modal (TRACKING-PLAN 6-1).
+    if (account.is_guest || viewed.current) return;
+    viewed.current = true;
+    send("me_viewed");
+  }, [account.is_guest, send]);
   useEffect(() => {
     if (!account.is_guest) return;
     // Guests cannot see this page: show the login modal over home and return here after login.
@@ -35,6 +51,8 @@ function ProfileScreen() {
   }, [account.is_guest, accountRedirect, router]);
   if (account.is_guest) return null;
   async function leave(remove = false) {
+    // Success resets PostHog, so only the server records it (TRACKING-PLAN 6).
+    send(remove ? "withdraw_confirmed" : "logout_clicked");
     setBusy(true);
     try {
       const issued = await api(
@@ -45,9 +63,17 @@ function ProfileScreen() {
       changeAccount(await readAccount(issued.account_id), "/");
     } catch (error) {
       setWithdraw(false);
+      send(remove ? "withdraw_failed" : "logout_failed", {
+        code: errorCode(error),
+      });
       notice(t(errorMessageKey(error)));
       setBusy(false);
     }
+  }
+  function cancelWithdraw(method: "cancel" | "outside" | "escape") {
+    // Once the withdrawal is sent, closing the modal no longer cancels it.
+    if (!busy) send("withdraw_cancelled", { method });
+    setWithdraw(false);
   }
   return (
     <>
@@ -61,7 +87,10 @@ function ProfileScreen() {
           <button
             className="icon_button"
             aria-label={t("account.me.edit")}
-            onClick={() => setEdit(true)}
+            onClick={() => {
+              send("profile_edit_clicked");
+              setEdit(true);
+            }}
           >
             <Icon name="edit" />
           </button>
@@ -89,7 +118,10 @@ function ProfileScreen() {
             <button
               className="button danger"
               disabled={busy}
-              onClick={() => setWithdraw(true)}
+              onClick={() => {
+                send("withdraw_clicked");
+                setWithdraw(true);
+              }}
             >
               {t("account.me.withdraw")}
             </button>
@@ -101,11 +133,13 @@ function ProfileScreen() {
       {withdraw && (
         <Modal
           title={t("account.me.withdraw_title")}
-          onClose={() => setWithdraw(false)}
+          onClose={(reason) =>
+            cancelWithdraw(reason === "button" ? "cancel" : reason)
+          }
         >
           <p className="muted">{t("account.me.withdraw_body")}</p>
           <div className="modal_actions">
-            <button className="button" onClick={() => setWithdraw(false)}>
+            <button className="button" onClick={() => cancelWithdraw("cancel")}>
               {t("common.cancel")}
             </button>
             <button
@@ -123,6 +157,18 @@ function ProfileScreen() {
 }
 function EditProfile({ onClose }: { onClose: () => void }) {
   const { account, t, changeAccount, notice } = useSession();
+  const send = useTrack();
+  const methods: Record<CloseReason, "close" | "outside" | "escape"> = {
+    button: "close",
+    outside: "outside",
+    escape: "escape",
+  };
+  /** Closed without saving (TRACKING-PLAN 6-7). */
+  function close(method: "cancel" | "close" | "outside" | "escape") {
+    // Once the save is sent, closing does not drop it; its result is recorded instead.
+    if (!busy) send("profile_edit_closed", { method });
+    onClose();
+  }
   const [nickname, setNickname] = useState(account.nickname ?? "");
   const [file, setFile] = useState<File | null>(null);
   const fileUrl = useMemo(
@@ -140,50 +186,68 @@ function EditProfile({ onClose }: { onClose: () => void }) {
   );
   async function chooseFile(selected?: File) {
     if (!selected) return;
+    const checked = (result: "accepted" | "invalid_type" | "too_large") =>
+      send("profile_photo_selected", { result });
     if (!["image/png", "image/jpeg", "image/webp"].includes(selected.type)) {
+      checked("invalid_type");
       setError("account.me.photo_type_invalid");
       return;
     }
     if (selected.size > 2 * 1024 * 1024) {
+      checked("too_large");
       setError("account.me.photo_large");
       return;
     }
     try {
       const bitmap = await createImageBitmap(selected);
       bitmap.close();
+      checked("accepted");
       setFile(selected);
       setError("");
     } catch {
+      checked("invalid_type");
       setError("account.me.photo_type_invalid");
     }
   }
   async function save() {
+    if (busy) return;
+    send("profile_save_clicked");
     if (!nickname.trim()) {
+      send("profile_update_failed", { code: "nickname_required" });
       setError("account.me.nickname_required");
       return;
     }
     setBusy(true);
     setError("");
     const form = new FormData();
-    if (nickname.trim() !== account.nickname)
-      form.set("nickname", nickname.trim());
+    const nicknameChanged = nickname.trim() !== account.nickname;
+    if (nicknameChanged) form.set("nickname", nickname.trim());
     if (file) form.set("photo", file);
+    let next;
     try {
-      changeAccount(
-        await api("/account/me", accountSchema, {
-          method: "PATCH",
-          body: form,
-        }),
-      );
-      notice(t("account.me.saved"));
-      onClose();
+      next = await api("/account/me", accountSchema, {
+        method: "PATCH",
+        body: form,
+      });
     } catch (error) {
+      // Nothing changed is refused by the server as invalid input, and counted here.
+      send("profile_update_failed", { code: errorCode(error) });
       setError(errorMessageKey(error));
       setBusy(false);
+      return;
     }
+    send("profile_updated", {
+      changed: nicknameChanged && file ? "both" : file ? "photo" : "nickname",
+    });
+    changeAccount(next);
+    notice(t("account.me.saved"));
+    onClose();
   }
   return (
-    <Modal title={t("account.me.edit")} onClose={onClose}>
+    <Modal
+      title={t("account.me.edit")}
+      onClose={(reason) => close(methods[reason])}
+    >
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -219,7 +283,11 @@ function EditProfile({ onClose }: { onClose: () => void }) {
           </p>
         )}
         <div className="modal_actions">
-          <button type="button" className="button" onClick={onClose}>
+          <button
+            type="button"
+            className="button"
+            onClick={() => close("cancel")}
+          >
             {t("common.cancel")}
           </button>
           <button

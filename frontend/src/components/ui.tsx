@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   useEffect,
   useLayoutEffect,
@@ -11,7 +12,14 @@ import { localeNames, supportedLocales, type Locale } from "@/i18n";
 import { api } from "@/lib/api";
 import { accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
-import { useSession } from "./providers";
+import { track, type EventProperties } from "@/lib/analytics";
+import {
+  clearLoginStart,
+  pageForPath,
+  saveLoginStart,
+  type LoginProvider,
+} from "@/lib/login";
+import { useSession, type LoginRequest } from "./providers";
 import { useTrack } from "./page";
 
 export function Icon({
@@ -136,7 +144,9 @@ export function SiteHeader({
       </div>
       <div className="header_actions">
         <LocaleSelect />
-        {safe && <SafeToggle onLogin={() => openLogin()} />}
+        {safe && (
+          <SafeToggle onLogin={() => openLogin({ trigger: "safe_toggle" })} />
+        )}
         {account.is_guest ? (
           <button
             type="button"
@@ -144,7 +154,7 @@ export function SiteHeader({
             aria-haspopup="dialog"
             onClick={() => {
               send("login_link_clicked");
-              openLogin();
+              openLogin({ trigger: "login_button" });
             }}
           >
             {t("account.login.button")}
@@ -156,35 +166,78 @@ export function SiteHeader({
     </header>
   );
 }
+/** Records a login event on the screen under the modal (TRACKING-PLAN 4). */
+function useLoginTrack() {
+  const page = pageForPath(usePathname());
+  return (event: string, properties: EventProperties) => {
+    if (page) track(event, page, properties);
+  };
+}
+// Showings already recorded; React's dev double mount must not count one twice.
+const viewedLogins = new Set<number>();
 export function LoginHost() {
   const { t, login, closeLogin } = useSession();
+  const send = useLoginTrack();
+  const sendRef = useRef(send);
+  useLayoutEffect(() => {
+    sendRef.current = send;
+  });
+  useEffect(() => {
+    if (!login || viewedLogins.has(login.id)) return;
+    viewedLogins.add(login.id);
+    sendRef.current("login_modal_viewed", { trigger: login.trigger });
+    if (login.failed)
+      sendRef.current("login_failed", {
+        provider: login.failed.provider,
+        trigger: login.failed.trigger,
+      });
+  }, [login]);
   if (!login) return null;
   return (
     <Modal
       title={t("account.login.title")}
       className="login_modal"
-      onClose={closeLogin}
+      onClose={(method) => {
+        send("login_modal_closed", { trigger: login.trigger, method });
+        closeLogin();
+      }}
     >
       <p className="muted">{t("account.login.description")}</p>
-      <LoginOptions returnTo={login.returnTo} initialError={login.error} />
+      <LoginOptions login={login} send={send} />
     </Modal>
   );
 }
-export function LoginOptions({
-  returnTo,
-  initialError = "",
+function LoginOptions({
+  login,
+  send,
 }: {
-  returnTo: string;
-  initialError?: string;
+  login: LoginRequest;
+  send: (event: string, properties: EventProperties) => void;
 }) {
   const { t, changeAccount } = useSession();
+  const { returnTo, trigger } = login;
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState(initialError);
-  async function signIn(provider: "google" | "apple") {
+  const [error, setError] = useState(login.error);
+  useEffect(() => {
+    // Back from the provider page without finishing: the browser restores this page as it
+    // was left, buttons still waiting. Let the visitor try again, and forget the round trip
+    // so a later visit is not taken for its end.
+    const onShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      clearLoginStart();
+      setBusy(null);
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
+  async function signIn(provider: LoginProvider) {
     if (busy) return;
     setBusy(provider);
     setError("");
+    send("login_provider_clicked", { provider, trigger });
     if (process.env.NEXT_PUBLIC_LOGIN === "oauth") {
+      // The result is known only on the way back (src/lib/login.ts).
+      saveLoginStart(provider, trigger);
       // The server starts the provider flow and returns here by redirect.
       window.location.assign(
         `/api/v1/account/auth/${provider}/start?return_to=${encodeURIComponent(returnTo)}`,
@@ -197,9 +250,12 @@ export function LoginOptions({
         body: JSON.stringify({ provider }),
       });
       changeAccount(next, returnTo);
+      // After the account change, so the event belongs to the member.
+      send("login_succeeded", { provider, trigger });
     } catch (error) {
       setBusy(null);
       setError(errorMessageKey(error, "account.login.failed"));
+      send("login_failed", { provider, trigger });
     }
   }
   return (

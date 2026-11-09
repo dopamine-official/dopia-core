@@ -23,8 +23,15 @@ import {
   errorCode,
   setAnalyticsLocale,
   syncAnalyticsAccount,
+  track,
   trackBeforeSession,
 } from "@/lib/analytics";
+import {
+  pageForPath,
+  takeLoginReturn,
+  type LoginReturn,
+  type LoginTrigger,
+} from "@/lib/login";
 import { errorMessageKey } from "@/lib/errors";
 
 type Session = {
@@ -35,11 +42,23 @@ type Session = {
   changeAccount: (account: Account, redirectTo?: string) => void;
   accountRedirect: string | null;
   login: LoginRequest | null;
-  openLogin: (request?: { returnTo?: string; error?: string }) => void;
+  openLogin: (request: {
+    trigger: LoginTrigger;
+    returnTo?: string;
+    error?: string;
+  }) => void;
   closeLogin: () => void;
   notice: (message: string) => void;
 };
-export type LoginRequest = { returnTo: string; error: string };
+export type LoginRequest = {
+  // One showing of the modal; kept when a redirect reopens the same one.
+  id: number;
+  returnTo: string;
+  error: string;
+  trigger: LoginTrigger;
+  // A failed provider round trip this showing reports.
+  failed?: LoginReturn;
+};
 const Context = createContext<Session | null>(null);
 export function useSession() {
   const value = useContext(Context);
@@ -53,17 +72,29 @@ export function Providers({ children }: { children: ReactNode }) {
   const [accountRedirect, setAccountRedirect] = useState<string | null>(null);
   // The login modal replaces the old /login page and can be opened from any screen.
   const [login, setLogin] = useState<LoginRequest | null>(null);
+  const loginId = useRef(0);
+  // A failed or cancelled provider round trip: the modal it reopens, even through the
+  // members-only redirect, says so until the visitor closes it or opens another one.
+  const loginReturn = useRef<LoginReturn | null>(null);
   const openLogin = useCallback(
-    (request: { returnTo?: string; error?: string } = {}) =>
+    (request: { trigger: LoginTrigger; returnTo?: string; error?: string }) => {
+      loginReturn.current = null;
+      loginId.current += 1;
       setLogin({
+        id: loginId.current,
         returnTo: safeReturnTo(
           request.returnTo ?? window.location.pathname + window.location.search,
         ),
         error: request.error ?? "",
-      }),
+        trigger: request.trigger,
+      });
+    },
     [],
   );
-  const closeLogin = useCallback(() => setLogin(null), []);
+  const closeLogin = useCallback(() => {
+    loginReturn.current = null;
+    setLogin(null);
+  }, []);
   // Arrived where the account change was heading: adjust during render, not in an effect.
   if (accountRedirect !== null && pathname === accountRedirect)
     setAccountRedirect(null);
@@ -181,12 +212,33 @@ export function Providers({ children }: { children: ReactNode }) {
     };
   }, [applyAccount, initialize, notify]);
   const ready = !!account;
+  const returnChecked = useRef(false);
+  useEffect(() => {
+    // The first page after a provider round trip: how it ended (TRACKING-PLAN 4-3, 4-4).
+    if (!ready || returnChecked.current) return;
+    returnChecked.current = true;
+    const returned = takeLoginReturn(
+      accountRef.current?.is_guest === false,
+      window.location.search,
+    );
+    if (returned?.outcome === "succeeded") {
+      const page = pageForPath(window.location.pathname);
+      if (page)
+        track("login_succeeded", page, {
+          provider: returned.provider,
+          trigger: returned.trigger,
+        });
+    } else if (returned) loginReturn.current = returned;
+  }, [ready]);
   useEffect(() => {
     // `?login=1` (plus optional `return_to` and `error`) opens the login modal on arrival,
     // e.g. after a redirect for a members-only page or a failed provider round trip.
     if (!ready) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("login") !== "1") return;
+    // A guest on My Page is sent on to home with the same request (src/components/account.tsx);
+    // the modal opens there, so it shows once and over the screen the visitor sees.
+    if (pathname === "/me" && accountRef.current?.is_guest !== false) return;
     const target = params.get("return_to");
     const error =
       params.get("error") === "login_failed" ? "account.login.failed" : "";
@@ -197,7 +249,25 @@ export function Providers({ children }: { children: ReactNode }) {
       if (target) router.replace(safeReturnTo(target));
       return;
     }
-    setLogin({ returnTo: safeReturnTo(target ?? here), error });
+    const returned = loginReturn.current;
+    const trigger: LoginTrigger = returned
+      ? returned.outcome === "failed"
+        ? "login_failed"
+        : "login_cancelled"
+      : error
+        ? "login_failed"
+        : "members_only";
+    setLogin((open) => {
+      const same = open && returned && open.trigger === trigger;
+      if (!same) loginId.current += 1;
+      return {
+        id: same ? open.id : loginId.current,
+        returnTo: safeReturnTo(target ?? here),
+        error,
+        trigger,
+        failed: returned?.outcome === "failed" ? returned : undefined,
+      };
+    });
   }, [ready, pathname, router]);
   function retrySession() {
     // A click while the retry is still running would count one retry twice.

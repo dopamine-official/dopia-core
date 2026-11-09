@@ -12,6 +12,11 @@ if (
     "NEXT_PUBLIC_APP_ENV must be dev or prod when NEXT_PUBLIC_POSTHOG_KEY is set",
   );
 const config: NextConfig = {
+  // `page.e2e.tsx` screens exist only for e2e runs on the dev server, never in a build.
+  pageExtensions:
+    process.env.NODE_ENV === "production"
+      ? ["tsx", "ts", "jsx", "js"]
+      : ["tsx", "ts", "jsx", "js", "e2e.tsx"],
   turbopack: { root: workspaceRoot },
   outputFileTracingRoot: workspaceRoot,
   reactStrictMode: true,

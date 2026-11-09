@@ -5,11 +5,64 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { homeSchema, openSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
+import { errorCode, track } from "@/lib/analytics";
+import { Screen, useRetry } from "./page";
 import { useSession } from "./providers";
 import { ErrorState, Footer, Loading, Modal, SiteHeader } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 export function Home() {
+  return (
+    <Screen page="home">
+      <HomeScreen />
+    </Screen>
+  );
+}
+
+type CardSpot = { character_id: string; section_id: string; position: number };
+
+/**
+ * Sends `character_card_viewed` the first time half of a card is on screen, once per card
+ * for this view of the home screen. Returns the ref to put on each card.
+ */
+function useCardViews() {
+  const seen = useRef(new Set<string>());
+  const spots = useRef(new WeakMap<Element, CardSpot>());
+  const observer = useRef<IntersectionObserver | null>(null);
+  useEffect(
+    () => () => {
+      observer.current?.disconnect();
+      // A remount (React's dev double mount) starts a new observer.
+      observer.current = null;
+    },
+    [],
+  );
+  return (spot: CardSpot) => (node: HTMLElement | null) => {
+    const id = `${spot.section_id}:${spot.character_id}`;
+    if (!node || seen.current.has(id)) return;
+    observer.current ??= new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          // Some browsers report any overlap as intersecting; require half the card.
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.5) continue;
+          const found = spots.current.get(entry.target);
+          observer.current?.unobserve(entry.target);
+          if (!found) continue;
+          const key = `${found.section_id}:${found.character_id}`;
+          if (seen.current.has(key)) continue;
+          seen.current.add(key);
+          track("character_card_viewed", "home", found);
+        }
+      },
+      { threshold: 0.5 },
+    );
+    spots.current.set(node, spot);
+    observer.current.observe(node);
+    return () => observer.current?.unobserve(node);
+  };
+}
+
+function HomeScreen() {
   const { t, account, locale, notice } = useSession();
   const router = useRouter();
   const query = useQueryClient();
@@ -23,6 +76,28 @@ export function Home() {
     queryKey: ["home", account.account_id, account.adult_mode, locale],
     queryFn: ({ signal }) => api("/home", homeSchema, { signal }),
   });
+  const watchCard = useCardViews();
+  const retry = useRetry("home_list", () => result.refetch());
+  const viewed = useRef(false);
+  useEffect(() => {
+    // Once per showing of the home screen, with how its first read turned out.
+    if (viewed.current || result.isPending) return;
+    viewed.current = true;
+    track("home_viewed", "home", {
+      load_result: result.isError
+        ? "failed"
+        : result.data.sections.length
+          ? "loaded"
+          : "empty",
+    });
+  }, [result.isPending, result.isError, result.data]);
+  const sidebarOpen = mobile ? mobileOpen : sidebar;
+  /** A change the visitor asked for: the menu button, the shortcut, or the drawer's close. */
+  function toggleSidebar(open: boolean) {
+    track("sidebar_toggled", "home", { open });
+    if (mobile) setMobileOpen(open);
+    else setSidebar(open);
+  }
   useEffect(() => () => openingRef.current?.abort(), []);
   function cancelOpening() {
     openingRef.current?.abort();
@@ -39,18 +114,25 @@ export function Home() {
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+  const toggleRef = useRef(toggleSidebar);
+  useEffect(() => {
+    toggleRef.current = toggleSidebar;
+  });
+  const sidebarOpenRef = useRef(sidebarOpen);
+  useEffect(() => {
+    sidebarOpenRef.current = sidebarOpen;
+  }, [sidebarOpen]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
-        if (mobile) setMobileOpen((v) => !v);
-        else setSidebar((v) => !v);
+        toggleRef.current(!sidebarOpenRef.current);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [mobile]);
-  async function open(characterId: string) {
+  }, []);
+  async function open(characterId: string, source: "banner" | "card") {
     if (openingRef.current) return;
     const controller = new AbortController();
     openingRef.current = controller;
@@ -67,6 +149,11 @@ export function Home() {
       router.push(`/chats/${result.room_id}`);
     } catch (error) {
       if (controller.signal.aborted) return;
+      track("chat_open_failed", "home", {
+        source,
+        character_id: characterId,
+        code: errorCode(error),
+      });
       notice(t(errorMessageKey(error, "character.open_failed")));
       openingRef.current = null;
       setOpening(null);
@@ -77,9 +164,8 @@ export function Home() {
       <SiteHeader
         safe
         menu={{
-          open: mobile ? mobileOpen : sidebar,
-          toggle: () =>
-            mobile ? setMobileOpen((v) => !v) : setSidebar((v) => !v),
+          open: sidebarOpen,
+          toggle: () => toggleSidebar(!sidebarOpen),
         }}
       />
       <aside
@@ -93,7 +179,7 @@ export function Home() {
         <Modal
           drawer
           title={t("common.recent")}
-          onClose={() => setMobileOpen(false)}
+          onClose={() => toggleSidebar(false)}
         >
           <RecentChats
             onNavigate={() => {
@@ -120,10 +206,7 @@ export function Home() {
             <Loading cards />
           </>
         ) : result.isError ? (
-          <ErrorState
-            error={result.error}
-            retry={() => void result.refetch()}
-          />
+          <ErrorState error={result.error} retry={retry} />
         ) : (
           <>
             {result.data.banner && (
@@ -133,7 +216,12 @@ export function Home() {
                 aria-label={t("character.start", {
                   name: result.data.banner.name,
                 })}
-                onClick={() => void open(result.data.banner!.character_id)}
+                onClick={() => {
+                  if (openingRef.current) return;
+                  const id = result.data.banner!.character_id;
+                  track("banner_clicked", "home", { character_id: id });
+                  void open(id, "banner");
+                }}
               >
                 <img src={result.data.banner.image_url} alt="" />
                 <span className="hero_copy">
@@ -159,14 +247,30 @@ export function Home() {
                   </div>
                   <div className="card_grid">
                     {section.characters.map((character, index) => (
-                      <article className="character_card" key={character.id}>
+                      <article
+                        className="character_card"
+                        key={character.id}
+                        ref={watchCard({
+                          character_id: character.id,
+                          section_id: section.id,
+                          position: index + 1,
+                        })}
+                      >
                         <button
                           className="card_link"
                           aria-label={t("character.start", {
                             name: character.name,
                           })}
                           disabled={!!opening}
-                          onClick={() => void open(character.id)}
+                          onClick={() => {
+                            if (openingRef.current) return;
+                            track("character_card_clicked", "home", {
+                              character_id: character.id,
+                              section_id: section.id,
+                              position: index + 1,
+                            });
+                            void open(character.id, "card");
+                          }}
                         >
                           <div className={`card_art art_${index}`}>
                             <img

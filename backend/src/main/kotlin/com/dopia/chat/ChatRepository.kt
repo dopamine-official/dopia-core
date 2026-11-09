@@ -391,6 +391,40 @@ class ChatRepository(
             .list()
             .filterNotNull()
 
+    data class TurnFacts(
+        val turnId: UUID,
+        val aiRequestId: String,
+        val roomId: UUID,
+        val characterId: UUID,
+        val ownerAccountId: UUID,
+        val userMessageLength: Int,
+    )
+
+    /** What a server event needs about turns ended without their worker. */
+    fun turnFacts(turnIds: List<UUID>): List<TurnFacts> {
+        if (turnIds.isEmpty()) return emptyList()
+        return jdbc
+            .sql(
+                """
+            SELECT t.id, t.ai_request_id, t.room_id, r.character_id, r.owner_account_id, char_length(m.content) AS length
+            FROM chat_turns t
+            JOIN chat_rooms r ON r.id = t.room_id
+            JOIN chat_messages m ON m.id = t.user_message_id
+            WHERE t.id IN (:ids)
+            """,
+            ).param("ids", turnIds)
+            .query { rs, _ ->
+                TurnFacts(
+                    rs.getObject("id", UUID::class.java),
+                    rs.getString("ai_request_id"),
+                    rs.getObject("room_id", UUID::class.java),
+                    rs.getObject("character_id", UUID::class.java),
+                    rs.getObject("owner_account_id", UUID::class.java),
+                    rs.getInt("length"),
+                )
+            }.list()
+    }
+
     // Summaries
 
     data class SummaryRow(

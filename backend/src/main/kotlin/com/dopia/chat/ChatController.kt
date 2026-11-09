@@ -103,7 +103,7 @@ class ChatController(
 
             is TurnStart.Started -> {
                 if (!runner.submit(start, emitter)) {
-                    chat.fail(start, "server_busy")
+                    chat.reject(start, "server_busy")
                     throw ApiException("server_busy", HttpStatus.SERVICE_UNAVAILABLE, message = "generation capacity unavailable")
                 }
             }

@@ -18,7 +18,10 @@ import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
+import java.time.Duration
+import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 data class AccountView(
     val accountId: UUID,
@@ -55,6 +58,10 @@ class AccountService(
 ) {
     private val log = LoggerFactory.getLogger(AccountService::class.java)
     private val headerAccount = "X-Preview-Account"
+
+    // Merge attempts per guest for `attempt` (TRACKING-PLAN 8-1-5, 8-1-6). Kept in memory: a
+    // restart counts again from 1. How to keep it across restarts is open (TBD 3 ACCOUNT).
+    private val mergeAttempts = ConcurrentHashMap<UUID, Int>()
 
     // 4-1-2 request identification
 
@@ -96,14 +103,24 @@ class AccountService(
         response: HttpServletResponse,
     ): IssuedAccount {
         identifyOrNull(request)?.let { return IssuedAccount(it.id) }
-        return IssuedAccount(createGuest(response))
+        // A guest cookie whose guest already went to a member cannot be used again.
+        val merged =
+            cookies
+                .read(request, Cookies.GUEST)
+                ?.let { accounts.findByGuestToken(Tokens.sha256(it)) }
+                ?.mergeTargetAccountId != null
+        return IssuedAccount(createGuest(response, if (merged) "merged_guest_blocked" else "first_visit"))
     }
 
-    fun createGuest(response: HttpServletResponse): UUID {
+    /** [reason] for `server_guest_created`: first_visit, logout, withdraw or merged_guest_blocked. */
+    fun createGuest(
+        response: HttpServletResponse,
+        reason: String = "first_visit",
+    ): UUID {
         val token = Tokens.random()
         val id = tx.execute { accounts.insertGuest(Tokens.sha256(token)) }!!
         cookies.setGuest(response, token)
-        events.record(id, "guest_created")
+        events.record(id, "server_guest_created", mapOf("reason" to reason))
         return id
     }
 
@@ -151,7 +168,13 @@ class AccountService(
             throw ApiException("nickname_taken", HttpStatus.CONFLICT, listOf(FieldError("nickname", "taken")), "nickname already in use")
         }
         if (photoUrl != null && previous != null) storage.delete(previous)
-        events.record(identity.accountId, "profile_updated")
+        val changed =
+            when {
+                cleaned != null && photoUrl != null -> "both"
+                photoUrl != null -> "photo"
+                else -> "nickname"
+            }
+        events.record(identity.accountId, "server_profile_updated", mapOf("changed" to changed))
         return me(identity)
     }
 
@@ -182,7 +205,7 @@ class AccountService(
             }
         }
         tx.execute { accounts.updateAdultMode(identity.accountId, adultMode) }
-        events.record(identity.accountId, "safe_mode_changed", mapOf("adult_mode" to adultMode))
+        events.record(identity.accountId, "server_safe_mode_changed", mapOf("adult_mode" to adultMode))
         return me(identity)
     }
 
@@ -196,6 +219,7 @@ class AccountService(
     ): IssuedAccount {
         if (identity.isGuest) throw ApiException("member_required", HttpStatus.FORBIDDEN, message = "guests cannot log out")
         val sessionToken = cookies.read(request, Cookies.SESSION)
+        val createdAt = if (withdraw) accounts.createdAt(identity.accountId) else null
         val guestToken = Tokens.random()
         val guestId =
             tx.execute {
@@ -209,8 +233,13 @@ class AccountService(
             }!!
         cookies.clearSession(response)
         cookies.setGuest(response, guestToken)
-        events.record(identity.accountId, if (withdraw) "withdrawn" else "logout_succeeded")
-        events.record(guestId, "guest_created")
+        if (withdraw) {
+            val days = createdAt?.let { Duration.between(it, Instant.now()).toDays() } ?: 0
+            events.record(identity.accountId, "server_withdrawn", mapOf("days_since_created" to days))
+        } else {
+            events.record(identity.accountId, "server_logged_out")
+        }
+        events.record(guestId, "server_guest_created", mapOf("reason" to if (withdraw) "withdraw" else "logout"))
         return IssuedAccount(guestId)
     }
 
@@ -230,8 +259,14 @@ class AccountService(
         response: HttpServletResponse,
     ): UUID {
         val token = Tokens.random()
+        var isNewMember = false
+        var hadGuest = false
+        var mergeScheduled = false
         val memberId =
             tx.execute {
+                isNewMember = false
+                hadGuest = false
+                mergeScheduled = false
                 val existing =
                     accounts
                         .findIdentityAccount(profile.provider, profile.subject)
@@ -239,6 +274,7 @@ class AccountService(
                         ?.takeIf { it.deletedAt == null }
                 val memberId =
                     existing?.id ?: run {
+                        isNewMember = true
                         val id = accounts.insertMember(uniqueNickname(profile.name ?: defaultName(profile.provider)), profile.email)
                         accounts.upsertIdentity(profile.provider, profile.subject, id)
                         id
@@ -248,23 +284,40 @@ class AccountService(
                 if (guestAccountId != null) {
                     val guest = accounts.lock(guestAccountId)
                     if (guest != null && guest.isGuest && guest.deletedAt == null) {
+                        hadGuest = true
                         when (guest.mergeTargetAccountId) {
-                            null -> accounts.setMergeTarget(guestAccountId, memberId)
+                            null -> {
+                                accounts.setMergeTarget(guestAccountId, memberId)
+                                mergeScheduled = true
+                            }
 
-                            memberId -> Unit
+                            memberId -> {
+                                mergeScheduled = true
+                            }
 
-                            else -> throw ApiException(
-                                "login_failed",
-                                HttpStatus.CONFLICT,
-                                message = "guest already merging into another member",
-                            )
+                            else -> {
+                                throw ApiException(
+                                    "login_failed",
+                                    HttpStatus.CONFLICT,
+                                    message = "guest already merging into another member",
+                                )
+                            }
                         }
                     }
                 }
                 memberId
             }!!
         cookies.setSession(response, token)
-        events.record(memberId, "login_succeeded", mapOf("provider" to profile.provider))
+        events.record(
+            memberId,
+            "server_login_succeeded",
+            mapOf(
+                "provider" to profile.provider,
+                "is_new_member" to isNewMember,
+                "had_guest" to hadGuest,
+                "merge_scheduled" to mergeScheduled,
+            ),
+        )
         if (guestAccountId != null) {
             events.alias(guestAccountId, memberId)
             runCatching { merge(guestAccountId) }.onFailure { log.warn("merge of guest {} failed; will retry", guestAccountId, it) }
@@ -282,13 +335,36 @@ class AccountService(
 
     /** Transaction 2 of login (4-1-5): mark merged and move the guest's data into the member. */
     fun merge(guestAccountId: UUID) {
-        tx.execute {
-            val guest = accounts.lock(guestAccountId) ?: return@execute
-            val target = guest.mergeTargetAccountId ?: return@execute
-            if (guest.mergedIntoAccountId != null) return@execute
-            accounts.markMerged(guestAccountId, target)
-            chat.transferOwner(guestAccountId, target)
-        }
+        val target = accounts.find(guestAccountId)?.takeIf { it.mergedIntoAccountId == null }?.mergeTargetAccountId ?: return
+        val attempt = mergeAttempts.merge(guestAccountId, 1, Int::plus)!!
+        val moved =
+            try {
+                tx.execute {
+                    val guest = accounts.lock(guestAccountId) ?: return@execute null
+                    val lockedTarget = guest.mergeTargetAccountId ?: return@execute null
+                    if (guest.mergedIntoAccountId != null) return@execute null
+                    accounts.markMerged(guestAccountId, lockedTarget)
+                    lockedTarget to chat.transferOwner(guestAccountId, lockedTarget)
+                }
+            } catch (error: Exception) {
+                events.record(
+                    target,
+                    "server_merge_failed",
+                    mapOf(
+                        "guest_account_id" to guestAccountId.toString(),
+                        "attempt" to attempt,
+                        "error" to error.javaClass.simpleName,
+                    ),
+                )
+                throw error
+            }
+        mergeAttempts.remove(guestAccountId)
+        if (moved == null) return
+        events.record(
+            moved.first,
+            "server_merge_completed",
+            mapOf("guest_account_id" to guestAccountId.toString(), "room_count" to moved.second, "attempt" to attempt),
+        )
     }
 
     @Scheduled(initialDelayString = "PT5S", fixedDelayString = "PT60S")

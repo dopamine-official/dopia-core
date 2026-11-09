@@ -1,6 +1,7 @@
 package com.dopia.account
 
 import com.dopia.common.ApiException
+import com.dopia.common.AppEvents
 import com.dopia.common.Cookies
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -22,6 +23,7 @@ class AuthController(
     private val oauth: OAuthService,
     private val accounts: AccountService,
     private val cookies: Cookies,
+    private val events: AppEvents,
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
 
@@ -75,25 +77,46 @@ class AuthController(
         status: HttpStatus,
     ): ResponseEntity<Void> {
         cookies.clearLoginState(response, sameSiteNone = provider == "apple")
+        // Recorded under the guest that started the login; with no guest there is no one to record.
+        val visitor = { guest: java.util.UUID? -> guest ?: accounts.identifyOrNull(request)?.id }
         val saved =
             try {
                 oauth.verify(cookies.read(request, Cookies.LOGIN_STATE), provider)
             } catch (failure: LoginFailed) {
                 log.info("{} login state rejected: {}", provider, failure.message)
+                visitor(null)?.let { loginFailed(it, provider, "state_mismatch") }
                 return redirect(status, oauth.loginModalUrl("/", failed = true))
             }
-        if (error != null) return redirect(status, oauth.loginModalUrl(saved.returnTo, failed = false))
+        if (error != null) {
+            visitor(saved.guestAccountId)?.let {
+                events.record(it, "server_login_cancelled", mapOf("provider" to provider))
+            }
+            return redirect(status, oauth.loginModalUrl(saved.returnTo, failed = false))
+        }
+        var stage = "state_mismatch"
         try {
             if (state != saved.state) throw LoginFailed("state mismatch")
+            stage = "token_invalid"
             if (code.isNullOrBlank()) throw LoginFailed("code missing")
             val profile = oauth.exchange(provider, code, user)
+            stage = "transaction_failed"
             accounts.completeLogin(profile, saved.guestAccountId, response)
         } catch (failure: Exception) {
             log.warn("{} login failed: {}", provider, failure.message)
+            // The guest is already going to another member (ACCOUNT 4-1-4).
+            val reason = if (failure is ApiException && failure.code == "login_failed") "guest_already_pending" else stage
+            visitor(saved.guestAccountId)?.let { loginFailed(it, provider, reason) }
             return redirect(status, oauth.loginModalUrl(saved.returnTo, failed = true))
         }
         return redirect(status, oauth.webUrl(saved.returnTo))
     }
+
+    /** `server_login_failed` (TRACKING-PLAN 8-1-3). */
+    private fun loginFailed(
+        accountId: java.util.UUID,
+        provider: String,
+        reason: String,
+    ) = events.record(accountId, "server_login_failed", mapOf("provider" to provider, "reason" to reason))
 
     private fun redirect(
         status: HttpStatus,

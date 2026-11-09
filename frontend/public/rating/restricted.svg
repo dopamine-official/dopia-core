@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="限制級">
+  <polygon points="30,2 70,2 98,30 98,70 70,98 30,98 2,70 2,30" fill="#d7141a"/>
+  <polygon points="32,8 68,8 92,32 92,68 68,92 32,92 8,68 8,32" fill="none" stroke="#fff" stroke-width="3"/>
+  <text x="50" y="58" text-anchor="middle" font-family="'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif" font-size="40" font-weight="700" fill="#fff">限</text>
+  <text x="50" y="82" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#fff">18+</text>
+</svg>

@@ -12,6 +12,16 @@ data class RegionConfig(
     val defaultLocale: String,
     val supportedLocales: List<String>,
     val adultModeAvailable: Boolean,
+    val adultAge: Int? = null,
+    val verificationMethod: String? = null,
+    val consentItems: List<ConsentItem> = emptyList(),
+)
+
+/** One `consent.items[]` entry; `document_url` is only for the web. */
+data class ConsentItem(
+    val id: String,
+    val required: Boolean,
+    val version: String,
 )
 
 @Component
@@ -38,6 +48,22 @@ class I18n(
                     defaultLocale = locale.get("default").asString(),
                     supportedLocales = locale.get("supported").values().map { it.asString() },
                     adultModeAvailable = base.path("content").path("adult_mode_available").asBoolean(false),
+                    adultAge =
+                        base
+                            .path("age")
+                            .path("adult_age")
+                            .takeIf { it.isNumber }
+                            ?.asInt(),
+                    verificationMethod =
+                        base
+                            .path("age")
+                            .path("verification_method")
+                            .takeIf { it.isString }
+                            ?.asString(),
+                    consentItems =
+                        base.path("consent").path("items").values().map {
+                            ConsentItem(it.get("id").asString(), it.get("required").asBoolean(), it.get("version").asString())
+                        },
                 )
             }
     }

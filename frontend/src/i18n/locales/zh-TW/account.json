@@ -37,5 +37,34 @@
     "create_character": "建立",
     "charge_title": "儲值點數",
     "charge_placeholder": "[儲值內容]"
+  },
+  "consent": {
+    "title": "服務使用同意",
+    "description": "使用服務前，請同意以下條款。",
+    "all": "全部同意",
+    "required": "必要",
+    "optional": "選擇",
+    "view": "查看",
+    "view_item": "查看{name}",
+    "agree": "同意並開始",
+    "failed": "無法儲存同意，請再試一次。",
+    "item": {
+      "terms": "服務條款",
+      "privacy": "個人資料蒐集與使用"
+    }
+  },
+  "adult": {
+    "title": "成人認證",
+    "close": "關閉成人認證",
+    "rating_mark_alt": "分級標示",
+    "notice_restricted": "本內容為限制級，未滿十八歲者不得瀏覽。",
+    "gender": "性別",
+    "gender_male": "男性",
+    "gender_female": "女性",
+    "birth_date": "出生日期",
+    "irreversible": "送出後無法修改性別與出生日期。",
+    "rejected": "未滿十八歲者無法使用成人內容。",
+    "failed": "無法完成認證，請再試一次。",
+    "submit": "確認"
   }
 }

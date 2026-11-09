@@ -40,6 +40,8 @@ type Session = {
   setLocale: (locale: Locale) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
   changeAccount: (account: Account, redirectTo?: string) => void;
+  // Same account, new fields: no refetch of what the screen already shows.
+  replaceAccount: (account: Account) => void;
   accountRedirect: string | null;
   login: LoginRequest | null;
   openLogin: (request: {
@@ -48,7 +50,15 @@ type Session = {
     error?: string;
   }) => void;
   closeLogin: () => void;
+  adultVerification: AdultVerificationRequest | null;
+  openAdultVerification: (request: AdultVerificationRequest) => void;
+  closeAdultVerification: () => void;
   notice: (message: string) => void;
+};
+/** One showing of the adult verification modal (ACCOUNT web 4-4-6). */
+export type AdultVerificationRequest = {
+  // Runs with the new account when the submission passes. Focus goes back to the opener.
+  onPassed: (account: Account) => void;
 };
 export type LoginRequest = {
   // One showing of the modal; kept when a redirect reopens the same one.
@@ -96,6 +106,12 @@ export function Providers({ children }: { children: ReactNode }) {
     loginReturn.current = null;
     setLogin(null);
   }, []);
+  const [adultVerification, setAdultVerification] =
+    useState<AdultVerificationRequest | null>(null);
+  const closeAdultVerification = useCallback(
+    () => setAdultVerification(null),
+    [],
+  );
   // Arrived where the account change was heading: adjust during render, not in an effect.
   if (accountRedirect !== null && pathname === accountRedirect)
     setAccountRedirect(null);
@@ -230,7 +246,8 @@ export function Providers({ children }: { children: ReactNode }) {
       channel.current = null;
     };
   }, [applyAccount, initialize, notify]);
-  const ready = !!account;
+  // The login modal address waits until the required consents are given (ACCOUNT web 2-2-6).
+  const ready = !!account && !account.consent_required;
   useEffect(() => {
     // `?login=1` (plus optional `return_to` and `error`) opens the login modal on arrival,
     // e.g. after a redirect for a members-only page or a failed provider round trip.
@@ -321,10 +338,14 @@ export function Providers({ children }: { children: ReactNode }) {
             setLocale,
             t,
             changeAccount,
+            replaceAccount: applyAccount,
             accountRedirect,
             login,
             openLogin,
             closeLogin,
+            adultVerification,
+            openAdultVerification: setAdultVerification,
+            closeAdultVerification,
             notice: notify,
           }}
         >

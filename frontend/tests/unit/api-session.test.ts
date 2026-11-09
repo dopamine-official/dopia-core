@@ -16,6 +16,8 @@ const current: Account = {
   photo_url: null,
   adult_mode: false,
   adult_verified: false,
+  adult_verification_rejected: false,
+  consent_required: false,
 };
 const fetchMock = vi.fn<typeof fetch>();
 const updated = vi.fn<(account: Account) => void>();

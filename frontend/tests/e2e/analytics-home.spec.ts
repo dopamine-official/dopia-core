@@ -246,6 +246,8 @@ test("header, footer, profile menu and 404", async ({ page, analytics }) => {
     result: "verification_required",
     is_member: true,
   });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "성인 인증" })).toBeHidden();
 
   const profile = page.getByRole("button", { name: "내 프로필", exact: true });
   await profile.click();

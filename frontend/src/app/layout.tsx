@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Providers } from "@/components/providers";
-import { LoginHost } from "@/components/ui";
+import { AdultVerificationHost, ConsentHost, LoginHost } from "@/components/ui";
 import { defaultLocale } from "@/i18n";
 import "./globals.css";
 export const metadata: Metadata = {
@@ -15,6 +15,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <Providers>
           {children}
           <LoginHost />
+          <AdultVerificationHost />
+          <ConsentHost />
         </Providers>
       </body>
     </html>

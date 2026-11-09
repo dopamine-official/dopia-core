@@ -5,6 +5,28 @@
     "default": "zh-TW",
     "supported": ["zh-TW", "en-US"]
   },
+  "age": {
+    "adult_age": 18,
+    "verification_method": "birth_date_only",
+    "rating_mark_url": "/rating/restricted.svg",
+    "notice_key": "account.adult.notice_restricted"
+  },
+  "consent": {
+    "items": [
+      {
+        "id": "terms",
+        "required": true,
+        "version": "2026-11-10",
+        "document_url": ""
+      },
+      {
+        "id": "privacy",
+        "required": true,
+        "version": "2026-11-10",
+        "document_url": ""
+      }
+    ]
+  },
   "content": {
     "adult_mode_available": true
   }

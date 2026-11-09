@@ -58,6 +58,8 @@ const guest: Account = {
   photo_url: null,
   adult_mode: false,
   adult_verified: false,
+  adult_verification_rejected: false,
+  consent_required: false,
 };
 const member: Account = { ...guest, account_id: "member-1", is_guest: false };
 
@@ -146,6 +148,8 @@ describe("analytics identity", () => {
       ...member,
       adult_mode: true,
       adult_verified: true,
+      adult_verification_rejected: false,
+      consent_required: false,
     });
     expect(lastRegister()).toMatchObject({ adult_mode: true });
   });

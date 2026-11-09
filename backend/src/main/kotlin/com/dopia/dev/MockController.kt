@@ -10,6 +10,7 @@ import com.dopia.common.Cookies
 import com.dopia.common.FieldError
 import com.dopia.common.Identity
 import com.dopia.common.PreviewScenario
+import com.dopia.common.RequestLocale
 import com.dopia.common.Scenario
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -51,16 +52,17 @@ class MockController(
     @PostMapping("/login")
     fun login(
         identity: Identity,
+        locale: RequestLocale,
         @RequestBody body: MockLoginRequest,
         response: HttpServletResponse,
     ): AccountView {
         val provider =
             body.provider?.takeIf { it == "google" || it == "apple" }
                 ?: throw ApiException.invalidInput(FieldError("provider", "invalid"))
-        if (identity.isMember) return accounts.me(identity)
+        if (identity.isMember) return accounts.me(identity, locale.region)
         val profile = AccountService.ProviderProfile(provider, "mock-$provider", null, null)
         val memberId = accounts.completeLogin(profile, identity.accountId, response)
-        return accounts.me(Identity(memberId, isGuest = false, adultMode = false))
+        return accounts.me(Identity(memberId, isGuest = false, adultMode = false), locale.region)
     }
 
     @GetMapping("/scenario")
@@ -84,13 +86,14 @@ class MockController(
 
     @PostMapping("/reset")
     fun reset(
+        locale: RequestLocale,
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): AccountView {
         tx.execute {
             jdbc
                 .sql(
-                    "TRUNCATE chat_turns, chat_summaries, chat_messages, chat_rooms, sessions, account_identities, guest_identifiers, accounts",
+                    "TRUNCATE chat_turns, chat_summaries, chat_messages, chat_rooms, sessions, account_consents, account_identities, guest_identifiers, accounts",
                 ).update()
         }
         events.clear()
@@ -98,6 +101,6 @@ class MockController(
         characters.clearCache()
         cookies.clearSession(response)
         val guestId = accounts.createGuest(response)
-        return accounts.me(Identity(guestId, isGuest = true, adultMode = false))
+        return accounts.me(Identity(guestId, isGuest = true, adultMode = false), locale.region)
     }
 }

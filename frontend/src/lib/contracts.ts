@@ -7,6 +7,8 @@ export const accountSchema = z.object({
   photo_url: z.string().nullable(),
   adult_mode: z.boolean(),
   adult_verified: z.boolean(),
+  adult_verification_rejected: z.boolean(),
+  consent_required: z.boolean(),
 });
 export type Account = z.infer<typeof accountSchema>;
 export const characterSchema = z.object({

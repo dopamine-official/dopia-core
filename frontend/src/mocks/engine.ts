@@ -5,7 +5,7 @@ import {
   type Scenario,
   type LocalEvent,
 } from "@/lib/contracts";
-import { type Locale } from "@/i18n";
+import { ageConfig, consentItems, type Locale } from "@/i18n";
 import { characters, characterInfo, getCharacter } from "./characters";
 
 type StoredAccount = Account & { provider?: "google" | "apple" };
@@ -37,7 +37,18 @@ export type State = {
   rooms: StoredRoom[];
   scenario: Scenario;
   events: LocalEvent[];
+  // Kept apart from the account so it never goes out in a response (ACCOUNT 5-1-3).
+  compliance?: Record<string, Compliance>;
 };
+type Compliance = {
+  consents: string[];
+  gender?: "male" | "female";
+  birth_date?: string;
+};
+function compliance(state: State, accountId: string): Compliance {
+  state.compliance ??= {};
+  return (state.compliance[accountId] ??= { consents: [] });
+}
 export const initialState = (): State => ({
   version: 1,
   active_account_id: null,
@@ -69,6 +80,13 @@ export function account(state: State): StoredAccount {
   // Normalize accounts saved by the previously unlocked development preview.
   if (result.is_guest) result.adult_verified = false;
   if (!result.adult_verified) result.adult_mode = false;
+  const record = compliance(state, result.account_id);
+  result.adult_verification_rejected =
+    !result.is_guest && !!record.birth_date && !result.adult_verified;
+  result.consent_required = consentItems.some(
+    (item) =>
+      item.required && !record.consents.includes(`${item.id}@${item.version}`),
+  );
   return result;
 }
 export function guest(state: State) {
@@ -83,6 +101,8 @@ export function guest(state: State) {
     photo_url: null,
     adult_mode: false,
     adult_verified: false,
+    adult_verification_rejected: false,
+    consent_required: true,
   };
   state.accounts.push(result);
   state.active_account_id = result.account_id;
@@ -104,6 +124,8 @@ export function login(state: State, provider: "google" | "apple") {
       photo_url: null,
       adult_mode: false,
       adult_verified: false,
+      adult_verification_rejected: false,
+      consent_required: true,
       provider,
     };
     state.accounts.push(member);
@@ -120,6 +142,7 @@ export function login(state: State, provider: "google" | "apple") {
     if (value.account_id === previous.account_id)
       value.account_id = member.account_id;
   });
+  copyConsents(state, previous.account_id, member.account_id);
   state.active_account_id = member.account_id;
   event(state, "login_succeeded", { provider });
   return account(state);
@@ -137,6 +160,64 @@ export function updateAdultMode(state: State, adultMode: boolean) {
   event(state, "safe_mode_changed", { adult_mode: adultMode });
   return user;
 }
+function copyConsents(state: State, from: string, to: string) {
+  const target = compliance(state, to);
+  for (const value of compliance(state, from).consents)
+    if (!target.consents.includes(value)) target.consents.push(value);
+}
+export function recordConsents(
+  state: State,
+  items: { id: string; version: string }[],
+) {
+  const user = account(state);
+  const current = new Map(consentItems.map((item) => [item.id, item]));
+  if (
+    !items.length ||
+    items.some((value) => current.get(value.id)?.version !== value.version) ||
+    consentItems.some(
+      (item) => item.required && !items.some((value) => value.id === item.id),
+    )
+  )
+    throw new ApiError("invalid_input", 422, [
+      { field: "items", reason: "invalid" },
+    ]);
+  const record = compliance(state, user.account_id);
+  for (const value of items) {
+    const key = `${value.id}@${value.version}`;
+    if (!record.consents.includes(key)) record.consents.push(key);
+  }
+  return account(state);
+}
+/** Same rule as chat-server: full years on the UTC date, one submission per account. */
+export function verifyAdult(state: State, gender: string, birthDate: string) {
+  const user = account(state);
+  if (user.is_guest) throw new ApiError("member_required", 403);
+  if (ageConfig.verification_method !== "birth_date_only")
+    throw new ApiError("adult_verification_unavailable", 403);
+  const today = new Date().toISOString().slice(0, 10);
+  const valid =
+    /^\d{4}-\d{2}-\d{2}$/.test(birthDate) &&
+    new Date(`${birthDate}T00:00:00Z`).toISOString().slice(0, 10) ===
+      birthDate &&
+    birthDate >= "1900-01-01" &&
+    birthDate <= today;
+  if ((gender !== "male" && gender !== "female") || !valid)
+    throw new ApiError("invalid_input", 422);
+  const record = compliance(state, user.account_id);
+  if (record.birth_date)
+    throw new ApiError("adult_verification_submitted", 409);
+  const [year, month, day] = birthDate.split("-").map(Number);
+  const [nowYear, nowMonth, nowDay] = today.split("-").map(Number);
+  const age =
+    nowYear - year - (nowMonth * 100 + nowDay < month * 100 + day ? 1 : 0);
+  record.gender = gender;
+  record.birth_date = birthDate;
+  if (age >= ageConfig.adult_age) {
+    user.adult_verified = true;
+    user.adult_mode = true;
+  }
+  return account(state);
+}
 export function logout(state: State, withdraw = false) {
   const previous = account(state);
   if (withdraw) {
@@ -152,7 +233,9 @@ export function logout(state: State, withdraw = false) {
     );
   } else event(state, "logout_succeeded");
   state.active_account_id = null;
-  return guest(state);
+  const next = guest(state);
+  if (!withdraw) copyConsents(state, previous.account_id, next.account_id);
+  return account(state);
 }
 export function updateProfile(
   state: State,

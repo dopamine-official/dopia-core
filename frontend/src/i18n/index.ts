@@ -27,6 +27,10 @@ export function regionConfig(
   return { ...region, ...overlay };
 }
 export const regionCode = regionConfig().code;
+/** Adult content entry: rating mark (empty for none) and the warning text key. */
+export const ageConfig = regionConfig().age;
+/** Consent items in display order; `document_url` may be empty until the document exists. */
+export const consentItems = regionConfig().consent.items;
 export const languageConfig = regionConfig().locale;
 export const supportedLocales = languageConfig.supported as Locale[];
 export const defaultLocale = languageConfig.default as Locale;

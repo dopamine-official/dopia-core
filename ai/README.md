@@ -19,7 +19,7 @@
 | 새 제공사 | `src/chat_ai/llm/adapters/` 에 어댑터 1개 추가 | 있음 |
 
 - 경로 이름은 `chat_general`, `chat_adult`, `compact` 세 개로 고정. 코드는 이름만 알고 실제 모델은 yaml이 정합니다.
-- 프롬프트 템플릿은 `<!-- system -->`(필수)과 `<!-- user -->` 구역, `{{name}}` 치환, `{{#summary}}…{{/summary}}`(값이 있을 때만), `{{^adult_mode}}…{{/adult_mode}}`(없을 때만) 블록을 씁니다. 파일 맨 위 머리말(`---` 사이)의 `version: chat_v1`이 템플릿 버전입니다. 내용을 고치면 `version`도 올립니다(CI가 버전 그대로인 수정은 막음). 버전별 내용은 git 기록으로 봅니다.
+- 프롬프트 템플릿은 `<!-- system -->`(필수)과 `<!-- user -->` 구역, `{{name}}` 치환, `{{#summary}}…{{/summary}}`(값이 있을 때만), `{{^is_adult}}…{{/is_adult}}`(없을 때만) 블록을 씁니다. 파일 맨 위 머리말(`---` 사이)의 `version: chat_v1`이 템플릿 버전입니다. 내용을 고치면 `version`도 올립니다(CI가 버전 그대로인 수정은 막음). 버전별 내용은 git 기록으로 봅니다.
 - 제공사 SDK는 어댑터 안에서만 import 합니다(테스트가 검사).
 
 ## 로컬 실행

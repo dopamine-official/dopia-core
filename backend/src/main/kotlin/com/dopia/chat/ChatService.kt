@@ -70,7 +70,7 @@ sealed interface TurnStart {
         val userInput: String,
         val clientMessageId: UUID,
         val aiRequestId: String,
-        val adultMode: Boolean,
+        val isAdult: Boolean,
         val locale: String,
         val accountId: UUID,
     ) : TurnStart

@@ -14,6 +14,7 @@ class Character(BaseModel):
     personality: StrictStr
     speech_style: StrictStr
     world_setting: StrictStr
+    is_adult: StrictBool
 
 
 class HistoryItem(BaseModel):
@@ -25,7 +26,6 @@ class HistoryItem(BaseModel):
 class ChatGeneration(BaseModel):
     model_config = ConfigDict(extra="ignore")
     locale: StrictStr
-    adult_mode: StrictBool
 
 
 class ChatTurnRequest(BaseModel):

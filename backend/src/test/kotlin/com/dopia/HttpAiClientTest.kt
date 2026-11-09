@@ -70,11 +70,11 @@ class HttpAiClientTest {
 
     private val request =
         AiTurnRequest(
-            character = AiCharacter("A", "f", "p", "s", "w"),
+            character = AiCharacter("A", "f", "p", "s", "w", false),
             history = emptyList(),
             summary = "",
             userInput = "hi",
-            generation = AiGeneration("ko-KR", false),
+            generation = AiGeneration("ko-KR"),
         )
 
     @AfterEach

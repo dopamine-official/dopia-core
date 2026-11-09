@@ -16,15 +16,15 @@ class ChatTurnInput:
     summary: str
     user_input: str
     locale: str
-    adult_mode: bool
+    is_adult: bool
 
     @property
     def route_name(self) -> str:
-        return "chat_adult" if self.adult_mode else "chat_general"
+        return "chat_adult" if self.is_adult else "chat_general"
 
     @property
     def model_route(self) -> str:
-        return "adult" if self.adult_mode else "general"
+        return "adult" if self.is_adult else "general"
 
 
 @dataclass(frozen=True)

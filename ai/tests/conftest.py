@@ -71,6 +71,7 @@ def chat_body(**overrides: Any) -> dict[str, Any]:
             "personality": "calm, a little playful",
             "speech_style": "short sentences",
             "world_setting": "a small bookshop in Taipei",
+            "is_adult": False,
         },
         "history": [
             {"role": "user", "content": "hello"},
@@ -78,7 +79,7 @@ def chat_body(**overrides: Any) -> dict[str, Any]:
         ],
         "summary": "",
         "user_input": "what are you reading?",
-        "generation": {"locale": "zh-TW", "adult_mode": False},
+        "generation": {"locale": "zh-TW"},
     }
     body.update(overrides)
     return body

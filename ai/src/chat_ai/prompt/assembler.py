@@ -131,12 +131,12 @@ class PromptAssembler:
         summary: str,
         user_input: str,
         locale: str,
-        adult_mode: bool,
+        is_adult: bool,
     ) -> AssembledPrompt:
         template = self._templates["chat"]
         system = render(
             template.system,
-            {**character, "locale": locale, "adult_mode": adult_mode, "summary": summary},
+            {**character, "locale": locale, "is_adult": is_adult, "summary": summary},
         )
         messages = [*history, Message(role="user", content=user_input)]
         return AssembledPrompt(prompt_version=template.version, system=system, messages=messages)

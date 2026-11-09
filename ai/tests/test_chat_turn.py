@@ -21,7 +21,7 @@ async def test_chat_01_input_errors_return_422_without_model_call(harness) -> No
         ({"character": {**chat_body()["character"], "name": ""}}, "character.name"),
         ({"user_input": "   "}, "user_input"),
         ({"history": [{"role": "system", "content": "x"}]}, "history.0.role"),
-        ({"generation": {"locale": "ko-KR", "adult_mode": "true"}}, "generation.adult_mode"),
+        ({"character": {**chat_body()["character"], "is_adult": "true"}}, "character.is_adult"),
     ]
     async with harness.client() as client:
         for override, field in cases:
@@ -51,6 +51,7 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
             "personality": " calm ",
             "speech_style": "short",
             "world_setting": "bookshop",
+            "is_adult": False,
         },
         history=[
             {"role": "user", "content": " one "},
@@ -74,7 +75,7 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
     system = request.prompt.system
     assert "Name: 林語彤\n" in system and "Personality: calm\n" in system
     assert "we met yesterday" in system and "Summary of the conversation so far" in system
-    assert "Adult mode is off" in system and "Adult mode is on" not in system
+    assert "This chat is not rated adult" in system and "This chat is rated adult" not in system
     assert "{{" not in system
     assert body["history"][0]["content"] == " one "  # request object untouched
 
@@ -83,12 +84,12 @@ async def test_chat_03_summary_omitted_and_adult_block(harness) -> None:
     async with harness.client() as client:
         await client.post(
             "/api/v1/chat/turn",
-            json=chat_body(summary="", generation={"locale": "ko-KR", "adult_mode": True}),
+            json=chat_body(summary="", character={**chat_body()["character"], "is_adult": True}),
             headers=ids("r"),
         )
     system = harness.adapter.calls[0].prompt.system
     assert "Summary of the conversation so far" not in system
-    assert "Adult mode is on" in system and "Adult mode is off" not in system
+    assert "This chat is rated adult" in system and "not rated adult" not in system
 
 
 async def test_chat_04_route_selection(harness) -> None:
@@ -96,7 +97,7 @@ async def test_chat_04_route_selection(harness) -> None:
         for adult in (False, True):
             await client.post(
                 "/api/v1/chat/turn",
-                json=chat_body(generation={"locale": "ko-KR", "adult_mode": adult}),
+                json=chat_body(character={**chat_body()["character"], "is_adult": adult}),
                 headers=ids(f"r-{adult}"),
             )
     assert [c.model for c in harness.adapter.calls] == ["fake-general", "fake-adult"]
@@ -115,7 +116,7 @@ async def test_chat_05_normal_stream_and_int_01(harness_factory) -> None:
         completed = events[3][1]
         assert completed["output"] == "*她抬起頭，合上手中的書。*\n你今天來得真早呢。"
         meta = completed["meta"]
-        assert meta["model"] == "fake-general" and meta["provider"] == "fake" and meta["prompt_version"] == "chat_v1"
+        assert meta["model"] == "fake-general" and meta["provider"] == "fake" and meta["prompt_version"] == "chat_v2"
         assert meta["input_token_count"] == usage.input_tokens and meta["output_token_count"] == usage.output_tokens
         assert isinstance(meta["ttft_ms"], int) and isinstance(meta["generation_ms"], int)
         assert meta["finish_reason"] == "stop"
@@ -164,12 +165,12 @@ async def test_chat_07_cancel_closes_stream_and_is_not_a_failure(harness_factory
     turn = ChatTurnInput(
         request_id="r",
         account_id="acct-1",
-        character=chat_body()["character"],
+        character={k: v for k, v in chat_body()["character"].items() if k != "is_adult"},
         history=[Message("user", "hi")],
         summary="",
         user_input="x",
         locale="ko-KR",
-        adult_mode=False,
+        is_adult=False,
     )
     trace = h.tracer.start(name="chat_turn", request_id="r", distinct_id="acct-1", input={}, metadata={})
     prompt = h.app.state.assembler.chat(
@@ -178,7 +179,7 @@ async def test_chat_07_cancel_closes_stream_and_is_not_a_failure(harness_factory
         summary="",
         user_input="x",
         locale="ko-KR",
-        adult_mode=False,
+        is_adult=False,
     )
     gen = generate_turn(
         turn,
@@ -211,16 +212,16 @@ def _direct_turn(h):  # type: ignore[no-untyped-def]
     turn = ChatTurnInput(
         request_id="r",
         account_id="acct-1",
-        character=chat_body()["character"],
+        character={k: v for k, v in chat_body()["character"].items() if k != "is_adult"},
         history=[],
         summary="",
         user_input="x",
         locale="ko-KR",
-        adult_mode=False,
+        is_adult=False,
     )
     trace = h.tracer.start(name="chat_turn", request_id="r", distinct_id="acct-1", input={}, metadata={})
     prompt = h.app.state.assembler.chat(
-        character=turn.character, history=[], summary="", user_input="x", locale="ko-KR", adult_mode=False
+        character=turn.character, history=[], summary="", user_input="x", locale="ko-KR", is_adult=False
     )
     return generate_turn(
         turn,
@@ -267,7 +268,7 @@ async def test_chat_08_concurrent_requests_do_not_mix(harness_factory) -> None:
             async with client.stream(
                 "POST",
                 "/api/v1/chat/turn",
-                json=chat_body(generation={"locale": "ko-KR", "adult_mode": adult}),
+                json=chat_body(character={**chat_body()["character"], "is_adult": adult}),
                 headers=ids(request_id),
             ) as r:
                 events = await read_sse(r)

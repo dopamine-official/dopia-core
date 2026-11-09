@@ -29,7 +29,7 @@ def test_parse_template_requires_system_section() -> None:
 
 def test_assembler_versions_come_from_frontmatter(tmp_path: Path) -> None:
     (tmp_path / "chat.md").write_text(
-        "---\nversion: chat_v2\n---\n<!-- system -->\n{{name}} {{locale}} {{adult_mode}} {{summary}}",
+        "---\nversion: chat_v2\n---\n<!-- system -->\n{{name}} {{locale}} {{is_adult}} {{summary}}",
         encoding="utf-8",
     )
     (tmp_path / "compact.md").write_text(
@@ -43,7 +43,7 @@ def test_assembler_versions_come_from_frontmatter(tmp_path: Path) -> None:
         summary="",
         user_input="hi",
         locale="ko-KR",
-        adult_mode=True,
+        is_adult=True,
     )
     assert prompt.prompt_version == "chat_v2" and prompt.system == "N ko-KR\n"
     (tmp_path / "chat.md").write_text("---\ntitle: no version\n---\n<!-- system -->\nS", encoding="utf-8")

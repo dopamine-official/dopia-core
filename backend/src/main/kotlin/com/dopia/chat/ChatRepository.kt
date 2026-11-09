@@ -176,11 +176,19 @@ class ChatRepository(
         from: UUID,
         to: UUID,
     ): Int =
+        // Deleted rooms move too, but only the visible ones count as moved (TRACKING-PLAN 8-1-5).
         jdbc
-            .sql("UPDATE chat_rooms SET owner_account_id = :to WHERE owner_account_id = :from")
-            .param("from", from)
+            .sql(
+                """
+            WITH moved AS (
+                UPDATE chat_rooms SET owner_account_id = :to WHERE owner_account_id = :from RETURNING deleted_at
+            )
+            SELECT count(*) FROM moved WHERE deleted_at IS NULL
+            """,
+            ).param("from", from)
             .param("to", to)
-            .update()
+            .query(Int::class.java)
+            .single()
 
     // Messages
 

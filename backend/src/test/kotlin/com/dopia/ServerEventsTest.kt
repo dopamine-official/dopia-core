@@ -265,6 +265,18 @@ class ServerEventsTest(
     }
 
     @Test
+    fun `a merge counts only the rooms the guest still has`() {
+        val browser = Browser()
+        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
+        val gone = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
+        assertTrue(browser.call("DELETE", "/chats/$gone").statusCode() in 200..299)
+        val kept = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
+        assertTrue(kept != gone)
+        val member = browser.json("POST", "/mock/login", """{"provider":"apple"}""").get("account_id").asString()
+        assertEquals(1, mergedFrom(member, guest)["room_count"])
+    }
+
+    @Test
     fun `a merge that fails is recorded per attempt, then completes`() {
         val browser = Browser()
         val guest = browser.json("POST", "/account/guest").get("account_id").asString()

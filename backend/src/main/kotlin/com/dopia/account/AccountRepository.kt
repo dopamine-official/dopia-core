@@ -152,16 +152,16 @@ class AccountRepository(
             .update()
     }
 
+    /** True when the value actually changed. */
     fun updateAdultMode(
         id: UUID,
         adultMode: Boolean,
-    ) {
+    ): Boolean =
         jdbc
-            .sql("UPDATE accounts SET adult_mode = :value WHERE id = :id")
+            .sql("UPDATE accounts SET adult_mode = :value WHERE id = :id AND adult_mode IS DISTINCT FROM :value")
             .param("id", id)
             .param("value", adultMode)
-            .update()
-    }
+            .update() > 0
 
     fun markDeleted(id: UUID) {
         jdbc.sql("UPDATE accounts SET deleted_at = now(), adult_mode = false WHERE id = :id").param("id", id).update()

@@ -67,7 +67,7 @@ curl http://127.0.0.1:8100/health
 | `PROMPT_DIR` | `prompt` | 템플릿 폴더 |
 | `PORT` | `8100` | 수신 포트. Railway가 넣어 줌 |
 | `APP_ENV` | `dev` | `dev` 또는 `prod`. `POSTHOG_API_KEY`가 있으면 필수. 없거나 다른 값이면 기동 실패 |
-| `APP_RELEASE` | `RAILWAY_GIT_COMMIT_SHA` 또는 `local` | PostHog AI 호출 기록의 `release` |
+| `APP_RELEASE` | `RAILWAY_GIT_COMMIT_SHA` 또는 `local` | PostHog AI 호출 기록과 오류 보고의 `app_release` |
 | `CHAT_REQUEST_TIMEOUT_SECONDS` | `90` | 채팅 요청 전체 한도. 넘으면 `failed` `timeout` |
 | `COMPACT_REQUEST_TIMEOUT_SECONDS` | `60` | 요약 요청 전체 한도. 넘으면 502 `timeout` |
 | `POSTHOG_API_KEY`, `POSTHOG_HOST` | 없음 | 있으면 요청마다 AI 호출 기록(`$ai_trace`, `$ai_span`, `$ai_generation`)과 내부 오류 전송. 요청 헤더 `X-Account-Id`가 `distinct_id` |

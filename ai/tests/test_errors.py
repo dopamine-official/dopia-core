@@ -156,8 +156,7 @@ def test_err_05_modules_do_not_import_provider_sdks() -> None:
     sdk = re.compile(r"^\s*(import|from)\s+(anthropic|posthog)\b", re.MULTILINE)
     allowed = {
         SRC_DIR / "llm" / "adapters" / "anthropic.py",
-        SRC_DIR / "observe" / "tracer.py",
-        SRC_DIR / "observe" / "errors.py",
+        SRC_DIR / "observe" / "posthog.py",
     }
     for path in SRC_DIR.rglob("*.py"):
         if path in allowed:

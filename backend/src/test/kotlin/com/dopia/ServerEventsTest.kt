@@ -63,6 +63,16 @@ class ServerEventsTest(
         ): JsonNode {
             val response = call(method, path, body)
             assertTrue(response.statusCode() in 200..299, "$method $path -> ${response.statusCode()} ${response.body()}")
+            // A new guest agrees first, as the web's consent modal makes it (chat needs it).
+            if (path ==
+                "/account/guest"
+            ) {
+                json(
+                    "POST",
+                    "/account/me/consents",
+                    """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+                )
+            }
             return mapper.readTree(response.body())
         }
     }
@@ -126,7 +136,8 @@ class ServerEventsTest(
         try {
             jdbc
                 .sql(
-                    "UPDATE accounts SET adult_verified_at = coalesce(adult_verified_at, now()), adult_mode = true WHERE id = :id",
+                    "UPDATE accounts SET gender = 'male', birth_date = DATE '1990-01-01', " +
+                        "adult_verified_at = coalesce(adult_verified_at, now()), adult_mode = true WHERE id = :id",
                 ).param("id", UUID.fromString(member))
                 .update()
             val before = named(member, "server_safe_mode_changed").size
@@ -140,7 +151,7 @@ class ServerEventsTest(
             // Back to unverified for the other tests that share this member, even on failure.
             jdbc
                 .sql(
-                    "UPDATE accounts SET adult_mode = false, adult_verified_at = null WHERE id = :id",
+                    "UPDATE accounts SET adult_mode = false, adult_verified_at = null, gender = null, birth_date = null WHERE id = :id",
                 ).param("id", UUID.fromString(member))
                 .update()
         }

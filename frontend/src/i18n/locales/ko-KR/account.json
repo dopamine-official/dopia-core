@@ -37,5 +37,34 @@
     "create_character": "만들기",
     "charge_title": "크레딧 충전",
     "charge_placeholder": "[충전 내용]"
+  },
+  "consent": {
+    "title": "서비스 이용 동의",
+    "description": "서비스를 이용하려면 아래 약관에 동의해 주세요.",
+    "all": "전체 동의",
+    "required": "필수",
+    "optional": "선택",
+    "view": "보기",
+    "view_item": "{name} 보기",
+    "agree": "동의하고 시작하기",
+    "failed": "동의를 저장하지 못했어요. 다시 시도해 주세요.",
+    "item": {
+      "terms": "이용약관",
+      "privacy": "개인정보 수집 및 이용"
+    }
+  },
+  "adult": {
+    "title": "성인 인증",
+    "close": "성인 인증 닫기",
+    "rating_mark_alt": "등급 표시",
+    "notice_restricted": "이 콘텐츠는 제한 등급입니다. 만 18세 미만은 이용할 수 없습니다.",
+    "gender": "성별",
+    "gender_male": "남성",
+    "gender_female": "여성",
+    "birth_date": "생년월일",
+    "irreversible": "제출한 성별과 생년월일은 바꿀 수 없어요.",
+    "rejected": "만 18세 미만은 성인 콘텐츠를 이용할 수 없어요.",
+    "failed": "인증하지 못했어요. 다시 시도해 주세요.",
+    "submit": "확인"
   }
 }

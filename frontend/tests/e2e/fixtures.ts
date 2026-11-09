@@ -5,7 +5,33 @@ export type Captured = { event: string; properties: Record<string, unknown> };
 
 // Every test runs with analytics on (playwright.config.ts). PostHog requests are answered
 // here so nothing leaves the browser, and the events are kept for tests that check them.
-export const test = base.extend<{ analytics: Captured[] }>({
+export const test = base.extend<{
+  analytics: Captured[];
+  autoConsent: boolean;
+  consent: void;
+}>({
+  autoConsent: [true, { option: true }],
+  // The terms modal opens over every first visit (ACCOUNT web 2-2-6). Tests about other
+  // screens agree through it whenever it is in the way; tests/e2e/compliance.spec.ts covers it.
+  consent: [
+    async ({ context, autoConsent }, use) => {
+      if (!autoConsent) return use();
+      const agree = (page: Page) =>
+        page.addLocatorHandler(
+          page.locator("dialog.consent_modal"),
+          async (dialog) => {
+            await dialog.getByRole("checkbox", { name: "전체 동의" }).check();
+            await dialog
+              .getByRole("button", { name: "동의하고 시작하기" })
+              .click();
+          },
+        );
+      await Promise.all(context.pages().map(agree));
+      context.on("page", (page) => void agree(page));
+      await use();
+    },
+    { auto: true },
+  ],
   analytics: [
     async ({ context }, use) => {
       const events: Captured[] = [];

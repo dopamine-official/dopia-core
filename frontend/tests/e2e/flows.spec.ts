@@ -293,9 +293,12 @@ test("SAFE requires login and adult verification without sending a PATCH", async
   await expect(page).toHaveURL("/");
   await expect(safe).toBeChecked();
   await safe.click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "성인 인증이 필요해요." }),
-  ).toBeVisible();
+  // An unverified member gets the adult verification modal; closing it changes nothing.
+  const verification = page.getByRole("dialog", { name: "성인 인증" });
+  await expect(verification).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(verification).toBeHidden();
+  await expect(safe).toBeFocused();
   await expect(safe).toBeChecked();
   await expect(adult).toHaveCount(0);
   expect(changes).toEqual([]);

@@ -6,11 +6,19 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type FormEvent,
   type ReactNode,
 } from "react";
-import { localeNames, supportedLocales, type Locale } from "@/i18n";
-import { api } from "@/lib/api";
-import { accountSchema } from "@/lib/contracts";
+import {
+  ageConfig,
+  localeNames,
+  regionToday,
+  supportedLocales,
+  type Locale,
+} from "@/i18n";
+import { useQueryClient } from "@tanstack/react-query";
+import { api, refreshSession } from "@/lib/api";
+import { accountSchema, ApiError } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
 import { track, type EventProperties } from "@/lib/analytics";
 import {
@@ -20,7 +28,11 @@ import {
   type LoginPage,
   type LoginProvider,
 } from "@/lib/login";
-import { useSession, type LoginRequest } from "./providers";
+import {
+  useSession,
+  type AdultVerificationRequest,
+  type LoginRequest,
+} from "./providers";
 import { useTrack } from "./page";
 
 export function Icon({
@@ -422,7 +434,8 @@ export function ProfileMenu() {
   );
 }
 function SafeToggle({ onLogin }: { onLogin: () => void }) {
-  const { account, changeAccount, t, notice } = useSession();
+  const { account, changeAccount, t, notice, openAdultVerification } =
+    useSession();
   const send = useTrack();
   const [busy, setBusy] = useState(false);
   const adultMode =
@@ -446,9 +459,15 @@ function SafeToggle({ onLogin }: { onLogin: () => void }) {
           onLogin();
           return;
         }
+        if (account.adult_verification_rejected) {
+          finish("verification_rejected");
+          notice(t("character.adult_verification_rejected"));
+          return;
+        }
         if (!account.adult_verified) {
           finish("verification_required");
-          notice(t("character.adult_verification_required"));
+          // Passing turns adult mode on, so no separate change request (ACCOUNT web 2-2-7).
+          openAdultVerification({ onPassed: (next) => changeAccount(next) });
           return;
         }
         setBusy(true);
@@ -509,6 +528,7 @@ export function Modal({
   drawer = false,
   closeLabel,
   className,
+  locked = false,
 }: {
   title: string;
   titleContent?: ReactNode;
@@ -517,22 +537,34 @@ export function Modal({
   drawer?: boolean;
   closeLabel?: string;
   className?: string;
+  // No close button; `Esc` and a click outside do nothing.
+  locked?: boolean;
 }) {
   const { t } = useSession();
   const ref = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const close = useRef(onClose);
+  const lockedRef = useRef(locked);
   useLayoutEffect(() => {
     close.current = onClose;
+    lockedRef.current = locked;
   });
   useLayoutEffect(() => {
     const dialog = ref.current!;
     const opener = document.activeElement;
+    let mounted = true;
+    // Browsers may still close a modal whose cancel was prevented (a second `Esc`).
+    const reopen = () => {
+      if (mounted && lockedRef.current && !dialog.open) dialog.showModal();
+    };
+    dialog.addEventListener("close", reopen);
     dialog.showModal();
     if (drawer) closeButton.current?.focus();
     const before = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      mounted = false;
+      dialog.removeEventListener("close", reopen);
       dialog.close();
       document.body.style.overflow = before;
       if (opener instanceof HTMLElement && opener.isConnected)
@@ -548,11 +580,11 @@ export function Modal({
       aria-label={title}
       onCancel={(event) => {
         event.preventDefault();
-        close.current("escape");
+        if (!locked) close.current("escape");
       }}
       onClick={(e) => {
         // A click outside closes a modal; the sidebar drawer stays open until closed on purpose.
-        if (!drawer && e.target === e.currentTarget) {
+        if (!drawer && !locked && e.target === e.currentTarget) {
           const box = e.currentTarget.getBoundingClientRect();
           if (
             e.clientX < box.left ||
@@ -566,14 +598,16 @@ export function Modal({
     >
       <div className="modal_heading">
         <h2>{titleContent ?? title}</h2>
-        <button
-          ref={closeButton}
-          className="icon_button"
-          onClick={() => onClose("button")}
-          aria-label={closeLabel ?? t("common.close")}
-        >
-          <Icon name="close" />
-        </button>
+        {!locked && (
+          <button
+            ref={closeButton}
+            className="icon_button"
+            onClick={() => onClose("button")}
+            aria-label={closeLabel ?? t("common.close")}
+          >
+            <Icon name="close" />
+          </button>
+        )}
       </div>
       {children}
     </dialog>
@@ -688,5 +722,241 @@ export function Footer() {
         </Modal>
       )}
     </footer>
+  );
+}
+
+/** Required consents, before anything else on any screen (ACCOUNT web 2-2-6). */
+export function ConsentHost() {
+  const { account } = useSession();
+  // A new showing (a new required version) starts with nothing checked.
+  return account.consent_required ? <Consent /> : null;
+}
+function Consent() {
+  const { t, account, replaceAccount } = useSession();
+  const consentItems = account.consent_items;
+  const [checked, setChecked] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const all = consentItems.every((item) => checked.includes(item.id));
+  const ready = consentItems.every(
+    (item) => !item.required || checked.includes(item.id),
+  );
+  const toggle = (id: string) =>
+    setChecked((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    );
+  async function agree() {
+    if (busy || !ready) return;
+    setBusy(true);
+    setError("");
+    try {
+      const next = await api("/account/me/consents", accountSchema, {
+        method: "POST",
+        body: JSON.stringify({
+          items: consentItems
+            .filter((item) => checked.includes(item.id))
+            .map((item) => ({ id: item.id, version: item.version })),
+        }),
+      });
+      replaceAccount(next);
+    } catch {
+      // 422 means this build's items differ from the server's: show the failure and keep going.
+      setError("account.consent.failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal
+      title={t("account.consent.title")}
+      className="consent_modal"
+      locked
+      onClose={() => {}}
+    >
+      <p className="muted">{t("account.consent.description")}</p>
+      <label className="consent_all">
+        <input
+          type="checkbox"
+          checked={all}
+          onChange={() =>
+            setChecked(all ? [] : consentItems.map((item) => item.id))
+          }
+        />
+        <span>{t("account.consent.all")}</span>
+      </label>
+      <ul className="consent_items">
+        {consentItems.map((item) => (
+          <li key={item.id}>
+            <label>
+              <input
+                type="checkbox"
+                checked={checked.includes(item.id)}
+                onChange={() => toggle(item.id)}
+              />
+              <span>{t(`account.consent.item.${item.id}`)}</span>
+              <small>
+                {t(
+                  item.required
+                    ? "account.consent.required"
+                    : "account.consent.optional",
+                )}
+              </small>
+            </label>
+            {item.document_url && (
+              <a
+                href={item.document_url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={t("account.consent.view_item", {
+                  name: t(`account.consent.item.${item.id}`),
+                })}
+              >
+                {t("account.consent.view")}
+              </a>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p className="inline_error" role="alert">
+          {t(error)}
+        </p>
+      )}
+      <button
+        className="button primary wide"
+        disabled={!ready || busy}
+        onClick={() => void agree()}
+      >
+        {t("account.consent.agree")}
+      </button>
+    </Modal>
+  );
+}
+/** Gender and birth date once, when an unverified member turns SAFE off (ACCOUNT web 2-2-7). */
+export function AdultVerificationHost() {
+  const { adultVerification } = useSession();
+  if (!adultVerification) return null;
+  return <AdultVerification request={adultVerification} />;
+}
+function AdultVerification({ request }: { request: AdultVerificationRequest }) {
+  const { t, replaceAccount, closeAdultVerification } = useSession();
+  const queryClient = useQueryClient();
+  const [gender, setGender] = useState<"male" | "female" | "">("");
+  const [birthDate, setBirthDate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [rejected, setRejected] = useState(false);
+  const [error, setError] = useState("");
+  const today = regionToday();
+  const close = () => {
+    if (!busy) closeAdultVerification();
+  };
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy || rejected || !gender || !birthDate) return;
+    setBusy(true);
+    setError("");
+    let next;
+    try {
+      next = await api("/account/me/adult_verification", accountSchema, {
+        method: "POST",
+        body: JSON.stringify({ gender, birth_date: birthDate }),
+      });
+    } catch (failure) {
+      if (
+        failure instanceof ApiError &&
+        failure.code === "adult_verification_submitted"
+      ) {
+        // Already submitted elsewhere: take the stored result, reread what SAFE filtered
+        // and close. Stays busy until then so a second click sends nothing.
+        await refreshSession().catch(() => undefined);
+        await queryClient.invalidateQueries();
+        closeAdultVerification();
+        return;
+      }
+      setBusy(false);
+      setError(
+        failure instanceof ApiError && failure.status === 403
+          ? "character.adult_mode_unavailable"
+          : "account.adult.failed",
+      );
+      return;
+    }
+    setBusy(false);
+    if (next.adult_verified) {
+      closeAdultVerification();
+      request.onPassed(next);
+      return;
+    }
+    // Rejected: keep the modal with the reason; only closing is left.
+    setRejected(true);
+    replaceAccount(next);
+  }
+  const locked = busy || rejected;
+  return (
+    <Modal
+      title={t("account.adult.title")}
+      className="adult_modal"
+      closeLabel={t("account.adult.close")}
+      onClose={close}
+    >
+      <form onSubmit={(event) => void submit(event)}>
+        {ageConfig.rating_mark_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="rating_mark"
+            src={ageConfig.rating_mark_url}
+            alt={t("account.adult.rating_mark_alt")}
+          />
+        )}
+        <p className="adult_notice">{t(ageConfig.notice_key)}</p>
+        <fieldset className="gender_choice" disabled={locked}>
+          <legend>{t("account.adult.gender")}</legend>
+          {(["male", "female"] as const).map((value, index) => (
+            <label key={value}>
+              <input
+                type="radio"
+                name="gender"
+                value={value}
+                checked={gender === value}
+                autoFocus={index === 0}
+                onChange={() => setGender(value)}
+              />
+              <span>{t(`account.adult.gender_${value}`)}</span>
+            </label>
+          ))}
+        </fieldset>
+        <label className="field">
+          {t("account.adult.birth_date")}
+          <input
+            type="date"
+            min="1900-01-01"
+            max={today}
+            value={birthDate}
+            disabled={locked}
+            onChange={(event) => setBirthDate(event.target.value)}
+          />
+        </label>
+        <p className="field_help">{t("account.adult.irreversible")}</p>
+        {(rejected || error) && (
+          <p className="inline_error" role="alert">
+            {t(rejected ? "account.adult.rejected" : error)}
+          </p>
+        )}
+        <div className="modal_actions">
+          <button type="button" className="button" onClick={close}>
+            {t("common.cancel")}
+          </button>
+          <button
+            type="submit"
+            className="button primary"
+            disabled={locked || !gender || !birthDate}
+          >
+            {t("account.adult.submit")}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

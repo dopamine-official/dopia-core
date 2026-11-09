@@ -57,6 +57,16 @@ class ChatFlowTest(
         ): JsonNode {
             val response = call(method, path, body, locale = locale)
             assertTrue(response.statusCode() in 200..299, "$method $path -> ${response.statusCode()} ${response.body()}")
+            // A new guest agrees first, as the web's consent modal makes it (chat needs it).
+            if (path ==
+                "/account/guest"
+            ) {
+                json(
+                    "POST",
+                    "/account/me/consents",
+                    """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+                )
+            }
             return mapper.readTree(response.body())
         }
     }

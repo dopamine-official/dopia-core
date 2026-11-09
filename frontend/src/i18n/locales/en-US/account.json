@@ -37,5 +37,34 @@
     "create_character": "Create",
     "charge_title": "Top up credits",
     "charge_placeholder": "[Top-up content]"
+  },
+  "consent": {
+    "title": "Terms agreement",
+    "description": "Agree to the terms below to use the service.",
+    "all": "Agree to all",
+    "required": "Required",
+    "optional": "Optional",
+    "view": "View",
+    "view_item": "View {name}",
+    "agree": "Agree and start",
+    "failed": "Your agreement was not saved. Please try again.",
+    "item": {
+      "terms": "Terms of Service",
+      "privacy": "Collection and use of personal data"
+    }
+  },
+  "adult": {
+    "title": "Adult verification",
+    "close": "Close adult verification",
+    "rating_mark_alt": "Rating mark",
+    "notice_restricted": "This content is restricted. No one under 18 may view it.",
+    "gender": "Gender",
+    "gender_male": "Male",
+    "gender_female": "Female",
+    "birth_date": "Date of birth",
+    "irreversible": "Your gender and date of birth cannot be changed after you submit.",
+    "rejected": "Adult content is not available to anyone under 18.",
+    "failed": "Verification failed. Please try again.",
+    "submit": "Confirm"
   }
 }

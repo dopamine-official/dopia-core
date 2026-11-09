@@ -20,6 +20,20 @@ data class AdultModeRequest(
     val adultMode: Boolean?,
 )
 
+data class AdultVerificationRequest(
+    val gender: String?,
+    val birthDate: String?,
+)
+
+data class ConsentRequest(
+    val items: List<ConsentRequestItem>?,
+)
+
+data class ConsentRequestItem(
+    val id: String?,
+    val version: String?,
+)
+
 @RestController
 @RequestMapping("/api/v1/account")
 class AccountController(
@@ -32,14 +46,18 @@ class AccountController(
     ): IssuedAccount = service.issueGuest(request, response)
 
     @GetMapping("/me")
-    fun me(identity: Identity): AccountView = service.me(identity)
+    fun me(
+        identity: Identity,
+        locale: RequestLocale,
+    ): AccountView = service.me(identity, locale.region)
 
     @PatchMapping("/me", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun updateProfile(
         identity: Identity,
+        locale: RequestLocale,
         @RequestParam(required = false) nickname: String?,
         @RequestPart(required = false) photo: MultipartFile?,
-    ): AccountView = service.updateProfile(identity, nickname, photo?.takeIf { !it.isEmpty }?.bytes)
+    ): AccountView = service.updateProfile(identity, nickname, photo?.takeIf { !it.isEmpty }?.bytes, locale.region)
 
     @PatchMapping("/me/adult_mode", consumes = [MediaType.APPLICATION_JSON_VALUE])
     fun updateAdultMode(
@@ -49,6 +67,28 @@ class AccountController(
     ): AccountView {
         val value = body.adultMode ?: throw ApiException.invalidInput(com.dopia.common.FieldError("adult_mode", "required"))
         return service.updateAdultMode(identity, value, locale.region)
+    }
+
+    @PostMapping("/me/adult_verification", consumes = [MediaType.APPLICATION_JSON_VALUE])
+    fun verifyAdult(
+        identity: Identity,
+        locale: RequestLocale,
+        @RequestBody body: AdultVerificationRequest,
+    ): AccountView = service.verifyAdult(identity, body.gender, body.birthDate, locale.region)
+
+    @PostMapping("/me/consents", consumes = [MediaType.APPLICATION_JSON_VALUE])
+    fun recordConsents(
+        identity: Identity,
+        locale: RequestLocale,
+        @RequestBody body: ConsentRequest,
+    ): AccountView {
+        val items =
+            body.items?.map {
+                val id = it.id ?: throw ApiException.invalidInput(com.dopia.common.FieldError("items.id", "required"))
+                val version = it.version ?: throw ApiException.invalidInput(com.dopia.common.FieldError("items.version", "required"))
+                id to version
+            } ?: throw ApiException.invalidInput(com.dopia.common.FieldError("items", "required"))
+        return service.recordConsents(identity, items, locale.region)
     }
 
     @PostMapping("/logout")

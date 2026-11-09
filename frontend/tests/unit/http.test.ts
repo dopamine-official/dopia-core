@@ -72,6 +72,9 @@ describe("mock HTTP boundary", () => {
       is_guest: true,
       adult_mode: false,
       adult_verified: false,
+      adult_verification_rejected: false,
+      consent_required: true,
+      consent_items: expect.any(Array),
     });
     const response = await call("/home", { headers: { "X-Locale": "en-US" } });
     expect(homeSchema.parse(await response.json()).sections[0].name).toBe(
@@ -168,6 +171,9 @@ describe("mock HTTP boundary", () => {
       expect(accountSchema.parse(await changed.json())).toMatchObject({
         adult_mode,
         adult_verified: true,
+        adult_verification_rejected: false,
+        consent_required: true,
+        consent_items: expect.any(Array),
       });
       expect(
         accountSchema.parse(await (await call("/account/me")).json())

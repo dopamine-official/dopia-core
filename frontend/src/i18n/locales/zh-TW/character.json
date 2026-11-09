@@ -19,5 +19,6 @@
   },
   "adult": "成人角色",
   "adult_mode_unavailable": "目前無法使用成人模式。",
-  "not_found": "目前無法與這個角色對話。"
+  "not_found": "目前無法與這個角色對話。",
+  "adult_verification_rejected": "未符合成人認證條件，無法關閉 SAFE。"
 }

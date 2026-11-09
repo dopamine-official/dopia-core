@@ -185,6 +185,32 @@ export const handlers = [
       return json({ account_id: user.account_id });
     }),
   ),
+  http.post(
+    "/api/v1/account/me/adult_verification",
+    guarded(async (req) => {
+      const body = z
+        .object({ gender: z.string(), birth_date: z.string() })
+        .parse(await req.json());
+      return json(
+        await run(req, (state) =>
+          engine.verifyAdult(state, body.gender, body.birth_date),
+        ),
+      );
+    }),
+  ),
+  http.post(
+    "/api/v1/account/me/consents",
+    guarded(async (req) => {
+      const { items } = z
+        .object({
+          items: z.array(z.object({ id: z.string(), version: z.string() })),
+        })
+        .parse(await req.json());
+      return json(
+        await run(req, (state) => engine.recordConsents(state, items)),
+      );
+    }),
+  ),
   http.patch(
     "/api/v1/account/me/adult_mode",
     guarded(async (req) => {

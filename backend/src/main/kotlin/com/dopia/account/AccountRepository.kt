@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Repository
 import java.sql.ResultSet
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.util.UUID
 
@@ -15,6 +16,7 @@ data class AccountRow(
     val photoUrl: String?,
     val adultMode: Boolean,
     val adultVerifiedAt: Instant?,
+    val birthDate: LocalDate?,
     val mergeTargetAccountId: UUID?,
     val mergedIntoAccountId: UUID?,
     val deletedAt: Instant?,
@@ -25,7 +27,7 @@ class AccountRepository(
     private val jdbc: JdbcClient,
 ) {
     private val columns =
-        "id, is_guest, nickname, photo_url, adult_mode, adult_verified_at, " +
+        "id, is_guest, nickname, photo_url, adult_mode, adult_verified_at, birth_date, " +
             "merge_target_account_id, merged_into_account_id, deleted_at"
 
     private val account =
@@ -37,6 +39,7 @@ class AccountRepository(
                 photoUrl = rs.getString("photo_url"),
                 adultMode = rs.getBoolean("adult_mode"),
                 adultVerifiedAt = rs.getObject("adult_verified_at", OffsetDateTime::class.java)?.toInstant(),
+                birthDate = rs.getObject("birth_date", LocalDate::class.java),
                 mergeTargetAccountId = rs.getObject("merge_target_account_id", UUID::class.java),
                 mergedIntoAccountId = rs.getObject("merged_into_account_id", UUID::class.java),
                 deletedAt = rs.getObject("deleted_at", OffsetDateTime::class.java)?.toInstant(),
@@ -163,6 +166,30 @@ class AccountRepository(
             .param("value", adultMode)
             .update() > 0
 
+    /**
+     * Stores the one adult verification submission (4-1-8). Only a row without a birth date is
+     * updated, so a second or concurrent submission changes nothing and returns false.
+     */
+    fun submitAdultVerification(
+        id: UUID,
+        gender: String,
+        birthDate: LocalDate,
+        verified: Boolean,
+    ): Boolean =
+        jdbc
+            .sql(
+                """
+            UPDATE accounts SET gender = :gender, birth_date = :birth,
+                adult_verified_at = CASE WHEN :verified THEN now() ELSE adult_verified_at END,
+                adult_mode = adult_mode OR :verified
+            WHERE id = :id AND birth_date IS NULL AND NOT is_guest
+            """,
+            ).param("id", id)
+            .param("gender", gender)
+            .param("birth", birthDate)
+            .param("verified", verified)
+            .update() > 0
+
     fun markDeleted(id: UUID) {
         jdbc.sql("UPDATE accounts SET deleted_at = now(), adult_mode = false WHERE id = :id").param("id", id).update()
     }
@@ -227,6 +254,48 @@ class AccountRepository(
 
     fun deleteDeadSessions() {
         jdbc.sql("DELETE FROM sessions WHERE expires_at < now() OR revoked_at < now() - interval '1 day'").update()
+    }
+
+    // Consents (3-2-7)
+
+    /** The (id, version) pairs this account agreed to. */
+    fun consents(accountId: UUID): Set<Pair<String, String>> =
+        jdbc
+            .sql("SELECT consent_id, version FROM account_consents WHERE account_id = :id")
+            .param("id", accountId)
+            .query { rs, _ -> rs.getString("consent_id") to rs.getString("version") }
+            .set()
+
+    fun insertConsent(
+        accountId: UUID,
+        consentId: String,
+        version: String,
+    ) {
+        jdbc
+            .sql(
+                "INSERT INTO account_consents (account_id, consent_id, version) VALUES (:account, :consent, :version) " +
+                    "ON CONFLICT DO NOTHING",
+            ).param("account", accountId)
+            .param("consent", consentId)
+            .param("version", version)
+            .update()
+    }
+
+    /** Copies every consent of [from] to [to] with its original time; ones [to] already has stay. */
+    fun copyConsents(
+        from: UUID,
+        to: UUID,
+    ) {
+        jdbc
+            .sql(
+                """
+            INSERT INTO account_consents (account_id, consent_id, version, agreed_at)
+            SELECT :to, consent_id, version, agreed_at FROM account_consents WHERE account_id = :from
+            ON CONFLICT DO NOTHING
+            """,
+            ).param("from", from)
+            .param("to", to)
+            .update()
     }
 
     // Merge

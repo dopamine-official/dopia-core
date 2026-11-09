@@ -9,6 +9,7 @@ data class AiCharacter(
     val personality: String,
     val speechStyle: String,
     val worldSetting: String,
+    val isAdult: Boolean,
 )
 
 data class AiHistoryItem(
@@ -18,7 +19,6 @@ data class AiHistoryItem(
 
 data class AiGeneration(
     val locale: String,
-    val adultMode: Boolean,
 )
 
 data class AiTurnRequest(

@@ -37,7 +37,7 @@ def assemble_chat_prompt(assembler: PromptAssembler, turn: ChatTurnInput, trace:
         summary=turn.summary,
         user_input=turn.user_input,
         locale=turn.locale,
-        adult_mode=turn.adult_mode,
+        is_adult=turn.is_adult,
     )
     trace.prompt_assembled(prompt, history_count=len(turn.history), summary_length=len(turn.summary))
     return prompt

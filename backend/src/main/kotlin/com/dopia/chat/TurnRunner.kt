@@ -109,11 +109,12 @@ class TurnRunner(
                             character.personality,
                             character.speechStyle,
                             character.worldSetting,
+                            started.isAdult,
                         ),
                     history = history.map { AiHistoryItem(it.role, it.content) },
                     summary = summary,
                     userInput = started.userInput,
-                    generation = AiGeneration(started.locale, started.adultMode),
+                    generation = AiGeneration(started.locale),
                 )
             val result =
                 ai.turn(

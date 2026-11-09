@@ -53,7 +53,7 @@ def _clean_history(items: list[HistoryItem]) -> list[Message]:
 
 
 def chat_input(request_id: str, account_id: str, body: ChatTurnRequest) -> ChatTurnInput:
-    character = {k: v.strip() for k, v in body.character.model_dump().items()}
+    character = {k: v.strip() for k, v in body.character.model_dump(exclude={"is_adult"}).items()}
     detail = [{"field": f"character.{k}", "reason": "empty"} for k, v in character.items() if not v]
     user_input = body.user_input.strip()
     if not user_input:
@@ -68,7 +68,7 @@ def chat_input(request_id: str, account_id: str, body: ChatTurnRequest) -> ChatT
         summary=(body.summary or "").strip(),
         user_input=user_input,
         locale=body.generation.locale.strip(),
-        adult_mode=body.generation.adult_mode,
+        is_adult=body.character.is_adult,
     )
 
 

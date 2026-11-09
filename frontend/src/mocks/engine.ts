@@ -5,7 +5,8 @@ import {
   type Scenario,
   type LocalEvent,
 } from "@/lib/contracts";
-import { ageConfig, consentItems, type Locale } from "@/i18n";
+import { ageConfig, regionToday, type Locale } from "@/i18n";
+import { consentItems } from "./consents";
 import { characters, characterInfo, getCharacter } from "./characters";
 
 type StoredAccount = Account & { provider?: "google" | "apple" };
@@ -83,6 +84,7 @@ export function account(state: State): StoredAccount {
   const record = compliance(state, result.account_id);
   result.adult_verification_rejected =
     !result.is_guest && !!record.birth_date && !result.adult_verified;
+  result.consent_items = consentItems;
   result.consent_required = consentItems.some(
     (item) =>
       item.required && !record.consents.includes(`${item.id}@${item.version}`),
@@ -103,6 +105,7 @@ export function guest(state: State) {
     adult_verified: false,
     adult_verification_rejected: false,
     consent_required: true,
+    consent_items: consentItems,
   };
   state.accounts.push(result);
   state.active_account_id = result.account_id;
@@ -126,6 +129,7 @@ export function login(state: State, provider: "google" | "apple") {
       adult_verified: false,
       adult_verification_rejected: false,
       consent_required: true,
+      consent_items: consentItems,
       provider,
     };
     state.accounts.push(member);
@@ -194,7 +198,7 @@ export function verifyAdult(state: State, gender: string, birthDate: string) {
   if (user.is_guest) throw new ApiError("member_required", 403);
   if (ageConfig.verification_method !== "birth_date_only")
     throw new ApiError("adult_verification_unavailable", 403);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = regionToday();
   const valid =
     /^\d{4}-\d{2}-\d{2}$/.test(birthDate) &&
     new Date(`${birthDate}T00:00:00Z`).toISOString().slice(0, 10) ===

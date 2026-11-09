@@ -60,6 +60,7 @@ const guest: Account = {
   adult_verified: false,
   adult_verification_rejected: false,
   consent_required: false,
+  consent_items: [],
 };
 const member: Account = { ...guest, account_id: "member-1", is_guest: false };
 
@@ -150,6 +151,7 @@ describe("analytics identity", () => {
       adult_verified: true,
       adult_verification_rejected: false,
       consent_required: false,
+      consent_items: [],
     });
     expect(lastRegister()).toMatchObject({ adult_mode: true });
   });

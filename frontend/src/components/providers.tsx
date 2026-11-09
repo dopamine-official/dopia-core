@@ -189,6 +189,14 @@ export function Providers({ children }: { children: ReactNode }) {
     },
     [applyAccount, query, router],
   );
+  // Same account, new fields: other tabs still reread it (consent, a rejected verification).
+  const replaceAccount = useCallback(
+    (next: Account) => {
+      applyAccount(next);
+      channel.current?.postMessage({ type: "account" });
+    },
+    [applyAccount],
+  );
   const initialize = useCallback(() => {
     if (boot.current) return boot.current;
     setFailure("");
@@ -338,7 +346,7 @@ export function Providers({ children }: { children: ReactNode }) {
             setLocale,
             t,
             changeAccount,
-            replaceAccount: applyAccount,
+            replaceAccount,
             accountRedirect,
             login,
             openLogin,

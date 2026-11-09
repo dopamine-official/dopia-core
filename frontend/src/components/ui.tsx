@@ -11,11 +11,12 @@ import {
 } from "react";
 import {
   ageConfig,
-  consentItems,
   localeNames,
+  regionToday,
   supportedLocales,
   type Locale,
 } from "@/i18n";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, refreshSession } from "@/lib/api";
 import { accountSchema, ApiError } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
@@ -543,17 +544,27 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const close = useRef(onClose);
+  const lockedRef = useRef(locked);
   useLayoutEffect(() => {
     close.current = onClose;
+    lockedRef.current = locked;
   });
   useLayoutEffect(() => {
     const dialog = ref.current!;
     const opener = document.activeElement;
+    let mounted = true;
+    // Browsers may still close a modal whose cancel was prevented (a second `Esc`).
+    const reopen = () => {
+      if (mounted && lockedRef.current && !dialog.open) dialog.showModal();
+    };
+    dialog.addEventListener("close", reopen);
     dialog.showModal();
     if (drawer) closeButton.current?.focus();
     const before = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      mounted = false;
+      dialog.removeEventListener("close", reopen);
       dialog.close();
       document.body.style.overflow = before;
       if (opener instanceof HTMLElement && opener.isConnected)
@@ -721,7 +732,8 @@ export function ConsentHost() {
   return account.consent_required ? <Consent /> : null;
 }
 function Consent() {
-  const { t, replaceAccount } = useSession();
+  const { t, account, replaceAccount } = useSession();
+  const consentItems = account.consent_items;
   const [checked, setChecked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -830,12 +842,13 @@ export function AdultVerificationHost() {
 }
 function AdultVerification({ request }: { request: AdultVerificationRequest }) {
   const { t, replaceAccount, closeAdultVerification } = useSession();
+  const queryClient = useQueryClient();
   const [gender, setGender] = useState<"male" | "female" | "">("");
   const [birthDate, setBirthDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState(false);
   const [error, setError] = useState("");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = regionToday();
   const close = () => {
     if (!busy) closeAdultVerification();
   };
@@ -851,16 +864,18 @@ function AdultVerification({ request }: { request: AdultVerificationRequest }) {
         body: JSON.stringify({ gender, birth_date: birthDate }),
       });
     } catch (failure) {
-      setBusy(false);
       if (
         failure instanceof ApiError &&
         failure.code === "adult_verification_submitted"
       ) {
-        // Already submitted elsewhere: take the stored result and close.
+        // Already submitted elsewhere: take the stored result, reread what SAFE filtered
+        // and close. Stays busy until then so a second click sends nothing.
         await refreshSession().catch(() => undefined);
+        await queryClient.invalidateQueries();
         closeAdultVerification();
         return;
       }
+      setBusy(false);
       setError(
         failure instanceof ApiError && failure.status === 403
           ? "character.adult_mode_unavailable"

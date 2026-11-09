@@ -10,6 +10,7 @@
   },
   "age": {
     "adult_age": 18,
+    "time_zone": "Asia/Taipei",
     "verification_method": "birth_date_only",
     "rating_mark_url": "/rating/restricted.svg",
     "notice_key": "account.adult.notice_restricted"

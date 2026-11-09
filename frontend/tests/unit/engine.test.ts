@@ -38,6 +38,7 @@ describe("account and conversation contracts", () => {
       adult_verified: false,
       adult_verification_rejected: false,
       consent_required: true,
+      consent_items: expect.any(Array),
     });
     expect(home(state, "ko-KR").sections[0].characters).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: adult.id })]),
@@ -51,6 +52,7 @@ describe("account and conversation contracts", () => {
       adult_verified: false,
       adult_verification_rejected: false,
       consent_required: true,
+      consent_items: expect.any(Array),
     });
     expect(logout(state)).toMatchObject({
       is_guest: true,
@@ -58,6 +60,7 @@ describe("account and conversation contracts", () => {
       adult_verified: false,
       adult_verification_rejected: false,
       consent_required: true,
+      consent_items: expect.any(Array),
     });
   });
   it.each(["guest", "member"])(
@@ -74,6 +77,7 @@ describe("account and conversation contracts", () => {
         adult_verified: false,
         adult_verification_rejected: false,
         consent_required: true,
+        consent_items: expect.any(Array),
       });
       expect(ownedRoom(restored, roomId).messages).toEqual(
         state.rooms[0].messages,
@@ -92,6 +96,7 @@ describe("account and conversation contracts", () => {
       adult_verified: false,
       adult_verification_rejected: false,
       consent_required: true,
+      consent_items: expect.any(Array),
     });
   });
   it("reuses a guest and opens only one room for the same character", () => {

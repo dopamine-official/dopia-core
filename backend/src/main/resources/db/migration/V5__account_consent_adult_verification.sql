@@ -4,9 +4,7 @@ ALTER TABLE accounts
     ADD COLUMN gender     text CHECK (gender IN ('male', 'female')),
     ADD COLUMN birth_date date,
     ADD CONSTRAINT accounts_adult_submission_pair
-        CHECK ((gender IS NULL) = (birth_date IS NULL)),
-    ADD CONSTRAINT accounts_adult_verified_birth_date
-        CHECK (adult_verified_at IS NULL OR birth_date IS NOT NULL);
+        CHECK ((gender IS NULL) = (birth_date IS NULL));
 
 CREATE TABLE account_consents (
     account_id uuid NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,

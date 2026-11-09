@@ -9,6 +9,15 @@ export const accountSchema = z.object({
   adult_verified: z.boolean(),
   adult_verification_rejected: z.boolean(),
   consent_required: z.boolean(),
+  // The request region's consent items in display order; `document_url` may be empty.
+  consent_items: z.array(
+    z.object({
+      id: z.string(),
+      required: z.boolean(),
+      version: z.string(),
+      document_url: z.string(),
+    }),
+  ),
 });
 export type Account = z.infer<typeof accountSchema>;
 export const characterSchema = z.object({

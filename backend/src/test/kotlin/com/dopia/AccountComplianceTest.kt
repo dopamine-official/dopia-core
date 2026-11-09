@@ -17,7 +17,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.LocalDate
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -95,7 +95,7 @@ class AccountComplianceTest(
         }
     }
 
-    private fun today() = LocalDate.now(ZoneOffset.UTC)
+    private fun today() = LocalDate.now(ZoneId.of("Asia/Taipei"))
 
     private fun verification(
         gender: String,
@@ -215,6 +215,27 @@ class AccountComplianceTest(
         assertFalse(browser.json("POST", "/account/me/consents", consents).get("consent_required").asBoolean())
         // Agreeing again keeps the first record.
         assertFalse(browser.json("POST", "/account/me/consents", consents).get("consent_required").asBoolean())
+    }
+
+    @Test
+    fun `chat waits for consent while home and the consent items stay readable`() {
+        val browser = Browser()
+        browser.json("POST", "/account/guest")
+        val me = browser.json("GET", "/account/me")
+        assertEquals(listOf("terms", "privacy"), me.get("consent_items").values().map { it.get("id").asString() })
+        assertEquals(
+            "2026-11-10",
+            me
+                .get("consent_items")
+                .get(0)
+                .get("version")
+                .asString(),
+        )
+        assertEquals(200, browser.call("GET", "/home").statusCode())
+        val open = browser.code("POST", "/chats/open", "{\"character_id\":\"${UUID.randomUUID()}\"}")
+        assertEquals(403 to "consent_required", open)
+        browser.json("POST", "/account/me/consents", consents)
+        assertEquals(404, browser.call("POST", "/chats/open", "{\"character_id\":\"${UUID.randomUUID()}\"}").statusCode())
     }
 
     @Test

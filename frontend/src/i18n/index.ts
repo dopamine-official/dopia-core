@@ -29,8 +29,15 @@ export function regionConfig(
 export const regionCode = regionConfig().code;
 /** Adult content entry: rating mark (empty for none) and the warning text key. */
 export const ageConfig = regionConfig().age;
-/** Consent items in display order; `document_url` may be empty until the document exists. */
-export const consentItems = regionConfig().consent.items;
+/** Today's date (`YYYY-MM-DD`) in the region's time zone, the day ages are counted on. */
+export function regionToday(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ageConfig.time_zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
 export const languageConfig = regionConfig().locale;
 export const supportedLocales = languageConfig.supported as Locale[];
 export const defaultLocale = languageConfig.default as Locale;

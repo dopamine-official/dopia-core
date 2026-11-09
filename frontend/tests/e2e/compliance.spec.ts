@@ -11,6 +11,7 @@ test.describe("terms", () => {
     const agree = dialog.getByRole("button", { name: "동의하고 시작하기" });
     await expect(agree).toBeDisabled();
     await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
     await expect(dialog).toBeVisible();
     await dialog.getByRole("checkbox", { name: "이용약관" }).check();
     await expect(agree).toBeDisabled();

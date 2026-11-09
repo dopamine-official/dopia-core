@@ -126,6 +126,22 @@ class GoogleLoginTest(
             path: String,
             body: String,
         ): HttpResponse<String> =
+            send(path, body).also {
+                // A new guest agrees first, as the web's consent modal makes it (chat needs it).
+                if (path ==
+                    "/account/guest"
+                ) {
+                    send(
+                        "/account/me/consents",
+                        """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+                    )
+                }
+            }
+
+        private fun send(
+            path: String,
+            body: String,
+        ): HttpResponse<String> =
             client.send(
                 HttpRequest
                     .newBuilder(

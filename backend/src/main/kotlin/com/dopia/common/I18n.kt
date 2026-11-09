@@ -5,6 +5,7 @@ import org.springframework.core.io.ClassPathResource
 import org.springframework.stereotype.Component
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
+import java.time.ZoneId
 
 /** Region config and locale resolution per COMMON/I18N/I18N.md. Files are copies of the web bundle. */
 data class RegionConfig(
@@ -14,14 +15,17 @@ data class RegionConfig(
     val adultModeAvailable: Boolean,
     val adultAge: Int? = null,
     val verificationMethod: String? = null,
+    /** Whose calendar day the age is counted on (`age.time_zone`). */
+    val timeZone: ZoneId? = null,
     val consentItems: List<ConsentItem> = emptyList(),
 )
 
-/** One `consent.items[]` entry; `document_url` is only for the web. */
+/** One `consent.items[]` entry, also sent to the web as is. */
 data class ConsentItem(
     val id: String,
     val required: Boolean,
     val version: String,
+    val documentUrl: String,
 )
 
 @Component
@@ -60,9 +64,20 @@ class I18n(
                             .path("verification_method")
                             .takeIf { it.isString }
                             ?.asString(),
+                    timeZone =
+                        base
+                            .path("age")
+                            .path("time_zone")
+                            .takeIf { it.isString }
+                            ?.let { ZoneId.of(it.asString()) },
                     consentItems =
                         base.path("consent").path("items").values().map {
-                            ConsentItem(it.get("id").asString(), it.get("required").asBoolean(), it.get("version").asString())
+                            ConsentItem(
+                                it.get("id").asString(),
+                                it.get("required").asBoolean(),
+                                it.get("version").asString(),
+                                it.path("document_url").asString(""),
+                            )
                         },
                 )
             }

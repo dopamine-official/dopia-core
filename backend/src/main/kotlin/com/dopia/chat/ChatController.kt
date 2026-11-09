@@ -5,6 +5,7 @@ import com.dopia.common.ErrorBody
 import com.dopia.common.FieldError
 import com.dopia.common.Identity
 import com.dopia.common.RequestLocale
+import com.dopia.common.RequiresConsent
 import com.dopia.config.AppProperties
 import org.springframework.http.CacheControl
 import org.springframework.http.HttpStatus
@@ -42,6 +43,7 @@ class ChatController(
     ): UUID = runCatching { UUID.fromString(value) }.getOrElse { throw ApiException.invalidInput(FieldError(field, "invalid_uuid")) }
 
     @PostMapping("/open")
+    @RequiresConsent
     fun open(
         identity: Identity,
         locale: RequestLocale,
@@ -76,6 +78,7 @@ class ChatController(
     }
 
     @PostMapping("/{room_id}/messages", consumes = [MediaType.APPLICATION_JSON_VALUE], produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    @RequiresConsent
     fun send(
         identity: Identity,
         locale: RequestLocale,

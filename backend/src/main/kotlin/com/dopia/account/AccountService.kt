@@ -3,6 +3,7 @@ package com.dopia.account
 import com.dopia.chat.ChatService
 import com.dopia.common.ApiException
 import com.dopia.common.AppEvents
+import com.dopia.common.ConsentItem
 import com.dopia.common.Cookies
 import com.dopia.common.FieldError
 import com.dopia.common.Identity
@@ -22,7 +23,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
-import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -36,23 +36,28 @@ data class AccountView(
     val adultVerified: Boolean,
     val adultVerificationRejected: Boolean,
     val consentRequired: Boolean,
+    // The request region's consent items; the web shows these, not a copy of its own.
+    val consentItems: List<ConsentItem>,
 )
 
 data class IssuedAccount(
     val accountId: UUID,
 )
 
-fun AccountRow.view(consentRequired: Boolean) =
-    AccountView(
-        accountId = id,
-        isGuest = isGuest,
-        nickname = if (isGuest) null else nickname,
-        photoUrl = photoUrl,
-        adultMode = !isGuest && adultMode,
-        adultVerified = !isGuest && adultVerifiedAt != null,
-        adultVerificationRejected = !isGuest && birthDate != null && adultVerifiedAt == null,
-        consentRequired = consentRequired,
-    )
+fun AccountRow.view(
+    consentRequired: Boolean,
+    consentItems: List<ConsentItem>,
+) = AccountView(
+    accountId = id,
+    isGuest = isGuest,
+    nickname = if (isGuest) null else nickname,
+    photoUrl = photoUrl,
+    adultMode = !isGuest && adultMode,
+    adultVerified = !isGuest && adultVerifiedAt != null,
+    adultVerificationRejected = !isGuest && birthDate != null && adultVerifiedAt == null,
+    consentRequired = consentRequired,
+    consentItems = consentItems,
+)
 
 @Service
 class AccountService(
@@ -137,7 +142,7 @@ class AccountService(
         region: RegionConfig,
     ): AccountView {
         val row = accounts.find(identity.accountId) ?: throw ApiException.unauthorized()
-        return row.view(consentRequired(identity.accountId, region))
+        return row.view(consentRequired(identity.accountId, region), region.consentItems)
     }
 
     // 4-1-9 consents
@@ -151,6 +156,16 @@ class AccountService(
         if (required.isEmpty()) return false
         val agreed = accounts.consents(accountId)
         return required.any { (it.id to it.version) !in agreed }
+    }
+
+    /** Chat waits until the required consents are given (4-1-9). */
+    fun assertConsented(
+        identity: Identity,
+        region: RegionConfig,
+    ) {
+        if (consentRequired(identity.accountId, region)) {
+            throw ApiException("consent_required", HttpStatus.FORBIDDEN, message = "required consents are not given")
+        }
     }
 
     fun recordConsents(
@@ -167,7 +182,11 @@ class AccountService(
         if (region.consentItems.any { it.required && it.id !in given }) {
             throw ApiException.invalidInput(FieldError("items", "required_missing"))
         }
-        tx.execute { items.distinct().forEach { (id, version) -> accounts.insertConsent(identity.accountId, id, version) } }
+        tx.execute {
+            // A guest already merged or leaving would keep consents its member never gets.
+            assertGuestWritable(identity)
+            items.distinct().forEach { (id, version) -> accounts.insertConsent(identity.accountId, id, version) }
+        }
         return me(identity, region)
     }
 
@@ -184,7 +203,8 @@ class AccountService(
             throw ApiException("adult_mode_unavailable", HttpStatus.FORBIDDEN, message = "region does not offer adult mode")
         }
         val adultAge = region.adultAge
-        if (region.verificationMethod != BIRTH_DATE_ONLY || adultAge == null) {
+        val zone = region.timeZone
+        if (region.verificationMethod != BIRTH_DATE_ONLY || adultAge == null || zone == null) {
             throw ApiException(
                 "adult_verification_unavailable",
                 HttpStatus.FORBIDDEN,
@@ -193,7 +213,7 @@ class AccountService(
         }
         val errors = mutableListOf<FieldError>()
         if (gender !in GENDERS) errors += FieldError("gender", "invalid")
-        val today = LocalDate.now(ZoneOffset.UTC)
+        val today = LocalDate.now(zone)
         val birth =
             try {
                 birthDate?.let { LocalDate.parse(it) }

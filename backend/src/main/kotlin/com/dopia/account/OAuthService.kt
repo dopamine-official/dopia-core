@@ -12,9 +12,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.security.KeyFactory
-import java.security.PrivateKey
 import java.security.Signature
-import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.RSAPublicKeySpec
 import java.time.Duration
 import java.time.Instant
@@ -38,7 +36,7 @@ class LoginFailed(
 ) : RuntimeException(message)
 
 /**
- * Google and Apple sign-in (ACCOUNT 4-1-3, 4-1-4, 5-1-1). Token exchange and ID token
+ * Google sign-in (ACCOUNT 4-1-3, 4-1-4, 5-1-1). Token exchange and ID token
  * verification use the JDK only; provider keys are cached in memory.
  */
 @Service
@@ -71,39 +69,16 @@ class OAuthService(
                     setOf("https://accounts.google.com", "accounts.google.com"),
                     "openid email profile",
                 ),
-            "apple" to
-                Provider(
-                    "apple",
-                    properties.oauth.apple.authorizeUrl,
-                    properties.oauth.apple.tokenUrl,
-                    properties.oauth.apple.jwksUrl,
-                    setOf("https://appleid.apple.com"),
-                    "name email",
-                ),
         )
 
     fun isProvider(name: String) = name in providers
 
     fun isConfigured(provider: String): Boolean =
-        when (provider) {
-            "google" -> {
-                properties.oauth.google.clientId
-                    .isNotBlank() &&
-                    properties.oauth.google.clientSecret
-                        .isNotBlank()
-            }
-
-            "apple" -> {
-                properties.oauth.apple.clientId
-                    .isNotBlank() &&
-                    properties.oauth.apple.privateKey
-                        .isNotBlank()
-            }
-
-            else -> {
-                false
-            }
-        }
+        provider == "google" &&
+            properties.oauth.google.clientId
+                .isNotBlank() &&
+            properties.oauth.google.clientSecret
+                .isNotBlank()
 
     fun callbackUrl(provider: String) = "${properties.oauth.redirectBaseUrl.trimEnd('/')}/api/v1/account/auth/$provider/callback"
 
@@ -174,13 +149,12 @@ class OAuthService(
         val config = providers.getValue(provider)
         val params =
             linkedMapOf(
-                "client_id" to clientId(provider),
+                "client_id" to clientId,
                 "redirect_uri" to callbackUrl(provider),
                 "response_type" to "code",
                 "scope" to config.scope,
                 "state" to state,
             )
-        if (provider == "apple") params["response_mode"] = "form_post"
         return config.authorizeUrl + "?" + params.entries.joinToString("&") { "${it.key}=${encode(it.value)}" }
     }
 
@@ -189,7 +163,6 @@ class OAuthService(
     fun exchange(
         provider: String,
         code: String,
-        appleUser: String?,
     ): AccountService.ProviderProfile {
         val config = providers.getValue(provider)
         val form =
@@ -197,8 +170,8 @@ class OAuthService(
                 "grant_type" to "authorization_code",
                 "code" to code,
                 "redirect_uri" to callbackUrl(provider),
-                "client_id" to clientId(provider),
-                "client_secret" to clientSecret(provider),
+                "client_id" to clientId,
+                "client_secret" to clientSecret,
             )
         val response =
             http.send(
@@ -216,19 +189,8 @@ class OAuthService(
         val claims = verifyIdToken(config, idToken)
         val subject = claims.path("sub").asString().ifEmpty { throw LoginFailed("id token without sub") }
         val email = claims.path("email").asString().ifEmpty { null }
-        val name =
-            when (provider) {
-                "google" -> claims.path("name").asString().ifEmpty { null }
-                else -> appleName(appleUser)
-            }
+        val name = claims.path("name").asString().ifEmpty { null }
         return AccountService.ProviderProfile(provider, subject, name, email)
-    }
-
-    private fun appleName(user: String?): String? {
-        val node = user?.let { runCatching { mapper.readTree(it) }.getOrNull() } ?: return null
-        val first = node.path("name").path("firstName").asString()
-        val last = node.path("name").path("lastName").asString()
-        return listOf(first, last).filter { it.isNotBlank() }.joinToString(" ").ifBlank { null }
     }
 
     private fun verifyIdToken(
@@ -249,10 +211,10 @@ class OAuthService(
         val audience = claims.path("aud")
         val audOk =
             if (audience.isArray) {
-                audience.values().any { it.asString() == clientId(config.name) }
+                audience.values().any { it.asString() == clientId }
             } else {
                 audience.asString() ==
-                    clientId(config.name)
+                    clientId
             }
         if (!audOk) throw LoginFailed("id token audience mismatch")
         if (claims.path("exp").asLong() < Instant.now().epochSecond) throw LoginFailed("id token expired")
@@ -309,37 +271,9 @@ class OAuthService(
 
     // Client credentials
 
-    private fun clientId(provider: String) = if (provider == "google") properties.oauth.google.clientId else properties.oauth.apple.clientId
+    private val clientId get() = properties.oauth.google.clientId
 
-    private fun clientSecret(provider: String): String =
-        if (provider == "google") properties.oauth.google.clientSecret else appleClientSecret()
-
-    /** Apple's client secret is a short-lived ES256 JWT signed with the .p8 key. */
-    private fun appleClientSecret(): String {
-        val apple = properties.oauth.apple
-        val now = Instant.now().epochSecond
-        val header = base64.encodeToString("""{"alg":"ES256","kid":"${apple.keyId}"}""".toByteArray())
-        val payload =
-            base64.encodeToString(
-                """{"iss":"${apple.teamId}","iat":$now,"exp":${now + 300},"aud":"https://appleid.apple.com","sub":"${apple.clientId}"}"""
-                    .toByteArray(),
-            )
-        val signer = Signature.getInstance("SHA256withECDSAinP1363Format")
-        signer.initSign(applePrivateKey())
-        signer.update("$header.$payload".toByteArray())
-        return "$header.$payload.${base64.encodeToString(signer.sign())}"
-    }
-
-    private fun applePrivateKey(): PrivateKey {
-        val pem =
-            properties.oauth.apple.privateKey
-                .replace("-----BEGIN PRIVATE KEY-----", "")
-                .replace("-----END PRIVATE KEY-----", "")
-                .replace("\\n", "")
-                .replace("\n", "")
-                .trim()
-        return KeyFactory.getInstance("EC").generatePrivate(PKCS8EncodedKeySpec(Base64.getDecoder().decode(pem)))
-    }
+    private val clientSecret get() = properties.oauth.google.clientSecret
 
     private fun encode(value: String) = URLEncoder.encode(value, Charsets.UTF_8)
 }

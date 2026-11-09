@@ -8,7 +8,7 @@ export type LoginTrigger =
   | "members_only"
   | "login_failed"
   | "login_cancelled";
-export type LoginProvider = "google" | "apple";
+export type LoginProvider = "google";
 /** Screens a login modal can be on. */
 export type LoginPage = Exclude<Page, "error">;
 
@@ -26,7 +26,7 @@ export type LoginReturn = {
 const KEY = "dopia:login";
 // An older note is from a round trip that never came back here.
 const MAX_AGE = 30 * 60_000;
-const providers: readonly string[] = ["google", "apple"];
+const providers: readonly string[] = ["google"];
 const pages: readonly string[] = ["home", "chat_room", "me", "not_found"];
 const triggers: readonly string[] = [
   "login_button",

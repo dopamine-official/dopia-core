@@ -9,7 +9,7 @@ import { ageConfig, regionToday, type Locale } from "@/i18n";
 import { consentItems } from "./consents";
 import { characters, characterInfo, getCharacter } from "./characters";
 
-type StoredAccount = Account & { provider?: "google" | "apple" };
+type StoredAccount = Account & { provider?: "google" };
 export type Turn = {
   client_message_id: string;
   user_message_id: string;
@@ -112,12 +112,12 @@ export function guest(state: State) {
   event(state, "guest_created");
   return result;
 }
-export function login(state: State, provider: "google" | "apple") {
+export function login(state: State, provider: "google") {
   const previous = account(state);
   if (!previous.is_guest) return previous;
   let member = state.accounts.find((value) => value.provider === provider);
   if (!member) {
-    let nickname = provider === "google" ? "Google Explorer" : "Apple Explorer";
+    let nickname = "Google Explorer";
     while (state.accounts.some((value) => value.nickname === nickname))
       nickname += " ✦";
     member = {

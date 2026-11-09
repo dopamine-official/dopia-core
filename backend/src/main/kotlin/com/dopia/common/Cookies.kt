@@ -41,17 +41,13 @@ class Cookies(
 
     fun clearSession(response: HttpServletResponse) = add(response, SESSION, "", Duration.ZERO)
 
-    /** Login progress cookie: 10 minutes, scoped to the auth path; Apple's form_post callback needs SameSite=None. */
+    /** Login progress cookie: 10 minutes, scoped to the auth path. */
     fun setLoginState(
         response: HttpServletResponse,
         value: String,
-        sameSiteNone: Boolean,
-    ) = add(response, LOGIN_STATE, value, Duration.ofMinutes(10), LOGIN_STATE_PATH, if (sameSiteNone) "None" else "Lax", withDomain = false)
+    ) = add(response, LOGIN_STATE, value, Duration.ofMinutes(10), LOGIN_STATE_PATH, withDomain = false)
 
-    fun clearLoginState(
-        response: HttpServletResponse,
-        sameSiteNone: Boolean,
-    ) = add(response, LOGIN_STATE, "", Duration.ZERO, LOGIN_STATE_PATH, if (sameSiteNone) "None" else "Lax", withDomain = false)
+    fun clearLoginState(response: HttpServletResponse) = add(response, LOGIN_STATE, "", Duration.ZERO, LOGIN_STATE_PATH, withDomain = false)
 
     private fun add(
         response: HttpServletResponse,

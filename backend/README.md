@@ -48,7 +48,6 @@ curl http://127.0.0.1:8080/actuator/health
 | `REGION_PROFILE` | `development` | region config 프로파일 (`src/main/resources/i18n`) |
 | `INSTANCE_ID` | `HOSTNAME` 또는 `local` | 턴을 받는 인스턴스 식별자 |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 없음 | Google 로그인. 비어 있으면 로그인 시작이 `/login?error=login_failed`로 돌아감 |
-| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | 없음 | Apple 로그인(.p8 키 본문). 구현은 있으나 실제 계정으로 검증 전 |
 | `OAUTH_REDIRECT_BASE_URL` | `http://127.0.0.1:3000` | 브라우저가 이 API에 닿는 origin. 콜백 주소 `{여기}/api/v1/account/auth/{provider}/callback` |
 | `WEB_BASE_URL` | `http://127.0.0.1:3000` | 로그인 뒤 돌아갈 웹 origin |
 | `LOGIN_STATE_KEY` | dev용 고정값 | `login_state` 쿠키 서명 키. 운영에서는 반드시 교체 |
@@ -66,7 +65,6 @@ E2E(`npm run test:e2e:server`)는 외부 제공사 없이 돌도록 dev 전용 `
 
 ## 아직 없는 것
 
-- Apple 로그인 실제 검증. 코드는 있으나 개발자 계정·키가 없어 돌려보지 못했습니다.
 - PAYMENT. 턴의 `charge_type`만 기록하고 차감·환급은 없습니다.
 - 대화 요약(compact). `chat_summaries` 테이블만 있고 요약 요청은 하지 않습니다.
 - PostHog·Langfuse. 이벤트는 메모리에만 남겨 미리보기 페이지에 보여줍니다. feature flag `adult_characters_visible`은 항상 `true`로 봅니다.

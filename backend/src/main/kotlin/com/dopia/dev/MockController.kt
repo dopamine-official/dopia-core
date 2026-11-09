@@ -57,7 +57,7 @@ class MockController(
         response: HttpServletResponse,
     ): AccountView {
         val provider =
-            body.provider?.takeIf { it == "google" || it == "apple" }
+            body.provider?.takeIf { it == "google" }
                 ?: throw ApiException.invalidInput(FieldError("provider", "invalid"))
         if (identity.isMember) return accounts.me(identity, locale.region)
         val profile = AccountService.ProviderProfile(provider, "mock-$provider", null, null)

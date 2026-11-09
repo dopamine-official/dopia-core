@@ -387,7 +387,7 @@ class AccountService(
                 val memberId =
                     existing?.id ?: run {
                         isNewMember = true
-                        val id = accounts.insertMember(uniqueNickname(profile.name ?: defaultName(profile.provider)), profile.email)
+                        val id = accounts.insertMember(uniqueNickname(profile.name ?: DEFAULT_NAME), profile.email)
                         accounts.upsertIdentity(profile.provider, profile.subject, id)
                         id
                     }
@@ -437,8 +437,6 @@ class AccountService(
         }
         return memberId
     }
-
-    private fun defaultName(provider: String) = if (provider == "google") "Google Explorer" else "Apple Explorer"
 
     private fun uniqueNickname(base: String): String {
         var candidate = base.filterNot { it.isISOControl() }.trim().ifEmpty { "Explorer" }
@@ -494,6 +492,7 @@ class AccountService(
 
     companion object {
         const val BIRTH_DATE_ONLY = "birth_date_only"
+        const val DEFAULT_NAME = "Google Explorer"
         val GENDERS = setOf("male", "female")
         val EARLIEST_BIRTH_DATE: LocalDate = LocalDate.of(1900, 1, 1)
     }

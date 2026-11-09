@@ -111,7 +111,7 @@ test("coming back from the provider: failed, cancelled, succeeded", async ({
 }) => {
   await home(page);
   await leaveNote(page, {
-    provider: "apple",
+    provider: "google",
     trigger: "safe_toggle",
     page: "chat_room",
   });
@@ -123,7 +123,7 @@ test("coming back from the provider: failed, cancelled, succeeded", async ({
   });
   // On the screen the modal was opened from, not the one it reopened on.
   await sent(analytics, "login_failed", {
-    provider: "apple",
+    provider: "google",
     trigger: "safe_toggle",
     page: "chat_room",
   });
@@ -150,10 +150,10 @@ test("coming back from the provider: failed, cancelled, succeeded", async ({
 
   await google(page).click();
   await sent(analytics, "login_succeeded", { trigger: "members_only" });
-  await leaveNote(page, { provider: "apple", trigger: "login_button" });
+  await leaveNote(page, { provider: "google", trigger: "login_button" });
   await page.goto("/");
   await sent(analytics, "login_succeeded", {
-    provider: "apple",
+    provider: "google",
     trigger: "login_button",
     page: "home",
   });
@@ -201,12 +201,15 @@ test("a login that returns to My Page is recorded before the screen's view", asy
   ).toBeVisible();
   // Opened on home for My Page; the provider returns to My Page.
   await leaveNote(page, {
-    provider: "apple",
+    provider: "google",
     trigger: "members_only",
     page: "home",
   });
   await page.goto("/me");
-  await sent(analytics, "login_succeeded", { provider: "apple", page: "home" });
+  await sent(analytics, "login_succeeded", {
+    provider: "google",
+    page: "home",
+  });
   await sent(analytics, "me_viewed");
   const order = analytics.map((item) => item.event);
   const succeeded = order.findLastIndex((event) => event === "login_succeeded");

@@ -14,7 +14,6 @@ import {
   settle,
   startTurn,
   updateAdultMode,
-  updateProfile,
 } from "@/mocks/engine";
 import { sendSchema } from "@/lib/contracts";
 
@@ -192,28 +191,19 @@ describe("account and conversation contracts", () => {
     );
     expect(ownedRoom(state, secondRoom).owner_id).toBe(user.account_id);
   });
-  it("keeps Google and Apple independent and denies another account’s rooms", () => {
+  it("denies the next guest the member's rooms after logout", () => {
     const { state, roomId } = setup();
     const google = login(state, "google");
     logout(state);
-    const apple = login(state, "apple");
-    expect(google.account_id).not.toBe(apple.account_id);
+    expect(account(state).account_id).not.toBe(google.account_id);
     expect(() => ownedRoom(state, roomId)).toThrow("room_not_found");
     expect(recent(state, "ko-KR").chats).toEqual([]);
-    expect(() => updateProfile(state, { nickname: google.nickname! })).toThrow(
-      "nickname_taken",
-    );
   });
-  it("deletes only the withdrawing member and creates a new identity on rejoin", () => {
+  it("creates a new identity when a withdrawn member joins again", () => {
     const { state } = setup();
     const google = login(state, "google");
-    logout(state);
-    const apple = login(state, "apple");
     logout(state, true);
-    expect(
-      state.accounts.some((value) => value.account_id === google.account_id),
-    ).toBe(true);
-    expect(login(state, "apple").account_id).not.toBe(apple.account_id);
+    expect(login(state, "google").account_id).not.toBe(google.account_id);
     expect(recent(state, "ko-KR").chats).toEqual([]);
   });
   it("soft deletion blocks new turns while already accepted work finishes", () => {

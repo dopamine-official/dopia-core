@@ -11,7 +11,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -43,7 +42,7 @@ class AuthController(
             return redirect(HttpStatus.FOUND, oauth.loginModalUrl(returnTo, failed = true))
         }
         val state = oauth.newState(provider, returnTo, current?.id)
-        cookies.setLoginState(response, oauth.sign(state), sameSiteNone = provider == "apple")
+        cookies.setLoginState(response, oauth.sign(state))
         return redirect(HttpStatus.FOUND, oauth.authorizeUrl(provider, state.state))
     }
 
@@ -54,29 +53,18 @@ class AuthController(
         @RequestParam(required = false) error: String?,
         request: HttpServletRequest,
         response: HttpServletResponse,
-    ): ResponseEntity<Void> = callback("google", code, state, error, null, request, response, HttpStatus.FOUND)
-
-    @PostMapping("/apple/callback", consumes = ["application/x-www-form-urlencoded"])
-    fun appleCallback(
-        @RequestParam(required = false) code: String?,
-        @RequestParam(required = false) state: String?,
-        @RequestParam(required = false) error: String?,
-        @RequestParam(required = false) user: String?,
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-    ): ResponseEntity<Void> = callback("apple", code, state, error, user, request, response, HttpStatus.SEE_OTHER)
+    ): ResponseEntity<Void> = callback("google", code, state, error, request, response, HttpStatus.FOUND)
 
     private fun callback(
         provider: String,
         code: String?,
         state: String?,
         error: String?,
-        user: String?,
         request: HttpServletRequest,
         response: HttpServletResponse,
         status: HttpStatus,
     ): ResponseEntity<Void> {
-        cookies.clearLoginState(response, sameSiteNone = provider == "apple")
+        cookies.clearLoginState(response)
         // Recorded under the guest that started the login; with no guest there is no one to record.
         val visitor = { guest: java.util.UUID? -> guest ?: accounts.identifyOrNull(request)?.id }
         val saved =
@@ -98,7 +86,7 @@ class AuthController(
             if (state != saved.state) throw LoginFailed("state mismatch")
             stage = "token_invalid"
             if (code.isNullOrBlank()) throw LoginFailed("code missing")
-            val profile = oauth.exchange(provider, code, user)
+            val profile = oauth.exchange(provider, code)
             stage = "transaction_failed"
             accounts.completeLogin(profile, saved.guestAccountId, response)
         } catch (failure: Exception) {

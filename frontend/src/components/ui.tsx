@@ -292,16 +292,6 @@ function LoginOptions({
           </b>
           {t("account.login.google")}
         </button>
-        <button
-          className="button provider apple"
-          disabled={!!busy}
-          onClick={() => void signIn("apple")}
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17.1 12.3c0-2 1.6-3 1.7-3.1-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-2.9-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.7-.4 6.8 1.1 9 .7 1.1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.9-.7s1.8.7 3 .7 2-1 2.7-2.1c.8-1.2 1.2-2.4 1.2-2.5-.1 0-2.1-.8-2.1-3.9ZM14.9 6.1c.6-.8 1.1-1.8 1-2.9-1 .1-2.1.7-2.8 1.4-.6.7-1.2 1.8-1 2.8 1 .1 2.1-.5 2.8-1.3Z" />
-          </svg>
-          {t("account.login.apple")}
-        </button>
       </div>
       {error && (
         <p className="inline_error" role="alert">

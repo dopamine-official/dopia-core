@@ -16,7 +16,7 @@ from chat_ai.llm.adapters.gemini import GeminiAdapter
 from chat_ai.llm.client import iterate_within
 from chat_ai.llm.types import Done, LlmError, LlmRequest, TextChunk
 from chat_ai.prompt.assembler import AssembledPrompt, Message
-from chat_ai.settings import Route, Settings
+from chat_ai.settings import Route, Settings, SettingsError
 
 PROMPT = AssembledPrompt(
     prompt_version="v",
@@ -254,5 +254,10 @@ def test_invalid_route_params_stop_the_server_at_startup(tmp_path: Path) -> None
         )
 
     assert set(build_adapters(settings({"temperature": 0.7, "thinking_config": {"thinking_budget": 0}}))) == {"gemini"}
-    with pytest.raises(ValueError, match="route chat_general has invalid params"):
-        build_adapters(settings({"temprature": 0.7}))
+    with pytest.raises(SettingsError) as info:
+        build_adapters(settings({"temprature": 0.7, "thinking_config": {"thinking_budget": "many"}}))
+    message = str(info.value)
+    # One short line per mistake, naming the route and the key.
+    assert "routes.chat_general.params.temprature (Extra inputs are not permitted) in models.yaml" in message
+    assert "routes.chat_general.params.thinking_config.thinking_budget (" in message
+    assert "\n" not in message and "pydantic" not in message

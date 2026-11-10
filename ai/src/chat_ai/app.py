@@ -45,17 +45,16 @@ def create_app(
     errors: ErrorReporter | None = None,
 ) -> FastAPI:
     """Builds the app. Settings load at import for the real server; tests pass everything in."""
-    if settings is None:
-        try:
-            settings = load_settings()
-        except SettingsError as e:
-            logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-            log.error("startup refused: %s", e)
-            sys.exit(2)
+    try:
+        resolved_settings: Settings = settings if settings is not None else load_settings()
+        resolved_adapters = adapters if adapters is not None else build_adapters(resolved_settings)
+    except SettingsError as e:
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+        log.error("startup refused: %s", e)
+        sys.exit(2)
 
-    resolved_settings: Settings = settings
     assembler = PromptAssembler(resolved_settings.prompt_dir)
-    llm = LlmClient(resolved_settings.routes, adapters if adapters is not None else build_adapters(resolved_settings))
+    llm = LlmClient(resolved_settings.routes, resolved_adapters)
 
     # One PostHog client for AI call records and error reports, closed once at shutdown.
     client = (

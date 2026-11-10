@@ -13,6 +13,7 @@ from typing import Any
 import httpx2
 from google import genai
 from google.genai import errors, types
+from pydantic import ValidationError
 
 from chat_ai.llm.types import (
     PROVIDER_ERROR,
@@ -145,12 +146,13 @@ class GeminiAdapter:
         self._client = genai.Client(api_key=api_key, http_options=options)
 
     @staticmethod
-    def validate_params(params: dict[str, Any]) -> None:
-        """Raises ValueError when the route params are not GenerateContentConfig fields."""
+    def invalid_params(params: dict[str, Any]) -> list[str]:
+        """One short line per route param that is not a valid GenerateContentConfig field."""
         try:
             types.GenerateContentConfig.model_validate(params)
-        except Exception as exc:
-            raise ValueError(str(exc)) from exc
+        except ValidationError as exc:
+            return [f"params.{'.'.join(map(str, e['loc']))} ({e['msg']})" for e in exc.errors()]
+        return []
 
     def _kwargs(self, request: LlmRequest) -> dict[str, Any]:
         roles = {"assistant": "model"}

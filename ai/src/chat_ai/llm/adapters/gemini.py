@@ -137,7 +137,8 @@ class GeminiAdapter:
     name = "gemini"
 
     def __init__(self, api_key: str, base_url: str | None = None, http_client: Any = None) -> None:
-        self._http = http_client if http_client is not None else httpx2.AsyncClient()
+        # Follows redirects like the client the SDK would have made itself.
+        self._http = http_client if http_client is not None else httpx2.AsyncClient(follow_redirects=True)
         self._http.event_hooks["response"].append(_remember_response)
         # The SDK does not retry unless retry options are given: a failure goes straight back (6-1 5).
         options = types.HttpOptions(base_url=base_url, httpx_async_client=self._http)
@@ -180,6 +181,9 @@ class GeminiAdapter:
                 # Stops the provider's generation right away when the consumer left before the end.
                 for response in opened:
                     await response.aclose()
+                # The call is over: later calls in this task must not pile their responses up here.
+                opened.clear()
+                _open_responses.set(None)
         except LlmError:
             raise
         except Exception as exc:

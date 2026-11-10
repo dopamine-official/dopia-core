@@ -224,6 +224,16 @@ async def test_stream_is_closed_when_the_time_limit_cancels_it() -> None:
     assert closed == ["call-0"]
 
 
+async def test_responses_are_not_kept_after_the_call_ends() -> None:
+    from chat_ai.llm.adapters import gemini
+
+    stream = Endpoint(_sse(_chunk("a", "STOP")))
+    await _collect(stream.adapter(), _request())
+    assert gemini._open_responses.get() is None
+    await Endpoint(httpx2.Response(200, json=_chunk("b", "STOP"))).adapter().complete(_request())
+    assert gemini._open_responses.get() is None
+
+
 def test_invalid_route_params_stop_the_server_at_startup(tmp_path: Path) -> None:
     def settings(params: dict[str, Any]) -> Settings:
         route = Route(

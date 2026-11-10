@@ -181,7 +181,16 @@ class ChatRepository(
             .query(message)
             .list()
 
-    /** Messages after the given seq whose turn is not failed, in order. */
+    /** The room's first message (no turn): the prologue sent to the AI apart from the history. */
+    fun prologueOf(roomId: UUID): String =
+        jdbc
+            .sql("SELECT content FROM chat_messages WHERE room_id = :room AND turn_id IS NULL ORDER BY seq LIMIT 1")
+            .param("room", roomId)
+            .query(String::class.java)
+            .optional()
+            .orElse("")
+
+    /** Turn messages after the given seq whose turn is completed, in order. The first message is not one. */
     fun historyAfter(
         roomId: UUID,
         afterSeq: Int,
@@ -190,7 +199,7 @@ class ChatRepository(
         jdbc
             .sql(
                 "$messageSelect WHERE m.room_id = :room AND m.seq > :after AND m.seq < :before " +
-                    "AND (t.status IS NULL OR t.status = 'completed') ORDER BY m.seq",
+                    "AND t.status = 'completed' ORDER BY m.seq",
             ).param("room", roomId)
             .param("after", afterSeq)
             .param("before", beforeSeq)

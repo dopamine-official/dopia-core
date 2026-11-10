@@ -12,6 +12,7 @@ class ChatTurnInput:
     request_id: str
     account_id: str
     character: dict[str, str]  # name, gender, personality, speech_style, world_setting
+    prologue: str  # the room's first message; never part of history
     history: list[Message]
     summary: str
     user_input: str

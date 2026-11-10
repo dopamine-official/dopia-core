@@ -134,7 +134,8 @@ class ServerEventsTest(
         assertEquals(room, completed["room_id"])
         assertEquals("credit", completed["charge_type"])
         assertEquals(false, completed["has_summary"])
-        assertEquals(1, completed["history_count"])
+        // The first message is the prologue, not history: nothing was exchanged before this turn.
+        assertEquals(0, completed["history_count"])
         assertNotNull(completed["ai_request_id"])
         assertTrue((completed["assistant_message_length"] as Int) > 0)
 

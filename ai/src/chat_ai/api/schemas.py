@@ -31,6 +31,7 @@ class ChatGeneration(BaseModel):
 class ChatTurnRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     character: Character
+    prologue: StrictStr | None = None
     history: list[HistoryItem] = []
     summary: StrictStr | None = None
     user_input: StrictStr

@@ -73,6 +73,7 @@ def chat_body(**overrides: Any) -> dict[str, Any]:
             "world_setting": "a small bookshop in Taipei",
             "is_adult": False,
         },
+        "prologue": "*She looks up from the counter.* You came.",
         "history": [
             {"role": "user", "content": "hello"},
             {"role": "assistant", "content": "hey"},

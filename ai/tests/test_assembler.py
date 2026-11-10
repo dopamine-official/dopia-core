@@ -29,7 +29,8 @@ def test_parse_template_requires_system_section() -> None:
 
 def test_assembler_versions_come_from_frontmatter(tmp_path: Path) -> None:
     (tmp_path / "chat.md").write_text(
-        "---\nversion: chat_v2\n---\n<!-- system -->\n{{name}} {{locale}} {{is_adult}} {{summary}}",
+        "---\nversion: chat_v2\n---\n<!-- system -->\n"
+        "{{name}} {{locale}} {{is_adult}} {{summary}}\n{{#prologue}}P:{{prologue}}{{/prologue}}",
         encoding="utf-8",
     )
     (tmp_path / "compact.md").write_text(
@@ -39,6 +40,7 @@ def test_assembler_versions_come_from_frontmatter(tmp_path: Path) -> None:
     assert assembler.version("chat") == "chat_v2"
     prompt = assembler.chat(
         character={"name": "N", "gender": "g", "personality": "p", "speech_style": "s", "world_setting": "w"},
+        prologue="",
         history=[],
         summary="",
         user_input="hi",
@@ -46,6 +48,13 @@ def test_assembler_versions_come_from_frontmatter(tmp_path: Path) -> None:
         is_adult=True,
     )
     assert prompt.prompt_version == "chat_v2" and prompt.system == "N ko-KR\n"
+    character = {"name": "N", "gender": "g", "personality": "p", "speech_style": "s", "world_setting": "w"}
+    opened = assembler.chat(
+        character=character, prologue="once", history=[], summary="", user_input="hi", locale="ko-KR", is_adult=True
+    )
+    # The prologue goes into the system prompt only; the messages start with the user.
+    assert opened.system == "N ko-KR  \nP:once\n"
+    assert [(m.role, m.content) for m in opened.messages] == [("user", "hi")]
     (tmp_path / "chat.md").write_text("---\ntitle: no version\n---\n<!-- system -->\nS", encoding="utf-8")
     with pytest.raises(TemplateError, match="no version"):
         PromptAssembler(tmp_path)

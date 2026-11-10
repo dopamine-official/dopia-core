@@ -5,6 +5,7 @@ import com.dopia.common.AppEvents
 import com.dopia.common.ConsentItem
 import com.dopia.common.Cookies
 import com.dopia.common.FieldError
+import com.dopia.common.I18n
 import com.dopia.common.Identity
 import com.dopia.common.RegionConfig
 import com.dopia.common.Tokens
@@ -64,6 +65,7 @@ class AccountService(
     private val properties: AppProperties,
     private val storage: PhotoStorage,
     private val events: AppEvents,
+    private val i18n: I18n,
 ) {
     private val log = LoggerFactory.getLogger(AccountService::class.java)
     private val headerAccount = "X-Preview-Account"
@@ -165,10 +167,20 @@ class AccountService(
         if (region.consentItems.any { it.required && it.id !in given }) {
             throw ApiException.invalidInput(FieldError("items", "required_missing"))
         }
-        tx.execute {
-            // Serialized with the login copying this guest's consents: none is left behind.
-            if (identity.isGuest) accounts.lock(identity.accountId)
-            items.distinct().forEach { (id, version) -> accounts.insertConsent(identity.accountId, id, version) }
+        val recorded =
+            tx.execute {
+                // Serialized with the login copying this guest's consents: none is left behind.
+                if (identity.isGuest) accounts.lock(identity.accountId)
+                items.distinct().filter { (id, version) -> accounts.insertConsent(identity.accountId, id, version) }.map { it.first }
+            }!!
+        // Agreeing again to what is already recorded is no new consent (TRACKING-PLAN 8-1-9).
+        if (recorded.isNotEmpty()) {
+            events.record(
+                identity.accountId,
+                "server_consents_recorded",
+                mapOf("items" to recorded, "is_guest" to identity.isGuest),
+                person(identity.accountId, region),
+            )
         }
         return me(identity, region)
     }
@@ -205,7 +217,8 @@ class AccountService(
             }
         if (birth == null || birth.isBefore(EARLIEST_BIRTH_DATE) || birth.isAfter(today)) errors += FieldError("birth_date", "invalid")
         if (errors.isNotEmpty()) throw ApiException.invalidInput(*errors.toTypedArray())
-        val verified = Period.between(birth!!, today).years >= adultAge
+        val age = Period.between(birth!!, today).years
+        val verified = age >= adultAge
         val stored = tx.execute { accounts.submitAdultVerification(identity.accountId, gender!!, birth, verified) }!!
         if (!stored) {
             throw ApiException(
@@ -214,6 +227,14 @@ class AccountService(
                 message = "adult verification was already submitted",
             )
         }
+        events.record(
+            identity.accountId,
+            "server_adult_verification_submitted",
+            mapOf("result" to if (verified) "passed" else "rejected", "gender" to gender, "age" to age),
+            person(identity.accountId, region),
+        )
+        // Passing turns adult mode on in the same update (TRACKING-PLAN 8-1-8).
+        if (verified) events.record(identity.accountId, "server_safe_mode_changed", mapOf("adult_mode" to true))
         return me(identity, region)
     }
 
@@ -396,9 +417,31 @@ class AccountService(
                 "is_new_member" to isNewMember,
                 "had_guest" to hadGuest,
             ),
+            // The browser redirect carries no region: the deployment's default one.
+            person(memberId, i18n.region(null)),
         )
         if (guestAccountId != null) events.alias(guestAccountId, memberId)
         return memberId
+    }
+
+    /**
+     * PostHog person properties from the DB (TRACKING-PLAN 8-4): agreed versions, the adult
+     * verification result, gender and age. Never the birth date.
+     */
+    private fun person(
+        accountId: UUID,
+        region: RegionConfig,
+    ): Map<String, Any> {
+        val values = mutableMapOf<String, Any>()
+        accounts.agreedVersions(accountId).forEach { (id, version) -> values["consent_${id}_version"] = version }
+        values["adult_verified"] = false
+        accounts.verification(accountId)?.let { (gender, birth, passed) ->
+            values["adult_verification_result"] = if (passed) "passed" else "rejected"
+            values["adult_verified"] = passed
+            values["gender"] = gender
+            region.timeZone?.let { values["age"] = Period.between(birth, LocalDate.now(it)).years }
+        }
+        return values
     }
 
     private fun uniqueNickname(base: String): String {

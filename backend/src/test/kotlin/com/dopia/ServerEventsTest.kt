@@ -18,8 +18,12 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.time.LocalDate
+import java.time.Period
+import java.time.ZoneId
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -250,5 +254,65 @@ class ServerEventsTest(
         assertEquals("worker_lost", failed["error_code"])
         assertEquals(room, failed["room_id"])
         assertEquals(2, failed["user_message_length"])
+    }
+
+    @Test
+    fun `consent and adult verification events set the person properties`() {
+        val browser = Browser()
+        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
+        val consented = only(guest, "server_consents_recorded")
+        assertEquals(listOf("terms", "privacy"), consented.properties["items"])
+        assertEquals(true, consented.properties["is_guest"])
+        assertEquals("2026-11-10", consented.person["consent_terms_version"])
+        assertEquals("2026-11-10", consented.person["consent_privacy_version"])
+        assertEquals(false, consented.person["adult_verified"])
+        assertFalse("gender" in consented.person || "age" in consented.person)
+        // Agreeing again records nothing new.
+        browser.json(
+            "POST",
+            "/account/me/consents",
+            """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+        )
+        only(guest, "server_consents_recorded")
+
+        val (member, token) = accounts.loginFresh(UUID.fromString(guest))
+        browser.session = token
+        // The guest's consents were copied: the member's person has them from the login on.
+        assertEquals("2026-11-10", only(member, "server_login_succeeded").person["consent_terms_version"])
+
+        val birth = LocalDate.of(1990, 5, 5)
+        browser.json("POST", "/account/me/adult_verification", """{"gender":"male","birth_date":"$birth"}""")
+        val age = Period.between(birth, LocalDate.now(ZoneId.of("Asia/Taipei"))).years
+        val submitted = only(member, "server_adult_verification_submitted")
+        assertEquals(mapOf("result" to "passed", "gender" to "male", "age" to age), submitted.properties)
+        assertEquals(
+            mapOf(
+                "consent_terms_version" to "2026-11-10",
+                "consent_privacy_version" to "2026-11-10",
+                "adult_verification_result" to "passed",
+                "adult_verified" to true,
+                "gender" to "male",
+                "age" to age,
+            ),
+            submitted.person,
+        )
+        // Passing turned adult mode on.
+        assertEquals(true, only(member, "server_safe_mode_changed").properties["adult_mode"])
+
+        val young = Browser()
+        val minor = young.login()
+        val underage = LocalDate.now(ZoneId.of("Asia/Taipei")).minusYears(17)
+        young.json("POST", "/account/me/adult_verification", """{"gender":"female","birth_date":"$underage"}""")
+        val rejected = only(minor, "server_adult_verification_submitted")
+        assertEquals("rejected", rejected.properties["result"])
+        assertEquals("rejected", rejected.person["adult_verification_result"])
+        assertEquals(false, rejected.person["adult_verified"])
+        assertTrue(named(minor, "server_safe_mode_changed").isEmpty())
+        // A second submission is refused and records nothing.
+        assertEquals(
+            409,
+            young.call("POST", "/account/me/adult_verification", """{"gender":"female","birth_date":"1990-01-01"}""").statusCode(),
+        )
+        only(minor, "server_adult_verification_submitted")
     }
 }

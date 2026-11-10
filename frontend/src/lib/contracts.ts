@@ -94,7 +94,7 @@ export const eventsSchema = z.array(
     account_id: z.string(),
     properties: z.record(
       z.string(),
-      z.union([z.string(), z.number(), z.boolean()]),
+      z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]),
     ),
   }),
 );

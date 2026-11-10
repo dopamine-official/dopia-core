@@ -268,6 +268,8 @@ export const handlers = [
   http.post(
     "/api/v1/chats/open",
     guarded(async (req) => {
+      // Like the server: who may chat is checked before the body.
+      await run(req, (state) => engine.chatter(state));
       const { character_id } = z
         .object({ character_id: z.uuid() })
         .parse(await req.json());
@@ -321,6 +323,8 @@ export const handlers = [
   http.post(
     "/api/v1/chats/:room_id/messages",
     guarded(async (req, params) => {
+      // Like the server: who may chat is checked before the body.
+      await run(req, (state) => engine.chatter(state));
       const input = sendSchema.parse(await req.json());
       const roomId = String(params.room_id);
       const turn = await run(req, (state) =>

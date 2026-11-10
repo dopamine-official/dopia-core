@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { expect, signIn, test } from "./fixtures";
 
 async function home(page: Page) {
   await page.goto("/");
@@ -55,6 +55,7 @@ test("all cards lock during opening and recent navigation supersedes a late resp
   isMobile,
 }) => {
   await home(page);
+  await signIn(page);
   await page
     .getByRole("button", { name: "겨울 대화 시작", exact: true })
     .click();

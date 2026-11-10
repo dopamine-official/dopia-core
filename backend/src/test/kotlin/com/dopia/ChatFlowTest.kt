@@ -1,6 +1,8 @@
 package com.dopia
 
+import com.dopia.account.AccountService
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
@@ -24,6 +26,7 @@ import kotlin.test.assertTrue
 @ActiveProfiles("dev")
 class ChatFlowTest(
     @LocalServerPort private val port: Int,
+    @Autowired private val accounts: AccountService,
 ) {
     private val mapper = ObjectMapper()
     private val winter = "3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d"
@@ -31,6 +34,17 @@ class ChatFlowTest(
     /** One browser: its own cookie jar. */
     private inner class Browser {
         private val client = HttpClient.newBuilder().cookieHandler(CookieManager()).build()
+
+        /** Session set outside HTTP: the login transaction runs in-process. */
+        var session: String? = null
+
+        /** A new guest (agreed to the terms) logged in as a fresh member of its own. */
+        fun login(): String {
+            val guest = json("POST", "/account/guest").get("account_id").asString()
+            val (member, token) = accounts.loginFresh(UUID.fromString(guest))
+            session = token
+            return member
+        }
 
         fun call(
             method: String,
@@ -43,6 +57,7 @@ class ChatFlowTest(
                 HttpRequest
                     .newBuilder(URI("http://127.0.0.1:$port/api/v1$path"))
                     .header("X-Locale", locale)
+                    .apply { session?.let { header("Cookie", "session=$it") } }
                     .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
                     .apply { if (body != null) header("Content-Type", type) }
                     .build()
@@ -79,7 +94,7 @@ class ChatFlowTest(
     ): HttpResponse<String> = browser.call("POST", "/chats/$room/messages", """{"content":"$content","client_message_id":"$clientId"}""")
 
     @Test
-    fun `guest chats, logs in and keeps the room, idempotent resend replays the reply`() {
+    fun `a guest browses but cannot chat, a member chats and an idempotent resend replays the reply`() {
         val browser = Browser()
         val guest = browser.json("POST", "/account/guest")
         val guestId = guest.get("account_id").asString()
@@ -106,9 +121,18 @@ class ChatFlowTest(
                 .asString(),
         )
 
+        // Chat is for members: no room for a guest, and a guest has no rooms to list.
+        val refused = browser.call("POST", "/chats/open", """{"character_id":"$winter"}""")
+        assertEquals(403, refused.statusCode())
+        assertEquals("member_required", mapper.readTree(refused.body()).get("code").asString())
+        assertEquals(0, browser.json("GET", "/chats/recent").get("chats").size())
+
+        val member = browser.login()
+        assertEquals(false, browser.json("GET", "/account/me").get("is_guest").asBoolean())
+        assertNotEquals(guestId, member)
+
         val opened = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""")
         val room = opened.get("room_id").asString()
-        assertTrue(opened.get("created").asBoolean())
         assertEquals(room, browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString())
 
         val clientId = UUID.randomUUID().toString()
@@ -152,9 +176,6 @@ class ChatFlowTest(
                 .asString(),
         )
 
-        val member = browser.json("POST", "/mock/login", """{"provider":"google"}""")
-        assertEquals(false, member.get("is_guest").asBoolean())
-        assertNotEquals(guestId, member.get("account_id").asString())
         assertEquals(
             room,
             browser
@@ -168,7 +189,8 @@ class ChatFlowTest(
         // Multipart profile edits are covered by the web E2E suite.
 
         val loggedOut = browser.json("POST", "/account/logout")
-        assertNotEquals(member.get("account_id").asString(), loggedOut.get("account_id").asString())
+        browser.session = null
+        assertNotEquals(member, loggedOut.get("account_id").asString())
         assertEquals(404, browser.call("GET", "/chats/$room").statusCode())
         assertEquals(403, browser.call("POST", "/account/logout").statusCode())
     }
@@ -177,10 +199,12 @@ class ChatFlowTest(
     fun `unknown cookies are 401 and invalid ids are 422`() {
         val browser = Browser()
         assertEquals(401, browser.call("GET", "/account/me").statusCode())
-        browser.json("POST", "/account/guest")
+        browser.login()
         assertEquals(422, browser.call("POST", "/chats/open", """{"character_id":"nope"}""").statusCode())
         assertEquals(404, browser.call("POST", "/chats/open", """{"character_id":"${UUID.randomUUID()}"}""").statusCode())
         assertEquals(422, browser.call("DELETE", "/chats/not-a-uuid").statusCode())
+        browser.json("POST", "/account/logout")
+        browser.session = null
         val adult = browser.call("PATCH", "/account/me/adult_mode", """{"adult_mode":true}""")
         assertEquals(403, adult.statusCode())
         assertEquals("adult_verification_required", mapper.readTree(adult.body()).get("code").asString())
@@ -189,7 +213,7 @@ class ChatFlowTest(
     @Test
     fun `preview failure scenario stores a failed turn that the history exposes`() {
         val browser = Browser()
-        browser.json("POST", "/account/guest")
+        browser.login()
         val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
         browser.json("PUT", "/mock/scenario", """{"response":"fail","home":"normal"}""")
         val stream = send(browser, room, "실패")

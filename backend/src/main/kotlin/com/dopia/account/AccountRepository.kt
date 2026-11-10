@@ -17,8 +17,6 @@ data class AccountRow(
     val adultMode: Boolean,
     val adultVerifiedAt: Instant?,
     val birthDate: LocalDate?,
-    val mergeTargetAccountId: UUID?,
-    val mergedIntoAccountId: UUID?,
     val deletedAt: Instant?,
 )
 
@@ -27,8 +25,7 @@ class AccountRepository(
     private val jdbc: JdbcClient,
 ) {
     private val columns =
-        "id, is_guest, nickname, photo_url, adult_mode, adult_verified_at, birth_date, " +
-            "merge_target_account_id, merged_into_account_id, deleted_at"
+        "id, is_guest, nickname, photo_url, adult_mode, adult_verified_at, birth_date, deleted_at"
 
     private val account =
         RowMapper { rs: ResultSet, _: Int ->
@@ -40,8 +37,6 @@ class AccountRepository(
                 adultMode = rs.getBoolean("adult_mode"),
                 adultVerifiedAt = rs.getObject("adult_verified_at", OffsetDateTime::class.java)?.toInstant(),
                 birthDate = rs.getObject("birth_date", LocalDate::class.java),
-                mergeTargetAccountId = rs.getObject("merge_target_account_id", UUID::class.java),
-                mergedIntoAccountId = rs.getObject("merged_into_account_id", UUID::class.java),
                 deletedAt = rs.getObject("deleted_at", OffsetDateTime::class.java)?.toInstant(),
             )
         }
@@ -117,6 +112,11 @@ class AccountRepository(
         return id
     }
 
+    /** The guest's cookie identifies no one any more (login, ACCOUNT 4-1-4). */
+    fun deleteGuestIdentifier(accountId: UUID) {
+        jdbc.sql("DELETE FROM guest_identifiers WHERE account_id = :id").param("id", accountId).update()
+    }
+
     fun insertMember(
         nickname: String,
         email: String?,
@@ -167,7 +167,7 @@ class AccountRepository(
             .update() > 0
 
     /**
-     * Stores the one adult verification submission (4-1-8). Only a row without a birth date is
+     * Stores the one adult verification submission (4-1-7). Only a row without a birth date is
      * updated, so a second or concurrent submission changes nothing and returns false.
      */
     fun submitAdultVerification(
@@ -297,35 +297,4 @@ class AccountRepository(
             .param("to", to)
             .update()
     }
-
-    // Merge
-
-    fun setMergeTarget(
-        guestId: UUID,
-        memberId: UUID,
-    ) {
-        jdbc
-            .sql("UPDATE accounts SET merge_target_account_id = :member WHERE id = :guest")
-            .param("guest", guestId)
-            .param("member", memberId)
-            .update()
-    }
-
-    fun markMerged(
-        guestId: UUID,
-        memberId: UUID,
-    ) {
-        jdbc
-            .sql("UPDATE accounts SET merged_into_account_id = :member WHERE id = :guest")
-            .param("guest", guestId)
-            .param("member", memberId)
-            .update()
-    }
-
-    fun pendingMerges(): List<UUID> =
-        jdbc
-            .sql("SELECT id FROM accounts WHERE merge_target_account_id IS NOT NULL AND merged_into_account_id IS NULL")
-            .query(UUID::class.java)
-            .list()
-            .filterNotNull()
 }

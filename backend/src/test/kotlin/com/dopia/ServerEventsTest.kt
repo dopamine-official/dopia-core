@@ -40,6 +40,17 @@ class ServerEventsTest(
     private inner class Browser {
         private val client = HttpClient.newBuilder().cookieHandler(CookieManager()).build()
 
+        /** Session set outside HTTP: the login transaction runs in-process. */
+        var session: String? = null
+
+        /** A new guest (agreed to the terms) logged in as a fresh member of its own. */
+        fun login(): String {
+            val guest = json("POST", "/account/guest").get("account_id").asString()
+            val (member, token) = accounts.loginFresh(UUID.fromString(guest))
+            session = token
+            return member
+        }
+
         fun call(
             method: String,
             path: String,
@@ -50,6 +61,7 @@ class ServerEventsTest(
                 HttpRequest
                     .newBuilder(URI("http://127.0.0.1:$port/api/v1$path"))
                     .header("X-Locale", "ko-KR")
+                    .apply { session?.let { header("Cookie", "session=$it") } }
                     .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
                     .apply { if (body != null) header("Content-Type", type) }
                     .build()
@@ -91,20 +103,24 @@ class ServerEventsTest(
         return found.single()
     }
 
-    private fun mergedFrom(
-        member: String,
-        guest: String,
-    ): Map<String, Any?> = named(member, "server_merge_completed").single { it.properties["guest_account_id"] == guest }.properties
-
     @Test
     fun `account and chat events carry the planned properties`() {
         val browser = Browser()
         val guest = browser.json("POST", "/account/guest").get("account_id").asString()
         assertEquals("first_visit", only(guest, "server_guest_created").properties["reason"])
+        assertEquals(403, browser.call("POST", "/chats/open", """{"character_id":"$winter"}""").statusCode())
+        assertTrue(named(guest, "server_room_created").isEmpty())
+
+        val member = browser.login()
+        val login = only(member, "server_login_succeeded").properties
+        assertEquals("google", login["provider"])
+        assertEquals(true, login["is_new_member"])
+        assertEquals(true, login["had_guest"])
+        assertTrue("merge_scheduled" !in login, login.toString())
 
         val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
         browser.json("POST", "/chats/open", """{"character_id":"$winter"}""")
-        val created = only(guest, "server_room_created")
+        val created = only(member, "server_room_created")
         assertEquals(room, created.properties["room_id"])
         assertEquals(winter, created.properties["character_id"])
         assertEquals(false, created.properties["is_adult"])
@@ -112,49 +128,28 @@ class ServerEventsTest(
         val reply =
             browser.call("POST", "/chats/$room/messages", """{"content":"안녕 😀","client_message_id":"${UUID.randomUUID()}"}""")
         assertTrue(reply.body().contains("event:completed"), reply.body())
-        val completed = only(guest, "server_turn_completed").properties
+        val completed = only(member, "server_turn_completed").properties
         // Characters as people count them: the emoji is one.
         assertEquals(4, completed["user_message_length"])
         assertEquals(room, completed["room_id"])
-        assertEquals("free_turn", completed["charge_type"])
+        assertEquals("credit", completed["charge_type"])
         assertEquals(false, completed["has_summary"])
         assertEquals(1, completed["history_count"])
         assertNotNull(completed["ai_request_id"])
         assertTrue((completed["assistant_message_length"] as Int) > 0)
 
-        val member = browser.json("POST", "/mock/login", """{"provider":"google"}""").get("account_id").asString()
-        // Other tests log in as the same mock member: the newest is this login.
-        val login = named(member, "server_login_succeeded").first().properties
-        assertEquals("google", login["provider"])
-        assertEquals(true, login["had_guest"])
-        assertEquals(true, login["merge_scheduled"])
-        val merged = mergedFrom(member, guest)
-        assertEquals(1, merged["room_count"])
-        assertEquals(1, merged["attempt"])
-
-        // Other tests share this member: start from on, so turning it off is a change.
-        try {
-            jdbc
-                .sql(
-                    "UPDATE accounts SET gender = 'male', birth_date = DATE '1990-01-01', " +
-                        "adult_verified_at = coalesce(adult_verified_at, now()), adult_mode = true WHERE id = :id",
-                ).param("id", UUID.fromString(member))
-                .update()
-            val before = named(member, "server_safe_mode_changed").size
-            browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
-            assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
-            assertEquals(false, named(member, "server_safe_mode_changed").first().properties["adult_mode"])
-            // The same value again (a stale second tab) changes nothing.
-            browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
-            assertEquals(before + 1, named(member, "server_safe_mode_changed").size)
-        } finally {
-            // Back to unverified for the other tests that share this member, even on failure.
-            jdbc
-                .sql(
-                    "UPDATE accounts SET adult_mode = false, adult_verified_at = null, gender = null, birth_date = null WHERE id = :id",
-                ).param("id", UUID.fromString(member))
-                .update()
-        }
+        // Start from on, so turning it off is a change.
+        jdbc
+            .sql(
+                "UPDATE accounts SET gender = 'male', birth_date = DATE '1990-01-01', " +
+                    "adult_verified_at = now(), adult_mode = true WHERE id = :id",
+            ).param("id", UUID.fromString(member))
+            .update()
+        browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
+        assertEquals(false, only(member, "server_safe_mode_changed").properties["adult_mode"])
+        // The same value again (a stale second tab) changes nothing.
+        browser.json("PATCH", "/account/me/adult_mode", """{"adult_mode":false}""")
+        only(member, "server_safe_mode_changed")
 
         assertTrue(browser.call("DELETE", "/chats/$room").statusCode() in 200..299)
         val deleted = only(member, "server_room_deleted").properties
@@ -162,6 +157,7 @@ class ServerEventsTest(
         assertEquals(winter, deleted["character_id"])
 
         val next = browser.json("POST", "/account/logout").get("account_id").asString()
+        browser.session = null
         only(member, "server_logged_out")
         assertEquals("logout", only(next, "server_guest_created").properties["reason"])
     }
@@ -169,18 +165,18 @@ class ServerEventsTest(
     @Test
     fun `failed replies, refusals and withdrawal`() {
         val browser = Browser()
-        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
+        val member = browser.login()
         val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
         browser.json("PUT", "/mock/scenario", """{"response":"fail","home":"normal"}""")
         browser.call("POST", "/chats/$room/messages", """{"content":"실패","client_message_id":"${UUID.randomUUID()}"}""")
-        val failed = only(guest, "server_turn_failed").properties
+        val failed = only(member, "server_turn_failed").properties
         assertEquals("mock_response_failed", failed["error_code"])
         assertEquals("before_ai", failed["stage"])
         assertEquals(false, failed["refunded"])
         assertEquals(2, failed["user_message_length"])
 
-        val member = browser.json("POST", "/mock/login", """{"provider":"google"}""").get("account_id").asString()
         val next = browser.json("POST", "/account/withdraw").get("account_id").asString()
+        browser.session = null
         assertEquals(0L, only(member, "server_withdrawn").properties["days_since_created"])
         assertEquals("withdraw", only(next, "server_guest_created").properties["reason"])
     }
@@ -188,7 +184,7 @@ class ServerEventsTest(
     @Test
     fun `a send while a reply is being generated is refused`() {
         val browser = Browser()
-        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
+        val member = browser.login()
         val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
         val first =
             java.util.concurrent.CompletableFuture.supplyAsync {
@@ -198,7 +194,7 @@ class ServerEventsTest(
         val second = browser.call("POST", "/chats/$room/messages", """{"content":"둘","client_message_id":"${UUID.randomUUID()}"}""")
         assertEquals(409, second.statusCode())
         first.get()
-        val refused = only(guest, "server_turn_rejected").properties
+        val refused = only(member, "server_turn_rejected").properties
         assertEquals("generation_in_progress", refused["code"])
         assertEquals(room, refused["room_id"])
         assertEquals(winter, refused["character_id"])
@@ -207,11 +203,11 @@ class ServerEventsTest(
     @Test
     fun `the preview event list reads every event, unknown values left out`() {
         val browser = Browser()
-        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
+        val member = browser.login()
         val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
         browser.call("POST", "/chats/$room/messages", """{"content":"안녕","client_message_id":"${UUID.randomUUID()}"}""")
         // The stub reports no token counts: left out instead of null.
-        val completed = only(guest, "server_turn_completed").properties
+        val completed = only(member, "server_turn_completed").properties
         assertTrue("input_token_count" !in completed && "output_token_count" !in completed, completed.toString())
         val listed = browser.json("GET", "/mock/events")
         assertTrue(listed.any { it.get("name").asString() == "server_turn_completed" })
@@ -233,48 +229,9 @@ class ServerEventsTest(
     }
 
     @Test
-    fun `a guest cookie already gone to a member gets a new guest, blocked`() {
-        val first = HttpClient.newHttpClient()
-        val issued =
-            first.send(
-                HttpRequest
-                    .newBuilder(URI("http://127.0.0.1:$port/api/v1/account/guest"))
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build(),
-                HttpResponse.BodyHandlers.ofString(),
-            )
-        val cookie =
-            issued
-                .headers()
-                .allValues("set-cookie")
-                .first { it.startsWith("guest_id=") }
-                .substringBefore(';')
-
-        fun withCookie(
-            method: String,
-            path: String,
-            body: String?,
-        ): HttpResponse<String> =
-            first.send(
-                HttpRequest
-                    .newBuilder(URI("http://127.0.0.1:$port/api/v1$path"))
-                    .header("Cookie", cookie)
-                    .header("Content-Type", "application/json")
-                    .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody())
-                    .build(),
-                HttpResponse.BodyHandlers.ofString(),
-            )
-        assertEquals(200, withCookie("POST", "/mock/login", """{"provider":"google"}""").statusCode())
-        // The same guest cookie again, without the member's session.
-        val again = withCookie("POST", "/account/guest", null)
-        val next = mapper.readTree(again.body()).get("account_id").asString()
-        assertEquals("merged_guest_blocked", only(next, "server_guest_created").properties["reason"])
-    }
-
-    @Test
     fun `a reply whose worker went silent is failed as worker_lost`() {
         val browser = Browser()
-        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
+        val member = browser.login()
         val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
         browser.json("PUT", "/mock/scenario", """{"response":"slow","home":"normal"}""")
         val sending =
@@ -288,58 +245,10 @@ class ServerEventsTest(
             .update()
         chat.recoverLostTurns()
         sending.get()
-        val failed = only(guest, "server_turn_failed").properties
+        val failed = only(member, "server_turn_failed").properties
         assertEquals("worker_lost", failed["stage"])
         assertEquals("worker_lost", failed["error_code"])
         assertEquals(room, failed["room_id"])
         assertEquals(2, failed["user_message_length"])
-    }
-
-    @Test
-    fun `a merge counts only the rooms the guest still has`() {
-        val browser = Browser()
-        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
-        val gone = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
-        assertTrue(browser.call("DELETE", "/chats/$gone").statusCode() in 200..299)
-        val kept = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
-        assertTrue(kept != gone)
-        val member = browser.json("POST", "/mock/login", """{"provider":"google"}""").get("account_id").asString()
-        assertEquals(1, mergedFrom(member, guest)["room_count"])
-    }
-
-    @Test
-    fun `a merge that fails is recorded per attempt, then completes`() {
-        val browser = Browser()
-        val guest = browser.json("POST", "/account/guest").get("account_id").asString()
-        browser.json("POST", "/chats/open", """{"character_id":"$winter"}""")
-        // Moving this guest's rooms fails until the trigger is dropped.
-        jdbc
-            .sql(
-                """
-            CREATE OR REPLACE FUNCTION test_block_transfer() RETURNS trigger AS $$
-            BEGIN
-              IF OLD.owner_account_id = '$guest'::uuid THEN RAISE EXCEPTION 'blocked for test'; END IF;
-              RETURN NEW;
-            END $$ LANGUAGE plpgsql
-            """,
-            ).update()
-        jdbc.sql("CREATE TRIGGER test_block BEFORE UPDATE ON chat_rooms FOR EACH ROW EXECUTE FUNCTION test_block_transfer()").update()
-        try {
-            val member = browser.json("POST", "/mock/login", """{"provider":"google"}""").get("account_id").asString()
-            runCatching { accounts.merge(UUID.fromString(guest)) }
-            val failures = named(member, "server_merge_failed").filter { it.properties["guest_account_id"] == guest }
-            assertTrue(failures.size >= 2, failures.toString())
-            assertEquals(listOf(1, 2), failures.reversed().take(2).map { it.properties["attempt"] })
-            jdbc.sql("DROP TRIGGER test_block ON chat_rooms").update()
-            accounts.merge(UUID.fromString(guest))
-            val completed = mergedFrom(member, guest)
-            // Counted after the fact: the scheduled retry may have added a failed attempt meanwhile.
-            val allFailures = named(member, "server_merge_failed").count { it.properties["guest_account_id"] == guest }
-            assertEquals(allFailures + 1, completed["attempt"])
-            assertEquals(1, completed["room_count"])
-        } finally {
-            jdbc.sql("DROP TRIGGER IF EXISTS test_block ON chat_rooms").update()
-            jdbc.sql("DROP FUNCTION IF EXISTS test_block_transfer()").update()
-        }
     }
 }

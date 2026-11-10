@@ -1,12 +1,11 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, readAccount } from "@/lib/api";
 import { accountIdentitySchema, accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
 import { errorCode } from "@/lib/analytics";
 import { Screen, useTrack } from "./page";
-import { useSession } from "./providers";
+import { useMembersOnly, useSession } from "./providers";
 import {
   Avatar,
   Footer,
@@ -25,8 +24,7 @@ export function Profile() {
   );
 }
 function ProfileScreen() {
-  const { account, t, changeAccount, accountRedirect, notice } = useSession();
-  const router = useRouter();
+  const { account, t, changeAccount, notice } = useSession();
   const [edit, setEdit] = useState(false);
   const [withdraw, setWithdraw] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -38,18 +36,9 @@ function ProfileScreen() {
     viewed.current = true;
     send("me_viewed");
   }, [account.is_guest, send]);
-  useEffect(() => {
-    if (!account.is_guest) return;
-    // Guests cannot see this page: show the login modal over home and return here after login.
-    const failed =
-      new URLSearchParams(window.location.search).get("error") ===
-      "login_failed";
-    router.replace(
-      accountRedirect ??
-        `/?login=1&return_to=%2Fme${failed ? "&error=login_failed" : ""}`,
-    );
-  }, [account.is_guest, accountRedirect, router]);
-  if (account.is_guest) return null;
+  // Guests cannot see this page: the login modal over home, and back here after login.
+  const member = useMembersOnly("/me");
+  if (!member) return null;
   async function leave(remove = false) {
     // Success resets PostHog, so only the server records it (TRACKING-PLAN 6).
     send(remove ? "withdraw_confirmed" : "logout_clicked");

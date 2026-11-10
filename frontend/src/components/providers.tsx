@@ -43,6 +43,7 @@ type Session = {
   // Same account, new fields: no refetch of what the screen already shows.
   replaceAccount: (account: Account) => void;
   accountRedirect: string | null;
+  clearAccountRedirect: () => void;
   login: LoginRequest | null;
   openLogin: (request: {
     trigger: LoginTrigger;
@@ -74,6 +75,29 @@ export function useSession() {
   const value = useContext(Context);
   if (!value) throw new Error("Session unavailable");
   return value;
+}
+/** Pages only members see: My Page and chat rooms (ACCOUNT web 3-2). */
+export function isMembersOnly(path: string) {
+  return path === "/me" || path.startsWith("/chats/");
+}
+/**
+ * Sends a guest on to the login modal over home, keeping a failed login's notice, and back to
+ * [returnTo] after logging in. True when the visitor is a member and the page may render.
+ */
+export function useMembersOnly(returnTo: string) {
+  const { account, accountRedirect } = useSession();
+  const router = useRouter();
+  useEffect(() => {
+    if (!account.is_guest) return;
+    const failed =
+      new URLSearchParams(window.location.search).get("error") ===
+      "login_failed";
+    router.replace(
+      accountRedirect ??
+        `/?login=1&return_to=${encodeURIComponent(returnTo)}${failed ? "&error=login_failed" : ""}`,
+    );
+  }, [account.is_guest, accountRedirect, returnTo, router]);
+  return !account.is_guest;
 }
 export function Providers({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -115,6 +139,8 @@ export function Providers({ children }: { children: ReactNode }) {
   // Arrived where the account change was heading: adjust during render, not in an effect.
   if (accountRedirect !== null && pathname === accountRedirect)
     setAccountRedirect(null);
+  // Home's `/?chat=` hand-over never equals a pathname: home clears it once it has read it.
+  const clearAccountRedirect = useCallback(() => setAccountRedirect(null), []);
   const [query] = useState(
     () =>
       new QueryClient({
@@ -262,9 +288,10 @@ export function Providers({ children }: { children: ReactNode }) {
     if (!ready) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("login") !== "1") return;
-    // A guest on My Page is sent on to home with the same request (src/components/account.tsx);
+    // A guest on a members-only page is sent on to home with the same request (useMembersOnly);
     // the modal opens there, so it shows once and over the screen the visitor sees.
-    if (pathname === "/me" && accountRef.current?.is_guest !== false) return;
+    if (isMembersOnly(pathname) && accountRef.current?.is_guest !== false)
+      return;
     const target = params.get("return_to");
     const error =
       params.get("error") === "login_failed" ? "account.login.failed" : "";
@@ -348,6 +375,7 @@ export function Providers({ children }: { children: ReactNode }) {
             changeAccount,
             replaceAccount,
             accountRedirect,
+            clearAccountRedirect,
             login,
             openLogin,
             closeLogin,

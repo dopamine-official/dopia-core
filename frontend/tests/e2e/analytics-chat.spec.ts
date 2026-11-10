@@ -1,9 +1,10 @@
 import { type Page } from "@playwright/test";
-import { expect, sent, settle, test } from "./fixtures";
+import { expect, sent, settle, signIn, test } from "./fixtures";
 
 // TRACKING-PLAN 5: chat room events.
 async function openChat(page: Page) {
   await page.goto("/");
+  await signIn(page);
   await page
     .getByRole("button", { name: "겨울 대화 시작", exact: true })
     .click();
@@ -28,7 +29,8 @@ test("chat room view, sends, replies and buttons", async ({
   const character = viewed.properties.character_id;
   expect(character).toBeTruthy();
   expect(viewed.properties).toMatchObject({
-    is_member: false,
+    // Chat is for members only.
+    is_member: true,
     adult_mode: false,
     locale: "ko-KR",
     environment: "dev",
@@ -110,6 +112,7 @@ test("a missing room redirects home and records why", async ({
   await expect(
     page.getByRole("heading", { name: "오리지널", exact: true }),
   ).toBeVisible();
+  await signIn(page);
   await page.goto("/chats/00000000-0000-0000-0000-000000000000");
   await expect(page).toHaveURL("/");
   await sent(analytics, "chat_room_redirected", {

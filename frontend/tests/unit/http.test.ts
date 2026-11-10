@@ -51,8 +51,23 @@ const call = (path: string, init: RequestInit = {}) =>
       ...init.headers,
     },
   });
+/** A room of a member: the guest agrees to the terms and logs in first (chat is for members). */
 async function room() {
   await call("/account/guest", { method: "POST" });
+  const me = await (await call("/account/me")).json();
+  await call("/account/me/consents", {
+    method: "POST",
+    body: JSON.stringify({
+      items: me.consent_items.map((item: { id: string; version: string }) => ({
+        id: item.id,
+        version: item.version,
+      })),
+    }),
+  });
+  await call("/mock/login", {
+    method: "POST",
+    body: JSON.stringify({ provider: "google" }),
+  });
   const response = await call("/chats/open", {
     method: "POST",
     body: JSON.stringify({ character_id: characters[0].id }),
@@ -81,10 +96,16 @@ describe("mock HTTP boundary", () => {
       "Original characters",
     );
     expect(response.headers.get("cache-control")).toBe("private, no-store");
-    const invalid = await call("/chats/open", {
+    const bad = {
       method: "POST",
       body: JSON.stringify({ character_id: "bad" }),
-    });
+    };
+    // Like the server: who may chat comes before the body.
+    const refused = await call("/chats/open", bad);
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: "consent_required" });
+    await room();
+    const invalid = await call("/chats/open", bad);
     expect(invalid.status).toBe(422);
     expect(await invalid.json()).toMatchObject({
       code: "invalid_input",

@@ -4,7 +4,7 @@ import type { Page } from "./analytics";
 export type LoginTrigger =
   | "login_button"
   | "safe_toggle"
-  | "turn_limit"
+  | "chat_open"
   | "members_only"
   | "login_failed"
   | "login_cancelled";
@@ -31,7 +31,7 @@ const pages: readonly string[] = ["home", "chat_room", "me", "not_found"];
 const triggers: readonly string[] = [
   "login_button",
   "safe_toggle",
-  "turn_limit",
+  "chat_open",
   "members_only",
   "login_failed",
   "login_cancelled",

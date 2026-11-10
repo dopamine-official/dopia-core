@@ -19,7 +19,19 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 ROUTE_NAMES = ("chat_general", "chat_adult", "compact")
 # Request fields the route's own keys or the code already set. A route's `params` may not repeat
 # them: the call would fail on every request, or silently override the route.
-RESERVED_PARAMS = ("model", "messages", "system", "stream", "timeout", "max_tokens", "max_completion_tokens")
+RESERVED_PARAMS = (
+    "model",
+    "messages",
+    "contents",
+    "system",
+    "system_instruction",
+    "stream",
+    "timeout",
+    "http_options",
+    "max_tokens",
+    "max_completion_tokens",
+    "max_output_tokens",
+)
 
 
 class SettingsError(Exception):

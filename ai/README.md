@@ -9,7 +9,7 @@
                        ↓
                  공통 LLM 호출 ← config/models.yaml (경로 → 제공사·모델·옵션)
                        ↓
-                 제공사 어댑터 (anthropic, openai, openrouter, fake) → 모델 API
+                 제공사 어댑터 (anthropic, openai, openrouter, gemini, fake) → 모델 API
 ```
 
 | 바꾸고 싶은 것 | 고치는 곳 | 코드 변경 |
@@ -62,7 +62,7 @@ curl http://127.0.0.1:8100/health
 
 | 변수 | 기본값 | 뜻 |
 |---|---|---|
-| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` | 없음 | `models.yaml`에 그 제공사(`anthropic`, `openai`, `openrouter`) 경로가 있으면 필수. 없으면 기동 실패 |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` | 없음 | `models.yaml`에 그 제공사(`anthropic`, `openai`, `openrouter`, `gemini`) 경로가 있으면 필수. 없으면 기동 실패 |
 | `MODELS_CONFIG_PATH` | `config/models.yaml` | 경로 파일 위치. `config/models.fake.yaml`이면 키 없이 동작 |
 | `PROMPT_DIR` | `prompt` | 템플릿 폴더 |
 | `PORT` | `8100` | 수신 포트. Railway가 넣어 줌 |

@@ -10,6 +10,13 @@ def build_adapters(settings: Settings) -> dict[str, Adapter]:
     """Instantiates one adapter per provider named in the route file."""
     adapters: dict[str, Adapter] = {}
     for route in settings.routes.values():
+        if route.provider == "gemini":
+            from chat_ai.llm.adapters.gemini import GeminiAdapter
+
+            try:
+                GeminiAdapter.validate_params(route.params)
+            except ValueError as e:
+                raise ValueError(f"route {route.name} has invalid params: {e}") from e
         if route.provider in adapters:
             continue
         if route.provider == "anthropic":
@@ -24,6 +31,10 @@ def build_adapters(settings: Settings) -> dict[str, Adapter]:
             from chat_ai.llm.adapters.openrouter import OpenRouterAdapter
 
             adapters["openrouter"] = OpenRouterAdapter(api_key=settings.provider_api_keys["openrouter"])
+        elif route.provider == "gemini":
+            from chat_ai.llm.adapters.gemini import GeminiAdapter
+
+            adapters["gemini"] = GeminiAdapter(api_key=settings.provider_api_keys["gemini"])
         elif route.provider == "fake":
             from chat_ai.llm.adapters.fake import FakeAdapter
 

@@ -177,10 +177,11 @@ async def test_err_04_trace_records_fields_and_no_prompt_text_in_logs(harness_fa
 
 
 def test_err_05_modules_do_not_import_provider_sdks() -> None:
-    sdk = re.compile(r"^\s*(import|from)\s+(anthropic|openai|posthog)\b", re.MULTILINE)
+    sdk = re.compile(r"^\s*(import|from)\s+(anthropic|openai|google|posthog)\b", re.MULTILINE)
     allowed = {
         SRC_DIR / "llm" / "adapters" / "anthropic.py",
         SRC_DIR / "llm" / "adapters" / "_chat_completions.py",
+        SRC_DIR / "llm" / "adapters" / "gemini.py",
         SRC_DIR / "observe" / "posthog.py",
     }
     for path in SRC_DIR.rglob("*.py"):

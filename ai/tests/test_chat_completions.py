@@ -70,7 +70,7 @@ async def _collect(adapter: OpenAIAdapter | OpenRouterAdapter, request: LlmReque
 async def test_openrouter_stream_sends_the_route_and_reads_the_reply() -> None:
     endpoint = Endpoint(_sse(_chunk("Hel"), _chunk("lo"), _chunk(finish="stop"), USAGE_CHUNK | {"usage": USAGE}))
     adapter = OpenRouterAdapter(api_key="or-key", http_client=endpoint.client())
-    events = await _collect(adapter, _request(extra_body={"provider": {"sort": "price"}}))
+    events = await _collect(adapter, _request(temperature=0.7, provider={"sort": "price"}))
     await adapter.close()
 
     sent = endpoint.requests[0]
@@ -79,6 +79,7 @@ async def test_openrouter_stream_sends_the_route_and_reads_the_reply() -> None:
     assert endpoint.body["model"] == "vendor/model" and endpoint.body["max_completion_tokens"] == 64
     assert endpoint.body["messages"] == [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}]
     assert endpoint.body["stream"] is True and endpoint.body["provider"] == {"sort": "price"}
+    assert endpoint.body["temperature"] == 0.7
     assert "stream_options" not in endpoint.body
 
     assert events[:-1] == [TextChunk("Hel"), TextChunk("lo")]
@@ -150,6 +151,15 @@ async def test_complete_reads_the_reply() -> None:
             "provider_error",
         ),
         (_sse(_chunk("a"), _chunk(finish="content_filter")), "provider_rejected"),
+        (
+            _sse(
+                _chunk("a"),
+                _chunk("", "error", error={"code": "rate_limit_exceeded", "message": "secret provider text"}),
+            ),
+            "provider_rate_limited",
+        ),
+        # The connection dropped mid-reply: no finish reason ever arrived.
+        (_sse(_chunk("a")), "provider_error"),
     ],
 )
 async def test_failures_map_to_contract_codes(response: httpx2.Response, code: str) -> None:
@@ -187,3 +197,9 @@ def test_classify_connection_and_unknown_errors() -> None:
     assert classify(openai.APITimeoutError(request)).code == "provider_timeout"
     assert classify(openai.APIConnectionError(request=request)).code == "provider_error"
     assert classify(RuntimeError("secret provider text")).message == "provider call failed"
+
+
+async def test_openai_params_are_sdk_arguments() -> None:
+    endpoint = Endpoint(_sse(_chunk("ok"), _chunk(finish="stop")))
+    await _collect(OpenAIAdapter(api_key="k", http_client=endpoint.client()), _request(reasoning_effort="low"))
+    assert endpoint.body["reasoning_effort"] == "low"

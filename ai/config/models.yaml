@@ -4,8 +4,8 @@
 # provider: an adapter name (anthropic, openai, openrouter, fake). API keys come from
 #           environment variables named <PROVIDER>_API_KEY.
 # model:    for openrouter, the OpenRouter slug (vendor/model).
-# params:   provider-specific options the adapter passes to the SDK as-is. For openrouter,
-#           OpenRouter-only fields go under extra_body (e.g. extra_body: {provider: {...}}).
+# params:   provider-specific options. anthropic and openai: SDK arguments, passed as-is.
+#           openrouter: request body fields as in the OpenRouter docs (temperature, provider, …).
 
 routes:
   chat_general:

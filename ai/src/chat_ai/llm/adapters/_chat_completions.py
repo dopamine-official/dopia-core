@@ -59,7 +59,7 @@ def classify(exc: BaseException) -> LlmError:
         status = exc.status_code if isinstance(exc, openai.APIStatusError) else error.get("code")
         if _blocked_by_policy(status, error):
             return LlmError(PROVIDER_REJECTED, "provider refused the request by content policy", provider_detail=detail)
-        if status == 429:
+        if status == 429 or error.get("code") == "rate_limit_exceeded":
             return LlmError(PROVIDER_RATE_LIMITED, "provider rate limit reached", provider_detail=detail)
         if status == 408:
             return LlmError(PROVIDER_TIMEOUT, "provider call exceeded its time limit", provider_detail=detail)
@@ -100,23 +100,30 @@ class ChatCompletions:
         api_key: str,
         base_url: str | None = None,
         stream_options: dict[str, Any] | None = None,
+        params_in_body: bool = False,
         http_client: Any = None,
     ) -> None:
         self._provider = provider
         self._stream_options = stream_options
+        # True: route params are request body fields the SDK does not know, sent as written.
+        self._params_in_body = params_in_body
         # No SDK retries: a failure goes straight back to the backend (6-1 5).
         self._client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url, max_retries=0, http_client=http_client)
 
     def _kwargs(self, request: LlmRequest) -> dict[str, Any]:
         messages = [{"role": "system", "content": request.prompt.system}]
         messages += [{"role": m.role, "content": m.content} for m in request.prompt.messages]
-        return {
+        kwargs: dict[str, Any] = {
             "model": request.model,
             "max_completion_tokens": request.max_output_tokens,
             "messages": messages,
             "timeout": request.timeout_seconds,
-            **request.params,
         }
+        if self._params_in_body:
+            kwargs["extra_body"] = dict(request.params)
+        else:
+            kwargs.update(request.params)
+        return kwargs
 
     def _result(self, request: LlmRequest, text: str, model: str | None, usage: Any, finish: str | None) -> LlmResult:
         return LlmResult(
@@ -153,8 +160,9 @@ class ChatCompletions:
         failure = rejected(finish, text, "".join(refusal))
         if failure is not None:
             raise failure
-        if finish == "error":
-            raise LlmError(PROVIDER_ERROR, "provider ended the stream with an error", stop_reason=finish)
+        if finish is None or finish == "error":
+            # No finish reason: the connection dropped mid-reply. A cut-off reply is not a result.
+            raise LlmError(PROVIDER_ERROR, "provider stream ended before the reply finished", stop_reason=finish)
         yield Done(self._result(request, text, model, usage, finish))
 
     async def complete(self, request: LlmRequest) -> LlmResult:

@@ -1,8 +1,14 @@
 # Model routes. Code refers to routes by name only; what each route calls lives here.
 # Changing a model = edit this file, commit, redeploy. No code change.
 #
-# provider: an adapter name (anthropic, fake). API keys come from environment variables.
-# params:   provider-specific options the adapter passes to the SDK as-is.
+# provider: an adapter name (anthropic, openai, openrouter, gemini, fake). API keys come from
+#           environment variables named <PROVIDER>_API_KEY.
+# model:    for openrouter, the OpenRouter slug (vendor/model).
+# params:   provider-specific options. anthropic and openai: SDK arguments, passed as-is.
+#           openrouter: request body fields as in the OpenRouter docs (temperature, provider, …).
+#           gemini: GenerateContentConfig fields (temperature, thinking_config, safety_settings, …).
+#           params cannot repeat what the route already sets (model, stream, timeout, max_tokens, …):
+#           the server refuses to start.
 
 routes:
   chat_general:

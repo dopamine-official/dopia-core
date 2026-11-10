@@ -73,6 +73,27 @@ def test_err_02_settings_errors_list_every_missing_item(tmp_path: Path, monkeypa
     assert "ANTHROPIC_API_KEY" in message
 
 
+def test_err_02_params_cannot_repeat_what_the_route_sets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PROMPT_DIR", raising=False)
+    config = tmp_path / "models.yaml"
+    route = "{provider: fake, model: m, max_output_tokens: 10, timeout_seconds: 1"
+    config.write_text(
+        "routes:\n"
+        f"  chat_general: {route}, params: {{stream: false, temperature: 0.7}}}}\n"
+        f"  chat_adult: {route}, params: {{max_tokens: 5, model: other}}}}\n"
+        f"  compact: {route}, params: {{temperature: 0.2}}}}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MODELS_CONFIG_PATH", str(config))
+    with pytest.raises(SettingsError) as info:
+        load_settings(env_file=tmp_path / "none.env")
+    message = str(info.value)
+    assert "routes.chat_general.params.stream is not allowed" in message
+    assert "routes.chat_adult.params.max_tokens is not allowed" in message
+    assert "routes.chat_adult.params.model is not allowed" in message
+    assert "temperature" not in message and "routes.compact" not in message
+
+
 def test_err_02_real_config_loads_with_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.delenv("MODELS_CONFIG_PATH", raising=False)
@@ -156,9 +177,11 @@ async def test_err_04_trace_records_fields_and_no_prompt_text_in_logs(harness_fa
 
 
 def test_err_05_modules_do_not_import_provider_sdks() -> None:
-    sdk = re.compile(r"^\s*(import|from)\s+(anthropic|posthog)\b", re.MULTILINE)
+    sdk = re.compile(r"^\s*(import|from)\s+(anthropic|openai|google|posthog)\b", re.MULTILINE)
     allowed = {
         SRC_DIR / "llm" / "adapters" / "anthropic.py",
+        SRC_DIR / "llm" / "adapters" / "_chat_completions.py",
+        SRC_DIR / "llm" / "adapters" / "gemini.py",
         SRC_DIR / "observe" / "posthog.py",
     }
     for path in SRC_DIR.rglob("*.py"):

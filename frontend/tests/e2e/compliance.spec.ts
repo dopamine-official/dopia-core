@@ -14,14 +14,16 @@ test.describe("terms", () => {
     await page.keyboard.press("Escape");
     await expect(dialog).toBeVisible();
     // Each item unfolds its text under it and folds it back.
-    const details = dialog.getByRole("button", { name: "이용약관 보기" });
+    const details = dialog.getByRole("button", {
+      name: "이용약관 자세히 보기",
+    });
     await expect(details).toHaveText("자세히 보기");
     await details.click();
     const hide = dialog.getByRole("button", { name: "이용약관 숨기기" });
     await expect(hide).toHaveAttribute("aria-expanded", "true");
-    await expect(dialog.locator("#consent_body_terms")).toHaveText(
-      /\[약관 내용\]/,
-    );
+    await expect(
+      dialog.getByRole("region", { name: "이용약관 내용" }),
+    ).toHaveText(/\[약관 내용\]/);
     await hide.click();
     await expect(dialog.locator("#consent_body_terms")).toBeHidden();
     await dialog.getByRole("checkbox", { name: "이용약관" }).check();

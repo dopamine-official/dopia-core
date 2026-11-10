@@ -312,12 +312,16 @@ type ProfileMenuItem =
  * Logout or withdrawal, then home as the new guest (ACCOUNT web 3-2). Success resets PostHog,
  * so only the server records it (TRACKING-PLAN 6).
  */
+// One logout or withdrawal at a time across the profile menu and My Page: a second click
+// would run as the new guest and fail.
+let leaveInFlight = false;
 export function useLeave() {
   const { t, changeAccount, notice } = useSession();
   const send = useTrack();
   const [busy, setBusy] = useState(false);
   async function leave(remove = false, onFailed?: () => void) {
-    if (busy) return;
+    if (leaveInFlight) return;
+    leaveInFlight = true;
     send(remove ? "withdraw_confirmed" : "logout_clicked");
     setBusy(true);
     try {
@@ -327,7 +331,9 @@ export function useLeave() {
         { method: "POST" },
       );
       changeAccount(await readAccount(issued.account_id), "/");
+      leaveInFlight = false;
     } catch (error) {
+      leaveInFlight = false;
       onFailed?.();
       send(remove ? "withdraw_failed" : "logout_failed", {
         code: errorCode(error),
@@ -449,7 +455,8 @@ export function ProfileMenu() {
             className="menu_logout danger"
             disabled={leaving}
             onClick={() => {
-              send("profile_menu_item_clicked", { item: "logout" });
+              // Closes like every other item; a failure shows only its toast.
+              choose("logout", true);
               void leave();
             }}
           >
@@ -872,6 +879,10 @@ function Consent() {
               <div
                 id={`consent_body_${item.id}`}
                 className="consent_body"
+                role="region"
+                aria-label={t("account.consent.body_label", {
+                  name: t(`account.consent.item.${item.id}`),
+                })}
                 tabIndex={0}
               >
                 {/* Placeholder until the documents are written (TBD). */}

@@ -215,6 +215,7 @@ test("the profile menu logs out from any screen, in red", async ({
     .getByRole("button", { name: "로그아웃", exact: true });
   await expect(logout).toHaveCSS("color", "rgb(178, 58, 58)");
   await logout.click();
+  await expect(logout).toBeHidden();
   await sent(analytics, "profile_menu_item_clicked", { item: "logout" });
   await sent(analytics, "logout_clicked", { page: "home" });
   await expect(

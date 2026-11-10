@@ -43,8 +43,12 @@
     "all": "Agree to all",
     "required": "Required",
     "optional": "Optional",
-    "view": "View",
+    "view": "Details",
     "view_item": "View {name}",
+    "hide": "Hide",
+    "hide_item": "Hide {name}",
+    "body_placeholder": "[Terms text]",
+    "open_document": "Open the full text",
     "agree": "Agree and start",
     "failed": "Your agreement was not saved. Please try again.",
     "item": {

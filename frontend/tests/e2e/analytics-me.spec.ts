@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { type Captured, expect, sent, settle, test } from "./fixtures";
+import { type Captured, expect, sent, settle, signIn, test } from "./fixtures";
 import { installStubs, setStubs } from "./stubs";
 
 // TRACKING-PLAN 6: My Page events. Logout and withdrawal success are server events.
@@ -201,4 +201,26 @@ test("a successful logout still sends its click", async ({
   // Sent as the member, though PostHog starts over right after.
   const clicked = await sent(analytics, "logout_clicked", { page: "me" });
   expect(clicked.properties.is_member).toBe(true);
+});
+
+test("the profile menu logs out from any screen, in red", async ({
+  page,
+  analytics,
+}) => {
+  await page.goto("/");
+  await signIn(page);
+  await page.getByRole("button", { name: "내 프로필", exact: true }).click();
+  const logout = page
+    .getByRole("navigation", { name: "내 메뉴", exact: true })
+    .getByRole("button", { name: "로그아웃", exact: true });
+  await expect(logout).toHaveCSS("color", "rgb(178, 58, 58)");
+  await logout.click();
+  await sent(analytics, "profile_menu_item_clicked", { item: "logout" });
+  await sent(analytics, "logout_clicked", { page: "home" });
+  await expect(
+    page
+      .locator(".site_header")
+      .getByRole("button", { name: "로그인", exact: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL("/");
 });

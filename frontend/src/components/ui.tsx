@@ -17,10 +17,14 @@ import {
   type Locale,
 } from "@/i18n";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, refreshSession } from "@/lib/api";
-import { accountSchema, ApiError } from "@/lib/contracts";
+import { api, readAccount, refreshSession } from "@/lib/api";
+import {
+  accountIdentitySchema,
+  accountSchema,
+  ApiError,
+} from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
-import { track, type EventProperties } from "@/lib/analytics";
+import { errorCode, track, type EventProperties } from "@/lib/analytics";
 import {
   clearLoginStart,
   pageForPath,
@@ -303,7 +307,37 @@ function LoginOptions({
   );
 }
 type ProfileMenuItem =
-  "profile" | "charge" | "my_characters" | "create_character";
+  "profile" | "charge" | "my_characters" | "create_character" | "logout";
+/**
+ * Logout or withdrawal, then home as the new guest (ACCOUNT web 3-2). Success resets PostHog,
+ * so only the server records it (TRACKING-PLAN 6).
+ */
+export function useLeave() {
+  const { t, changeAccount, notice } = useSession();
+  const send = useTrack();
+  const [busy, setBusy] = useState(false);
+  async function leave(remove = false, onFailed?: () => void) {
+    if (busy) return;
+    send(remove ? "withdraw_confirmed" : "logout_clicked");
+    setBusy(true);
+    try {
+      const issued = await api(
+        remove ? "/account/withdraw" : "/account/logout",
+        accountIdentitySchema,
+        { method: "POST" },
+      );
+      changeAccount(await readAccount(issued.account_id), "/");
+    } catch (error) {
+      onFailed?.();
+      send(remove ? "withdraw_failed" : "logout_failed", {
+        code: errorCode(error),
+      });
+      notice(t(errorMessageKey(error)));
+      setBusy(false);
+    }
+  }
+  return { busy, leave };
+}
 // PostHog flag `character_creation_enabled` is not wired yet; the spec's default (and unreadable) value is false.
 const characterCreationEnabled = false;
 export function ProfileMenu() {
@@ -311,6 +345,7 @@ export function ProfileMenu() {
   const send = useTrack();
   const [open, setOpen] = useState(false);
   const [charge, setCharge] = useState(false);
+  const { busy: leaving, leave } = useLeave();
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
@@ -408,6 +443,18 @@ export function ProfileMenu() {
               </div>
             </>
           )}
+          <hr />
+          <button
+            type="button"
+            className="menu_logout danger"
+            disabled={leaving}
+            onClick={() => {
+              send("profile_menu_item_clicked", { item: "logout" });
+              void leave();
+            }}
+          >
+            {t("account.me.logout")}
+          </button>
         </nav>
       )}
       {charge && (
@@ -725,6 +772,8 @@ function Consent() {
   const { t, account, replaceAccount } = useSession();
   const consentItems = account.consent_items;
   const [checked, setChecked] = useState<string[]>([]);
+  // Items whose text is unfolded under them.
+  const [shown, setShown] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const all = consentItems.every((item) => checked.includes(item.id));
@@ -794,17 +843,45 @@ function Consent() {
                 )}
               </small>
             </label>
-            {item.document_url && (
-              <a
-                href={item.document_url}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={t("account.consent.view_item", {
-                  name: t(`account.consent.item.${item.id}`),
-                })}
+            <button
+              type="button"
+              className="consent_toggle"
+              aria-expanded={shown.includes(item.id)}
+              aria-controls={`consent_body_${item.id}`}
+              aria-label={t(
+                shown.includes(item.id)
+                  ? "account.consent.hide_item"
+                  : "account.consent.view_item",
+                { name: t(`account.consent.item.${item.id}`) },
+              )}
+              onClick={() =>
+                setShown((current) =>
+                  current.includes(item.id)
+                    ? current.filter((value) => value !== item.id)
+                    : [...current, item.id],
+                )
+              }
+            >
+              {t(
+                shown.includes(item.id)
+                  ? "account.consent.hide"
+                  : "account.consent.view",
+              )}
+            </button>
+            {shown.includes(item.id) && (
+              <div
+                id={`consent_body_${item.id}`}
+                className="consent_body"
+                tabIndex={0}
               >
-                {t("account.consent.view")}
-              </a>
+                {/* Placeholder until the documents are written (TBD). */}
+                <p>{t("account.consent.body_placeholder")}</p>
+                {item.document_url && (
+                  <a href={item.document_url} target="_blank" rel="noreferrer">
+                    {t("account.consent.open_document")}
+                  </a>
+                )}
+              </div>
             )}
           </li>
         ))}

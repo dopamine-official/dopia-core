@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, readAccount } from "@/lib/api";
-import { accountIdentitySchema, accountSchema } from "@/lib/contracts";
+import { api } from "@/lib/api";
+import { accountSchema } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
 import { errorCode } from "@/lib/analytics";
 import { Screen, useTrack } from "./page";
@@ -12,6 +12,7 @@ import {
   Icon,
   Modal,
   SiteHeader,
+  useLeave,
   type CloseReason,
 } from "./ui";
 import { RecentChats } from "./recent-chats";
@@ -24,10 +25,11 @@ export function Profile() {
   );
 }
 function ProfileScreen() {
-  const { account, t, changeAccount, notice } = useSession();
+  const { account, t } = useSession();
   const [edit, setEdit] = useState(false);
   const [withdraw, setWithdraw] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, leave: leaveAs } = useLeave();
+  const leave = (remove = false) => leaveAs(remove, () => setWithdraw(false));
   const send = useTrack();
   const viewed = useRef(false);
   useEffect(() => {
@@ -39,26 +41,6 @@ function ProfileScreen() {
   // Guests cannot see this page: the login modal over home, and back here after login.
   const member = useMembersOnly("/me");
   if (!member) return null;
-  async function leave(remove = false) {
-    // Success resets PostHog, so only the server records it (TRACKING-PLAN 6).
-    send(remove ? "withdraw_confirmed" : "logout_clicked");
-    setBusy(true);
-    try {
-      const issued = await api(
-        remove ? "/account/withdraw" : "/account/logout",
-        accountIdentitySchema,
-        { method: "POST" },
-      );
-      changeAccount(await readAccount(issued.account_id), "/");
-    } catch (error) {
-      setWithdraw(false);
-      send(remove ? "withdraw_failed" : "logout_failed", {
-        code: errorCode(error),
-      });
-      notice(t(errorMessageKey(error)));
-      setBusy(false);
-    }
-  }
   function cancelWithdraw(method: "cancel" | "outside" | "escape") {
     // Once the withdrawal is sent, closing the modal no longer cancels it.
     if (!busy) send("withdraw_cancelled", { method });

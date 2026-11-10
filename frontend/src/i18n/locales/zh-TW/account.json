@@ -43,8 +43,12 @@
     "all": "全部同意",
     "required": "必要",
     "optional": "選擇",
-    "view": "查看",
+    "view": "查看詳情",
     "view_item": "查看{name}",
+    "hide": "隱藏",
+    "hide_item": "隱藏{name}",
+    "body_placeholder": "[條款內容]",
+    "open_document": "在新視窗查看全文",
     "agree": "同意並開始",
     "failed": "無法儲存同意，請再試一次。",
     "item": {

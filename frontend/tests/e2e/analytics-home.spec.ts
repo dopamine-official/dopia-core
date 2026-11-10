@@ -26,6 +26,13 @@ async function showRecent(page: Page) {
 }
 async function startChat(page: Page, name = "겨울") {
   await home(page);
+  // Chat is for members: log in once, the session stays for the next chat.
+  if (
+    (await page
+      .getByRole("button", { name: "내 프로필", exact: true })
+      .count()) === 0
+  )
+    await login(page);
   await card(page, name).click();
   await expect(page).toHaveURL(/\/chats\//);
   return page.url().split("/chats/")[1];
@@ -50,6 +57,11 @@ test("home view, card views and a card click", async ({
   analytics,
   isMobile,
 }) => {
+  // Chat is for members: log in, then count from a fresh home view.
+  await home(page);
+  await login(page);
+  await settle(page);
+  analytics.length = 0;
   await home(page);
   await sent(analytics, "home_viewed", { load_result: "loaded", page: "home" });
   if (!isMobile) {
@@ -89,6 +101,7 @@ test("home view, card views and a card click", async ({
 
 test("banner click", async ({ page, analytics }) => {
   await home(page);
+  await login(page);
   await page.locator("button.hero").click();
   const banner = await sent(analytics, "banner_clicked", { page: "home" });
   expect(banner.properties.character_id).toEqual(expect.any(String));
@@ -100,6 +113,7 @@ test("a chat that fails to open", async ({ page, analytics }) => {
     { path: "/api/v1/chats/open", method: "POST", status: 503 },
   ]);
   await home(page);
+  await login(page);
   await card(page, "겨울").click();
   const clicked = await sent(analytics, "character_card_clicked");
   await sent(analytics, "chat_open_failed", {
@@ -179,6 +193,7 @@ test("a failed recent list is recorded when shown, on each screen", async ({
   }
 
   // Another screen showing the failure records it with its own page.
+  await login(page);
   await card(page, "겨울").click();
   await expect(page).toHaveURL(/\/chats\//);
   await menuButton(page).click();
@@ -197,7 +212,9 @@ test("a failed recent list is recorded when shown, on each screen", async ({
     result: "loaded",
   });
   await settle(page);
-  expect(count(analytics, "recent_chats_load_failed")).toBe(2);
+  // Home as a guest, home again as the member who logged in to chat (only where the list is
+  // on screen), and the chat room.
+  expect(count(analytics, "recent_chats_load_failed")).toBe(isMobile ? 2 : 3);
 });
 
 test("header, footer, profile menu and 404", async ({ page, analytics }) => {
@@ -335,6 +352,7 @@ test("sidebar toggles in the chat room, shortcut included", async ({
   analytics,
 }) => {
   await home(page);
+  await login(page);
   await card(page, "겨울").click();
   await expect(page).toHaveURL(/\/chats\//);
   await page.keyboard.press("ControlOrMeta+b");
@@ -365,13 +383,7 @@ test("sidebar toggles in the chat room, shortcut included", async ({
     ),
   );
   await expect(dialog(page)).toHaveCount(0);
-
-  // With another dialog on top, the shortcut does nothing.
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(dialog(page)).toHaveCount(1);
-  await page.keyboard.press("ControlOrMeta+b");
   await settle(page);
-  await expect(dialog(page)).toHaveCount(1);
   expect(count(analytics, "sidebar_toggled")).toBe(4);
 });
 
@@ -492,8 +504,7 @@ test("recent chat clicks from the chat room and My Page", async ({
   });
   expect(fromRoom.properties.position).toBe(2);
 
-  await home(page);
-  await login(page);
+  // Already a member since the first chat.
   await page.goto("/me");
   await page
     .locator(".profile_recent")

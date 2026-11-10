@@ -1,5 +1,5 @@
 import { type Page } from "@playwright/test";
-import { test, expect } from "./fixtures";
+import { test, expect, signIn } from "./fixtures";
 async function home(page: Page) {
   await page.goto("/");
   await expect(
@@ -8,6 +8,7 @@ async function home(page: Page) {
 }
 async function openChat(page: Page) {
   await home(page);
+  await signIn(page);
   await page
     .getByRole("button", { name: "겨울 대화 시작", exact: true })
     .click();
@@ -88,20 +89,39 @@ test("three locales, preserved messages, no external requests", async ({
   ).toBe(true);
 });
 
-test("guest chat migrates on mock login, profile edits persist, logout isolates data", async ({
+test("a guest is asked to log in for chat; a member chats, edits the profile and logout isolates data", async ({
   page,
 }) => {
-  await openChat(page);
+  await home(page);
+  await page
+    .getByRole("button", { name: "겨울 대화 시작", exact: true })
+    .click();
+  const login = page.getByRole("dialog", { name: "이야기를 이어가세요" });
+  await expect(login).toBeVisible();
+  await expect(page).toHaveURL("/");
+  await login
+    .getByRole("button", { name: "Google로 로그인", exact: true })
+    .click();
+  // The chat the guest chose opens right after logging in, without a second click.
+  await expect(page).toHaveURL(/\/chats\//);
+  await expect(
+    page.getByRole("heading", { name: "겨울", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "메시지", exact: true }),
+  ).toBeEnabled();
   const roomUrl = page.url();
   await send(page, "나의 첫 대화");
   await expect(page.locator(".message.assistant")).toHaveCount(2);
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  // Back home inside the app: the chat chosen before logging in does not open again.
   await page
-    .getByRole("dialog", { name: "이야기를 이어가세요" })
-    .getByRole("button", { name: "Google로 로그인", exact: true })
+    .getByRole("button", { name: "대화 목록 열기 또는 닫기", exact: true })
     .click();
-  await expect(page).toHaveURL(roomUrl);
-  await expect(page.locator(".message.user")).toContainText("나의 첫 대화");
+  await page.getByRole("link", { name: "캐릭터챗", exact: true }).click();
+  await expect(page).toHaveURL("/");
+  await page.waitForTimeout(1_000);
+  await expect(page).toHaveURL("/");
+  await page.goto(roomUrl);
   await page.getByRole("button", { name: "내 프로필", exact: true }).click();
   await page
     .getByRole("navigation", { name: "내 메뉴", exact: true })
@@ -116,19 +136,14 @@ test("guest chat migrates on mock login, profile edits persist, logout isolates 
   await expect(page.locator(".profile_box")).toContainText("테스트 여행자");
   await page.getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page).toHaveURL("/");
+  // A guest on a room address gets the login modal over home, and the room after logging in.
   await page.goto(roomUrl);
   await expect(page).toHaveURL("/");
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
   await page
     .getByRole("dialog", { name: "이야기를 이어가세요" })
     .getByRole("button", { name: "Google로 로그인", exact: true })
     .click();
-  await expect(page).toHaveURL("/");
-  // Already on "/", so wait for the login itself before opening the room.
-  await expect(
-    page.getByRole("button", { name: "내 프로필", exact: true }),
-  ).toBeVisible();
-  await page.goto(roomUrl);
+  await expect(page).toHaveURL(roomUrl);
   await expect(page.locator(".message.user")).toContainText("나의 첫 대화");
 });
 

@@ -6,6 +6,7 @@ import com.dopia.common.I18n
 import com.dopia.common.Identity
 import com.dopia.common.RequestLocale
 import com.dopia.common.RequiresConsent
+import com.dopia.common.RequiresMember
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.MethodParameter
@@ -40,6 +41,7 @@ class WebConfig(
                     if (parameter.hasMethodAnnotation(RequiresConsent::class.java)) {
                         accounts.assertConsented(identity, i18n.region(http.getHeader("X-Region")))
                     }
+                    if (parameter.hasMethodAnnotation(RequiresMember::class.java)) accounts.assertMember(identity)
                     return identity
                 }
             },

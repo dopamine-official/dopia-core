@@ -73,7 +73,7 @@ test("login button: shown, closed three ways, then a login", async ({
   expect(count(analytics, "login_modal_closed")).toBe(3);
 });
 
-test("SAFE toggle and the chat room open the modal with their trigger", async ({
+test("SAFE toggle and a guest's card click open the modal with their trigger", async ({
   page,
   analytics,
 }) => {
@@ -89,12 +89,11 @@ test("SAFE toggle and the chat room open the modal with their trigger", async ({
   await page
     .getByRole("button", { name: "겨울 대화 시작", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/chats\//);
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
   await sent(analytics, "login_modal_viewed", {
-    trigger: "login_button",
-    page: "chat_room",
+    trigger: "chat_open",
+    page: "home",
   });
+  await expect(page).toHaveURL("/");
 });
 
 test("a guest on a members-only screen", async ({ page, analytics }) => {

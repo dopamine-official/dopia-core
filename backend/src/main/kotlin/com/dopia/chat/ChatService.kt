@@ -1,6 +1,5 @@
 package com.dopia.chat
 
-import com.dopia.account.AccountService
 import com.dopia.character.CharacterNotFound
 import com.dopia.character.CharacterService
 import com.dopia.common.ApiException
@@ -100,7 +99,6 @@ sealed interface TurnStart {
 class ChatService(
     private val repository: ChatRepository,
     private val characters: CharacterService,
-    private val accounts: AccountService,
     private val tx: TransactionTemplate,
     private val events: AppEvents,
     private val properties: AppProperties,
@@ -121,7 +119,6 @@ class ChatService(
         var isAdult = false
         val opened =
             tx.execute {
-                accounts.assertGuestWritable(identity)
                 val character =
                     try {
                         characters.forChat(characterId, locale.locale, characters.adultAllowed(identity, locale))
@@ -194,7 +191,7 @@ class ChatService(
             )
         }!!
 
-    // 4-1-7 delete
+    // 4-1-6 delete
 
     fun delete(
         identity: Identity,
@@ -202,7 +199,6 @@ class ChatService(
     ) {
         val characterId =
             tx.execute {
-                accounts.assertGuestWritable(identity)
                 val room =
                     repository.lockRoom(roomId)?.takeIf { !it.deleted && it.ownerAccountId == identity.accountId } ?: throw notFound()
                 repository.deleteRoom(room.id)
@@ -228,7 +224,6 @@ class ChatService(
         var characterId: UUID? = null
         return try {
             tx.execute {
-                accounts.assertGuestWritable(identity)
                 val room =
                     repository.lockRoom(roomId)?.takeIf { !it.deleted && it.ownerAccountId == identity.accountId } ?: throw notFound()
                 characterId = room.characterId
@@ -253,8 +248,8 @@ class ChatService(
                     }
                 }
                 if (repository.hasGeneratingTurn(roomId)) throw inProgress()
-                // PAYMENT is not specified yet: no deduction, charge_type recorded by account kind.
-                val chargeType = if (identity.isGuest) "free_turn" else "credit"
+                // PAYMENT is not specified yet: no deduction. Only members chat, so every turn is a credit turn.
+                val chargeType = "credit"
                 val seq = repository.nextSeq(roomId)
                 val userMessageId = repository.insertMessage(roomId, null, seq, "user", content)
                 val aiRequestId = UUID.randomUUID().toString()
@@ -418,13 +413,6 @@ class ChatService(
         val after = summary?.lastSummarizedSeq ?: 0
         return (summary?.content ?: "") to repository.historyAfter(started.roomId, after, started.userMessageSeq)
     }
-
-    // 4-1-6 owner transfer, inside ACCOUNT's merge transaction
-
-    fun transferOwner(
-        guestAccountId: UUID,
-        memberAccountId: UUID,
-    ): Int = repository.transferRooms(guestAccountId, memberAccountId)
 
     // 4-1-5 lost turn recovery
 

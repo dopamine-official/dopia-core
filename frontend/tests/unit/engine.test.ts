@@ -10,6 +10,7 @@ import {
   logout,
   openRoom,
   ownedRoom,
+  recordConsents,
   recent,
   roomView,
   settle,
@@ -18,9 +19,17 @@ import {
 } from "@/mocks/engine";
 import { sendSchema } from "@/lib/contracts";
 
-function setup() {
+/** A guest who agreed to the terms, as the consent modal makes every visitor do. */
+function visitor() {
   const state = initialState();
   guest(state);
+  recordConsents(state, account(state).consent_items);
+  return state;
+}
+/** A member with one room: chat is for members only. */
+function setup() {
+  const state = visitor();
+  login(state, "google");
   const opened = openRoom(state, characters[0].id, "ko-KR");
   return { state, roomId: opened.room_id };
 }
@@ -46,7 +55,8 @@ const input = (content = "안녕!") => ({
 });
 describe("account and conversation contracts", () => {
   it("starts guests and new members with SAFE ON and hides adult characters", () => {
-    const { state } = setup();
+    const state = initialState();
+    guest(state);
     const adult = characters.find((value) => value.is_adult)!;
     expect(account(state)).toMatchObject({
       is_guest: true,
@@ -59,9 +69,6 @@ describe("account and conversation contracts", () => {
     expect(home(state, "ko-KR").sections[0].characters).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: adult.id })]),
     );
-    expect(() => openRoom(state, adult.id, "ko-KR")).toThrow(
-      "character_not_found",
-    );
     expect(login(state, "google")).toMatchObject({
       is_guest: false,
       adult_mode: false,
@@ -70,6 +77,10 @@ describe("account and conversation contracts", () => {
       consent_required: true,
       consent_items: expect.any(Array),
     });
+    recordConsents(state, account(state).consent_items);
+    expect(() => openRoom(state, adult.id, "ko-KR")).toThrow(
+      "character_not_found",
+    );
     expect(logout(state)).toMatchObject({
       is_guest: true,
       adult_mode: false,
@@ -79,11 +90,24 @@ describe("account and conversation contracts", () => {
       consent_items: expect.any(Array),
     });
   });
-  it.each(["guest", "member"])(
+  it("keeps chat for members: consent first, then a login", () => {
+    const state = initialState();
+    guest(state);
+    expect(() => openRoom(state, characters[0].id, "ko-KR")).toThrow(
+      "consent_required",
+    );
+    recordConsents(state, account(state).consent_items);
+    expect(() => openRoom(state, characters[0].id, "ko-KR")).toThrow(
+      "member_required",
+    );
+    expect(state.rooms).toHaveLength(0);
+    login(state, "google");
+    expect(openRoom(state, characters[0].id, "ko-KR").created).toBe(true);
+  });
+  it.each(["member"])(
     "normalizes a saved unlocked %s without changing identity or conversations",
-    (kind) => {
+    () => {
       const { state, roomId } = setup();
-      if (kind === "member") login(state, "google");
       const saved = account(state);
       saved.adult_mode = true;
       const restored = structuredClone(state);
@@ -92,7 +116,7 @@ describe("account and conversation contracts", () => {
         adult_mode: false,
         adult_verified: false,
         adult_verification_rejected: false,
-        consent_required: true,
+        consent_required: false,
         consent_items: expect.any(Array),
       });
       expect(ownedRoom(restored, roomId).messages).toEqual(
@@ -103,7 +127,7 @@ describe("account and conversation contracts", () => {
   );
   it("normalizes an existing unverified member when logging back in", () => {
     const { state } = setup();
-    const member = login(state, "google");
+    const member = account(state);
     logout(state);
     member.adult_mode = true;
     expect(login(state, "google")).toMatchObject({
@@ -111,11 +135,11 @@ describe("account and conversation contracts", () => {
       adult_mode: false,
       adult_verified: false,
       adult_verification_rejected: false,
-      consent_required: true,
+      consent_required: false,
       consent_items: expect.any(Array),
     });
   });
-  it("reuses a guest and opens only one room for the same character", () => {
+  it("reuses the account and opens only one room for the same character", () => {
     const { state, roomId } = setup();
     const original = account(state).account_id;
     expect(guest(state).account_id).toBe(original);
@@ -195,22 +219,22 @@ describe("account and conversation contracts", () => {
       ).status,
     ).toBe("failed");
   });
-  it("migrates a guest room while generating and preserves the member’s existing rooms", () => {
+  it("finishes a reply after logout and shows the member's rooms on the next login", () => {
     const { state, roomId } = setup();
-    const user = login(state, "google");
+    const user = account(state);
+    const turn = startTurn(state, roomId, input(), "ko-KR", 100);
     logout(state);
-    const secondRoom = openRoom(state, characters[1].id, "ko-KR").room_id;
-    const turn = startTurn(state, secondRoom, input(), "ko-KR", 100);
+    expect(() => openRoom(state, characters[1].id, "ko-KR")).toThrow();
     expect(login(state, "google").account_id).toBe(user.account_id);
     settle(state, turn.finishes_at);
-    expect(recent(state, "ko-KR").chats.map((value) => value.room_id)).toEqual(
-      expect.arrayContaining([roomId, secondRoom]),
-    );
-    expect(ownedRoom(state, secondRoom).owner_id).toBe(user.account_id);
+    expect(recent(state, "ko-KR").chats.map((value) => value.room_id)).toEqual([
+      roomId,
+    ]);
+    expect(state.rooms[0].messages).toHaveLength(3);
   });
   it("denies the next guest the member's rooms after logout", () => {
     const { state, roomId } = setup();
-    const google = login(state, "google");
+    const google = account(state);
     logout(state);
     expect(account(state).account_id).not.toBe(google.account_id);
     expect(() => ownedRoom(state, roomId)).toThrow("room_not_found");
@@ -219,7 +243,6 @@ describe("account and conversation contracts", () => {
   it("rejects a nickname another member uses", () => {
     const { state } = setup();
     const other = otherMember(state);
-    login(state, "google");
     expect(() => updateProfile(state, { nickname: other.nickname! })).toThrow(
       "nickname_taken",
     );
@@ -227,7 +250,7 @@ describe("account and conversation contracts", () => {
   it("deletes only the withdrawing member and creates a new identity on rejoin", () => {
     const { state } = setup();
     const other = otherMember(state);
-    const google = login(state, "google");
+    const google = account(state);
     logout(state, true);
     expect(
       state.accounts.some((value) => value.account_id === google.account_id),
@@ -254,7 +277,7 @@ describe("account and conversation contracts", () => {
   it("lets verified members switch SAFE and keeps existing rooms when SAFE is enabled", () => {
     const { state } = setup();
     const adult = characters.find((value) => value.is_adult)!;
-    login(state, "google").adult_verified = true;
+    account(state).adult_verified = true;
     expect(updateAdultMode(state, true).adult_mode).toBe(true);
     expect(home(state, "ko-KR").sections[0].characters).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: adult.id })]),
@@ -274,7 +297,7 @@ describe("account and conversation contracts", () => {
   });
   it("attributes completion to the room owner after logout", () => {
     const { state, roomId } = setup();
-    const owner = login(state, "google");
+    const owner = account(state);
     const turn = startTurn(state, roomId, input(), "ko-KR", 100);
     logout(state);
     settle(state, turn.finishes_at);

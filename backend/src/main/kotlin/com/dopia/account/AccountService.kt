@@ -1,6 +1,5 @@
 package com.dopia.account
 
-import com.dopia.chat.ChatService
 import com.dopia.common.ApiException
 import com.dopia.common.AppEvents
 import com.dopia.common.ConsentItem
@@ -13,7 +12,6 @@ import com.dopia.config.AppProperties
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
-import org.springframework.context.annotation.Lazy
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.Scheduled
@@ -25,7 +23,6 @@ import java.time.LocalDate
 import java.time.Period
 import java.time.format.DateTimeParseException
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 data class AccountView(
     val accountId: UUID,
@@ -67,14 +64,9 @@ class AccountService(
     private val properties: AppProperties,
     private val storage: PhotoStorage,
     private val events: AppEvents,
-    @Lazy private val chat: ChatService,
 ) {
     private val log = LoggerFactory.getLogger(AccountService::class.java)
     private val headerAccount = "X-Preview-Account"
-
-    // Merge attempts per guest for `attempt` (TRACKING-PLAN 8-1-5, 8-1-6). Kept in memory: a
-    // restart counts again from 1. How to keep it across restarts is open (TBD 3 ACCOUNT).
-    private val mergeAttempts = ConcurrentHashMap<UUID, Int>()
 
     // 4-1-2 request identification
 
@@ -84,7 +76,6 @@ class AccountService(
         }
         cookies.read(request, Cookies.GUEST)?.let { token ->
             val guest = accounts.findByGuestToken(Tokens.sha256(token)) ?: return null
-            if (guest.mergeTargetAccountId != null) return null
             accounts.touchGuest(guest.id)
             return guest
         }
@@ -102,11 +93,9 @@ class AccountService(
         return Identity(row.id, row.isGuest, !row.isGuest && row.adultMode)
     }
 
-    /** Guest write check (4-2-7): inside the caller's transaction, the guest must still be active. */
-    fun assertGuestWritable(identity: Identity) {
-        if (identity.isMember) return
-        val row = accounts.lock(identity.accountId) ?: throw ApiException.unauthorized()
-        if (row.deletedAt != null || row.mergeTargetAccountId != null) throw ApiException.unauthorized()
+    /** Chat is for members only (CHAT 4-1-1, 4-1-3): a guest is sent to the login modal. */
+    fun assertMember(identity: Identity) {
+        if (identity.isGuest) throw ApiException("member_required", HttpStatus.FORBIDDEN, message = "chat is for members only")
     }
 
     // 4-1-1 guest issuance
@@ -116,16 +105,10 @@ class AccountService(
         response: HttpServletResponse,
     ): IssuedAccount {
         identifyOrNull(request)?.let { return IssuedAccount(it.id) }
-        // A guest cookie whose guest already went to a member cannot be used again.
-        val merged =
-            cookies
-                .read(request, Cookies.GUEST)
-                ?.let { accounts.findByGuestToken(Tokens.sha256(it)) }
-                ?.mergeTargetAccountId != null
-        return IssuedAccount(createGuest(response, if (merged) "merged_guest_blocked" else "first_visit"))
+        return IssuedAccount(createGuest(response, "first_visit"))
     }
 
-    /** [reason] for `server_guest_created`: first_visit, logout, withdraw or merged_guest_blocked. */
+    /** [reason] for `server_guest_created`: first_visit, logout or withdraw. */
     fun createGuest(
         response: HttpServletResponse,
         reason: String = "first_visit",
@@ -145,7 +128,7 @@ class AccountService(
         return row.view(consentRequired(identity.accountId, region), region.consentItems)
     }
 
-    // 4-1-9 consents
+    // 4-1-8 consents
 
     /** True when a required item of the region lacks a record for its current version. */
     private fun consentRequired(
@@ -158,7 +141,7 @@ class AccountService(
         return required.any { (it.id to it.version) !in agreed }
     }
 
-    /** Chat waits until the required consents are given (4-1-9). */
+    /** Chat waits until the required consents are given (4-1-8). */
     fun assertConsented(
         identity: Identity,
         region: RegionConfig,
@@ -183,14 +166,14 @@ class AccountService(
             throw ApiException.invalidInput(FieldError("items", "required_missing"))
         }
         tx.execute {
-            // A guest already merged or leaving would keep consents its member never gets.
-            assertGuestWritable(identity)
+            // Serialized with the login copying this guest's consents: none is left behind.
+            if (identity.isGuest) accounts.lock(identity.accountId)
             items.distinct().forEach { (id, version) -> accounts.insertConsent(identity.accountId, id, version) }
         }
         return me(identity, region)
     }
 
-    // 4-1-8 adult verification
+    // 4-1-7 adult verification
 
     fun verifyAdult(
         identity: Identity,
@@ -234,7 +217,7 @@ class AccountService(
         return me(identity, region)
     }
 
-    // 4-1-6 profile
+    // 4-1-5 profile
 
     fun updateProfile(
         identity: Identity,
@@ -287,7 +270,7 @@ class AccountService(
         return me(identity, region)
     }
 
-    // 4-1-7 adult mode
+    // 4-1-6 adult mode
 
     fun updateAdultMode(
         identity: Identity,
@@ -319,7 +302,7 @@ class AccountService(
         return me(identity, region)
     }
 
-    // 4-1-10 logout and withdrawal
+    // 4-1-9 logout and withdrawal
 
     fun logout(
         identity: Identity,
@@ -340,7 +323,7 @@ class AccountService(
                     accounts.revokeSession(Tokens.sha256(sessionToken))
                 }
                 val guestId = accounts.insertGuest(Tokens.sha256(guestToken))
-                // The next person on this browser agrees for themselves (4-1-10): no consent copy.
+                // The next person on this browser agrees for themselves (4-1-9): no consent copy.
                 guestId
             }!!
         cookies.clearSession(response)
@@ -364,7 +347,7 @@ class AccountService(
         val email: String?,
     )
 
-    /** Transaction 1 of login: member lookup or creation, session, merge target. Returns the session token. */
+    /** The login transaction (4-1-4): member lookup or creation, session, the guest's consents. */
     fun completeLogin(
         profile: ProviderProfile,
         guestAccountId: UUID?,
@@ -373,12 +356,10 @@ class AccountService(
         val token = Tokens.random()
         var isNewMember = false
         var hadGuest = false
-        var mergeScheduled = false
         val memberId =
             tx.execute {
                 isNewMember = false
                 hadGuest = false
-                mergeScheduled = false
                 val existing =
                     accounts
                         .findIdentityAccount(profile.provider, profile.subject)
@@ -398,29 +379,15 @@ class AccountService(
                     if (guest != null && guest.isGuest && guest.deletedAt == null) {
                         hadGuest = true
                         accounts.copyConsents(guestAccountId, memberId)
-                        when (guest.mergeTargetAccountId) {
-                            null -> {
-                                accounts.setMergeTarget(guestAccountId, memberId)
-                                mergeScheduled = true
-                            }
-
-                            memberId -> {
-                                mergeScheduled = true
-                            }
-
-                            else -> {
-                                throw ApiException(
-                                    "login_failed",
-                                    HttpStatus.CONFLICT,
-                                    message = "guest already merging into another member",
-                                )
-                            }
-                        }
+                        // The guest ends here: once the session is gone this browser gets a new
+                        // guest, never this one, so two people on one browser stay apart.
+                        accounts.deleteGuestIdentifier(guestAccountId)
                     }
                 }
                 memberId
             }!!
         cookies.setSession(response, token)
+        if (guestAccountId != null) cookies.clearGuest(response)
         events.record(
             memberId,
             "server_login_succeeded",
@@ -428,13 +395,9 @@ class AccountService(
                 "provider" to profile.provider,
                 "is_new_member" to isNewMember,
                 "had_guest" to hadGuest,
-                "merge_scheduled" to mergeScheduled,
             ),
         )
-        if (guestAccountId != null) {
-            events.alias(guestAccountId, memberId)
-            runCatching { merge(guestAccountId) }.onFailure { log.warn("merge of guest {} failed; will retry", guestAccountId, it) }
-        }
+        if (guestAccountId != null) events.alias(guestAccountId, memberId)
         return memberId
     }
 
@@ -442,47 +405,6 @@ class AccountService(
         var candidate = base.filterNot { it.isISOControl() }.trim().ifEmpty { "Explorer" }
         while (accounts.nicknameTaken(candidate, null)) candidate += " ✦"
         return candidate
-    }
-
-    /** Transaction 2 of login (4-1-5): mark merged and move the guest's data into the member. */
-    fun merge(guestAccountId: UUID) {
-        val target = accounts.find(guestAccountId)?.takeIf { it.mergedIntoAccountId == null }?.mergeTargetAccountId ?: return
-        val attempt = mergeAttempts.merge(guestAccountId, 1, Int::plus)!!
-        val moved =
-            try {
-                tx.execute {
-                    val guest = accounts.lock(guestAccountId) ?: return@execute null
-                    val lockedTarget = guest.mergeTargetAccountId ?: return@execute null
-                    if (guest.mergedIntoAccountId != null) return@execute null
-                    accounts.markMerged(guestAccountId, lockedTarget)
-                    lockedTarget to chat.transferOwner(guestAccountId, lockedTarget)
-                }
-            } catch (error: Exception) {
-                events.record(
-                    target,
-                    "server_merge_failed",
-                    mapOf(
-                        "guest_account_id" to guestAccountId.toString(),
-                        "attempt" to attempt,
-                        "error" to error.javaClass.simpleName,
-                    ),
-                )
-                throw error
-            }
-        mergeAttempts.remove(guestAccountId)
-        if (moved == null) return
-        events.record(
-            moved.first,
-            "server_merge_completed",
-            mapOf("guest_account_id" to guestAccountId.toString(), "room_count" to moved.second, "attempt" to attempt),
-        )
-    }
-
-    @Scheduled(initialDelayString = "PT5S", fixedDelayString = "PT60S")
-    fun retryPendingMerges() {
-        for (id in accounts.pendingMerges()) {
-            runCatching { merge(id) }.onFailure { log.warn("merge retry of guest {} failed", id, it) }
-        }
     }
 
     @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT1H")

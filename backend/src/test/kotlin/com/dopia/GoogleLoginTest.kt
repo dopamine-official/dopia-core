@@ -164,15 +164,11 @@ class GoogleLoginTest(
             .let { URLDecoder.decode(it, Charsets.UTF_8) }
 
     @Test
-    fun `guest logs in with google, keeps rooms, and is sent back to return_to`() {
+    fun `guest logs in with google, can chat, and is sent back to return_to`() {
         val browser = Browser()
         browser.post("/account/guest", "")
-        val room =
-            mapper
-                .readTree(
-                    browser.post("/chats/open", """{"character_id":"3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d"}""").body(),
-                ).get("room_id")
-                .asString()
+        val winter = """{"character_id":"3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d"}"""
+        assertEquals(403, browser.post("/chats/open", winter).statusCode())
 
         val start = browser.get("/account/auth/google/start?return_to=%2Fme")
         assertEquals(302, start.statusCode())
@@ -191,15 +187,8 @@ class GoogleLoginTest(
         val me = mapper.readTree(browser.get("/account/me").body())
         assertEquals(false, me.get("is_guest").asBoolean())
         assertEquals("Jane Doe", me.get("nickname").asString())
-        assertEquals(
-            room,
-            mapper
-                .readTree(browser.get("/chats/recent").body())
-                .get("chats")
-                .get(0)
-                .get("room_id")
-                .asString(),
-        )
+        // The guest's consents came along: the member chats right away.
+        assertEquals(200, browser.post("/chats/open", winter).statusCode())
 
         // Already a member: start goes straight back.
         assertEquals(

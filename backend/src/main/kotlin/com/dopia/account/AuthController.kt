@@ -83,9 +83,7 @@ class AuthController(
             accounts.completeLogin(profile, saved.guestAccountId, response)
         } catch (failure: Exception) {
             log.warn("{} login failed: {}", provider, failure.message)
-            // The guest is already going to another member (ACCOUNT 4-1-4).
-            val reason = if (failure is ApiException && failure.code == "login_failed") "guest_already_pending" else stage
-            visitor(saved.guestAccountId)?.let { loginFailed(it, provider, reason) }
+            visitor(saved.guestAccountId)?.let { loginFailed(it, provider, stage) }
             return redirect(status, oauth.loginModalUrl(saved.returnTo, failed = true))
         }
         return redirect(status, oauth.webUrl(saved.returnTo))

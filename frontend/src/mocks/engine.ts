@@ -134,11 +134,7 @@ export function login(state: State, provider: "google") {
     };
     state.accounts.push(member);
   }
-  state.rooms
-    .filter((room) => room.owner_id === previous.account_id)
-    .forEach((room) => {
-      room.owner_id = member.account_id;
-    });
+  // A guest has no rooms to bring along: chat is for members only (CHAT 4-1-1).
   state.accounts = state.accounts.filter(
     (value) => value.account_id !== previous.account_id,
   );
@@ -308,8 +304,15 @@ export function ownedRoom(state: State, roomId: string) {
   if (!room) throw new ApiError("room_not_found", 404);
   return room;
 }
-export function openRoom(state: State, characterId: string, locale: Locale) {
+/** Chat waits for the required consents, then is for members only (CHAT 4-1-1, 4-1-3). */
+export function chatter(state: State) {
   const user = account(state);
+  if (user.consent_required) throw new ApiError("consent_required", 403);
+  if (user.is_guest) throw new ApiError("member_required", 403);
+  return user;
+}
+export function openRoom(state: State, characterId: string, locale: Locale) {
+  const user = chatter(state);
   const existing = state.rooms
     .filter(
       (room) =>
@@ -414,6 +417,7 @@ export function startTurn(
   locale: Locale,
   now = Date.now(),
 ): Turn {
+  chatter(state);
   const room = ownedRoom(state, roomId);
   const existing = room.turns.find(
     (turn) => turn.client_message_id === input.client_message_id,

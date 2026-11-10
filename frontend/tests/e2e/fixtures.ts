@@ -87,3 +87,21 @@ export async function sent(
   await expect.poll(() => match(), { timeout: 15_000 }).toBeTruthy();
   return match()!;
 }
+
+/**
+ * Logs the visitor in through the header login button and the mock Google login, and waits
+ * for the member's profile button. Chat is for members only (CHAT 4-1-1).
+ */
+export async function signIn(page: Page) {
+  await page
+    .locator("header")
+    .getByRole("button", { name: "로그인", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "이야기를 이어가세요" })
+    .getByRole("button", { name: "Google로 로그인", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "내 프로필", exact: true }),
+  ).toBeVisible();
+}

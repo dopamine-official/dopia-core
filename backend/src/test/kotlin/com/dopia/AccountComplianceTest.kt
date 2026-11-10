@@ -7,7 +7,6 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
 import org.springframework.jdbc.core.simple.JdbcClient
-import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.context.ActiveProfiles
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
@@ -87,11 +86,9 @@ class AccountComplianceTest(
         /** Logs this browser in as a fresh member through the real login transaction. */
         fun login(): String {
             val guest = json("POST", "/account/guest").get("account_id").asString()
-            val response = MockHttpServletResponse()
-            val profile = AccountService.ProviderProfile("google", "compliance-${UUID.randomUUID()}", "Tester ${UUID.randomUUID()}", null)
-            val member = accounts.completeLogin(profile, UUID.fromString(guest), response)
-            session = response.getCookie("session")!!.value
-            return member.toString()
+            val (member, token) = accounts.loginFresh(UUID.fromString(guest))
+            session = token
+            return member
         }
     }
 
@@ -235,7 +232,11 @@ class AccountComplianceTest(
         val open = browser.code("POST", "/chats/open", "{\"character_id\":\"${UUID.randomUUID()}\"}")
         assertEquals(403 to "consent_required", open)
         browser.json("POST", "/account/me/consents", consents)
-        assertEquals(404, browser.call("POST", "/chats/open", "{\"character_id\":\"${UUID.randomUUID()}\"}").statusCode())
+        // Agreed, but chat is still for members only.
+        assertEquals(
+            403 to "member_required",
+            browser.code("POST", "/chats/open", "{\"character_id\":\"${UUID.randomUUID()}\"}"),
+        )
     }
 
     @Test
@@ -244,10 +245,10 @@ class AccountComplianceTest(
         browser.json("POST", "/account/guest")
         browser.json("POST", "/account/me/consents", consents)
         val guest = browser.json("GET", "/account/me").get("account_id").asString()
-        val response = MockHttpServletResponse()
-        val profile = AccountService.ProviderProfile("google", "compliance-${UUID.randomUUID()}", "Copy ${UUID.randomUUID()}", null)
-        accounts.completeLogin(profile, UUID.fromString(guest), response)
-        browser.session = response.getCookie("session")!!.value
+        val (_, token) = accounts.loginFresh(UUID.fromString(guest))
+        // The guest ended at login: its cookie alone identifies no one.
+        assertEquals(401, browser.call("GET", "/account/me").statusCode())
+        browser.session = token
         val member = browser.json("GET", "/account/me")
         assertFalse(member.get("is_guest").asBoolean())
         assertFalse(member.get("consent_required").asBoolean())

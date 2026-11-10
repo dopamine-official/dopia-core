@@ -69,8 +69,20 @@ function useCardViews() {
   };
 }
 
+/** Query on home naming the character whose chat opens once the guest has logged in. */
+const CHAT_AFTER_LOGIN = "chat";
+// The login hand-over already acted on: home mounts again later with the same one.
+let chatOpenedFor: string | null = null;
 function HomeScreen() {
-  const { t, account, locale, notice } = useSession();
+  const {
+    t,
+    account,
+    locale,
+    notice,
+    openLogin,
+    accountRedirect,
+    clearAccountRedirect,
+  } = useSession();
   const router = useRouter();
   const query = useQueryClient();
   const [sidebar, setSidebar] = useState(true);
@@ -123,6 +135,15 @@ function HomeScreen() {
   }, []);
   useSidebarShortcut(() => toggleSidebar(!sidebarOpen));
   async function open(characterId: string, source: "banner" | "card") {
+    // Chat is for members: a guest logs in first, and the chat they chose opens right after
+    // (CHARACTER web 2-2).
+    if (account.is_guest) {
+      openLogin({
+        trigger: "chat_open",
+        returnTo: `/?${CHAT_AFTER_LOGIN}=${encodeURIComponent(characterId)}&source=${source}`,
+      });
+      return;
+    }
     if (openingRef.current) return;
     const controller = new AbortController();
     openingRef.current = controller;
@@ -149,6 +170,39 @@ function HomeScreen() {
       setOpening(null);
     }
   }
+  // Back from a login started by a guest's card or banner: open the chat they chose, once.
+  useEffect(() => {
+    if (account.is_guest) {
+      // A new visitor on this tab: their own login may name the same character again.
+      chatOpenedFor = null;
+      return;
+    }
+    // The in-page login hands over its target before the address catches up; a provider
+    // round trip arrives with it in the address.
+    const target = accountRedirect?.startsWith("/?")
+      ? accountRedirect.slice(1)
+      : window.location.search;
+    const params = new URLSearchParams(target);
+    const characterId = params.get(CHAT_AFTER_LOGIN);
+    if (!characterId || target === chatOpenedFor) return;
+    chatOpenedFor = target;
+    const source = params.get("source") === "banner" ? "banner" : "card";
+    const here = new URLSearchParams(window.location.search);
+    here.delete(CHAT_AFTER_LOGIN);
+    here.delete("source");
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (here.size ? `?${here}` : ""),
+    );
+    // After this render: opening shows its progress state.
+    void Promise.resolve().then(() => {
+      // Read: a later guest redirect (session expiry) must not land here again.
+      if (accountRedirect?.startsWith("/?")) clearAccountRedirect();
+      return open(characterId, source);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per arrival
+  }, [account.is_guest, accountRedirect]);
   return (
     <div className={`home_page ${sidebar ? "" : "sidebar_closed"}`}>
       <SiteHeader

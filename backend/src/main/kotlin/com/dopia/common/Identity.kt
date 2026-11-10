@@ -13,8 +13,13 @@ data class Identity(
 
 /**
  * An endpoint the account may call only after agreeing to the region's required consents
- * (ACCOUNT 4-1-9). Identification answers 403 `consent_required` otherwise.
+ * (ACCOUNT 4-1-8). Identification answers 403 `consent_required` otherwise.
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class RequiresConsent
+
+/** An endpoint only members may call (CHAT 4-1-1, 4-1-3). Identification answers 403 `member_required` to a guest. */
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class RequiresMember

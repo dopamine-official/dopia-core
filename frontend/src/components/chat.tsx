@@ -8,7 +8,7 @@ import { ApiError, roomSchema, type Message, type Room } from "@/lib/contracts";
 import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
 import { Screen } from "./page";
-import { useSession } from "./providers";
+import { useMembersOnly, useSession } from "./providers";
 import {
   ErrorState,
   Icon,
@@ -43,6 +43,9 @@ function turnIndex(room: Room | undefined, clientMessageId: string) {
   return found === -1 ? users.length + 1 : found + 1;
 }
 export function Chat({ roomId }: { roomId: string }) {
+  // Chat is for members: a guest goes to the login modal over home and comes back here.
+  const member = useMembersOnly(`/chats/${roomId}`);
+  if (!member) return null;
   return (
     <Screen page="chat_room">
       <ChatRoom roomId={roomId} />
@@ -50,7 +53,7 @@ export function Chat({ roomId }: { roomId: string }) {
   );
 }
 function ChatRoom({ roomId }: { roomId: string }) {
-  const { account, locale, t, notice, openLogin } = useSession();
+  const { account, locale, t, notice } = useSession();
   const query = useQueryClient();
   const router = useRouter();
   const [menu, setMenu] = useState(false);
@@ -379,24 +382,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
           )}
         </div>
         <div className="header_actions">
-          {account.is_guest ? (
-            <button
-              type="button"
-              className="login_link"
-              aria-haspopup="dialog"
-              onClick={() => {
-                track("login_link_clicked", "chat_room");
-                openLogin({
-                  trigger: "login_button",
-                  returnTo: `/chats/${roomId}`,
-                });
-              }}
-            >
-              {t("account.login.button")}
-            </button>
-          ) : (
-            <ProfileMenu />
-          )}
+          <ProfileMenu />
         </div>
       </header>
       {menu && (

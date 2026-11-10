@@ -34,6 +34,8 @@ class Cookies(
         value: String,
     ) = add(response, GUEST, value, Duration.ofDays(365))
 
+    fun clearGuest(response: HttpServletResponse) = add(response, GUEST, "", Duration.ZERO)
+
     fun setSession(
         response: HttpServletResponse,
         value: String,

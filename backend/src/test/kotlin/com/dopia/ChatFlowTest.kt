@@ -1,6 +1,7 @@
 package com.dopia
 
 import com.dopia.account.AccountService
+import com.dopia.chat.ChatRepository
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -27,6 +28,7 @@ import kotlin.test.assertTrue
 class ChatFlowTest(
     @LocalServerPort private val port: Int,
     @Autowired private val accounts: AccountService,
+    @Autowired private val chats: ChatRepository,
 ) {
     private val mapper = ObjectMapper()
     private val winter = "3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d"
@@ -208,6 +210,36 @@ class ChatFlowTest(
         val adult = browser.call("PATCH", "/account/me/adult_mode", """{"adult_mode":true}""")
         assertEquals(403, adult.statusCode())
         assertEquals("adult_verification_required", mapper.readTree(adult.body()).get("code").asString())
+    }
+
+    @Test
+    fun `BE-09 the first message goes to the AI as the prologue, not as history`() {
+        val browser = Browser()
+        browser.login()
+        val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
+        val roomId = UUID.fromString(room)
+        val firstMessage =
+            browser
+                .json("GET", "/chats/$room")
+                .get("messages")
+                .get(0)
+                .get("content")
+                .asString()
+        assertEquals(firstMessage, chats.prologueOf(roomId))
+        // A new room: nothing has been exchanged yet.
+        assertEquals(emptyList(), chats.historyAfter(roomId, 0, Int.MAX_VALUE))
+
+        assertTrue(send(browser, room, "하나").body().contains("event:completed"))
+        browser.json("PUT", "/mock/scenario", """{"response":"fail","home":"normal"}""")
+        assertTrue(send(browser, room, "실패").body().contains("event:failed"))
+        assertTrue(send(browser, room, "둘").body().contains("event:completed"))
+
+        // Completed turns only, starting with the user; the first message and the failed turn are left out.
+        val history = chats.historyAfter(roomId, 0, Int.MAX_VALUE)
+        assertEquals(listOf("user", "assistant", "user", "assistant"), history.map { it.role })
+        assertEquals(listOf("하나", "둘"), history.filter { it.role == "user" }.map { it.content })
+        assertTrue(history.none { it.content == firstMessage })
+        assertEquals(firstMessage, chats.prologueOf(roomId))
     }
 
     @Test

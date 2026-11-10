@@ -64,6 +64,7 @@ def chat_input(request_id: str, account_id: str, body: ChatTurnRequest) -> ChatT
         request_id=request_id,
         account_id=account_id,
         character=character,
+        prologue=(body.prologue or "").strip(),
         history=_clean_history(body.history),
         summary=(body.summary or "").strip(),
         user_input=user_input,

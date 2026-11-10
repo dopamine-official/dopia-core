@@ -101,7 +101,7 @@ class TurnRunner(
                 return
             }
             val character = characters.forChat(started.characterId, started.locale, adultAllowed = true)
-            val (summary, history) = chat.history(started)
+            val material = chat.aiMaterial(started)
             val request =
                 AiTurnRequest(
                     character =
@@ -113,8 +113,9 @@ class TurnRunner(
                             character.worldSetting,
                             started.isAdult,
                         ),
-                    history = history.map { AiHistoryItem(it.role, it.content) },
-                    summary = summary,
+                    prologue = material.prologue,
+                    history = material.history.map { AiHistoryItem(it.role, it.content) },
+                    summary = material.summary,
                     userInput = started.userInput,
                     generation = AiGeneration(started.locale),
                 )
@@ -136,7 +137,7 @@ class TurnRunner(
                     },
                 )
             val assistantId =
-                chat.complete(started, result.output, result.meta, AiInputShape(history.size, summary.isNotEmpty()))
+                chat.complete(started, result.output, result.meta, AiInputShape(material.history.size, material.summary.isNotEmpty()))
             if (assistantId != null) {
                 stream.send("completed", CompletedEvent(assistantId, result.output))
             } else {

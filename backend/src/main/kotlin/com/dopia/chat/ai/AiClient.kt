@@ -23,6 +23,8 @@ data class AiGeneration(
 
 data class AiTurnRequest(
     val character: AiCharacter,
+    /** The room's first message. Never part of [history]. */
+    val prologue: String,
     val history: List<AiHistoryItem>,
     val summary: String,
     val userInput: String,

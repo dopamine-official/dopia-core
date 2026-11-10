@@ -60,6 +60,7 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
             {"role": "user", "content": "three"},
         ],
         summary="  we met yesterday  ",
+        prologue="  *She looks up.* You came.  ",
         user_input="  four  ",
     )
     async with harness.client() as client:
@@ -75,6 +76,10 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
     system = request.prompt.system
     assert "Name: 林語彤\n" in system and "Personality: calm\n" in system
     assert "we met yesterday" in system and "## Story So Far" in system
+    # The prologue is trimmed and placed in the system prompt only, before the summary.
+    assert "## Prologue" in system and "\n*She looks up.* You came.\n" in system
+    assert system.index("## Prologue") < system.index("## Story So Far")
+    assert all("You came." not in m.content for m in request.prompt.messages)
     assert "This chat is not rated adult" in system and "This chat is rated adult" not in system
     assert "{{" not in system
     assert body["history"][0]["content"] == " one "  # request object untouched
@@ -89,7 +94,19 @@ async def test_chat_03_summary_omitted_and_adult_block(harness) -> None:
         )
     system = harness.adapter.calls[0].prompt.system
     assert "## Story So Far" not in system
+    assert "## Prologue" in system
     assert "This chat is rated adult" in system and "not rated adult" not in system
+
+
+async def test_chat_02_prologue_omitted_or_blank_leaves_the_block_out(harness) -> None:
+    omitted = chat_body()
+    del omitted["prologue"]
+    async with harness.client() as client:
+        for body in (omitted, chat_body(prologue=""), chat_body(prologue="   ")):
+            r = await client.post("/api/v1/chat/turn", json=body, headers=ids("r"))
+            assert r.status_code == 200
+    for call in harness.adapter.calls:
+        assert "## Prologue" not in call.prompt.system and "{{" not in call.prompt.system
 
 
 async def test_chat_04_route_selection(harness) -> None:
@@ -116,7 +133,7 @@ async def test_chat_05_normal_stream_and_int_01(harness_factory) -> None:
         completed = events[3][1]
         assert completed["output"] == "*她抬起頭，合上手中的書。*\n你今天來得真早呢。"
         meta = completed["meta"]
-        assert meta["model"] == "fake-general" and meta["provider"] == "fake" and meta["prompt_version"] == "v0.1"
+        assert meta["model"] == "fake-general" and meta["provider"] == "fake" and meta["prompt_version"] == "v0.2"
         assert meta["input_token_count"] == usage.input_tokens and meta["output_token_count"] == usage.output_tokens
         assert isinstance(meta["ttft_ms"], int) and isinstance(meta["generation_ms"], int)
         assert meta["finish_reason"] == "stop"
@@ -166,6 +183,7 @@ async def test_chat_07_cancel_closes_stream_and_is_not_a_failure(harness_factory
         request_id="r",
         account_id="acct-1",
         character={k: v for k, v in chat_body()["character"].items() if k != "is_adult"},
+        prologue="",
         history=[Message("user", "hi")],
         summary="",
         user_input="x",
@@ -175,6 +193,7 @@ async def test_chat_07_cancel_closes_stream_and_is_not_a_failure(harness_factory
     trace = h.tracer.start(name="chat_turn", request_id="r", distinct_id="acct-1", input={}, metadata={})
     prompt = h.app.state.assembler.chat(
         character=turn.character,
+        prologue=turn.prologue,
         history=turn.history,
         summary="",
         user_input="x",
@@ -213,6 +232,7 @@ def _direct_turn(h):  # type: ignore[no-untyped-def]
         request_id="r",
         account_id="acct-1",
         character={k: v for k, v in chat_body()["character"].items() if k != "is_adult"},
+        prologue="",
         history=[],
         summary="",
         user_input="x",
@@ -221,7 +241,13 @@ def _direct_turn(h):  # type: ignore[no-untyped-def]
     )
     trace = h.tracer.start(name="chat_turn", request_id="r", distinct_id="acct-1", input={}, metadata={})
     prompt = h.app.state.assembler.chat(
-        character=turn.character, history=[], summary="", user_input="x", locale="ko-KR", is_adult=False
+        character=turn.character,
+        prologue=turn.prologue,
+        history=[],
+        summary="",
+        user_input="x",
+        locale="ko-KR",
+        is_adult=False,
     )
     return generate_turn(
         turn,

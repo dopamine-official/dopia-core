@@ -24,8 +24,8 @@ class StubAiClient(
     ): AiTurnResult {
         val behaviour = scenario.takeResponse()
         val replies = StubReplies.of(characterId, request.generation.locale)
-        val completedTurns = request.history.count { it.role == "assistant" } - 1
-        val reply = replies[maxOf(0, completedTurns) % replies.size]
+        val completedTurns = request.history.count { it.role == "assistant" }
+        val reply = replies[completedTurns % replies.size]
         val totalMs = if (behaviour == "slow") 6500L else 2200L
         val started = System.currentTimeMillis()
         var position = 0

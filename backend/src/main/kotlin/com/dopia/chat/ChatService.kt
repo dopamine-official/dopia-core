@@ -57,6 +57,13 @@ data class RoomView(
     val generating: Boolean,
 )
 
+/** What the room contributes to an AI turn request (4-2-6). */
+data class AiMaterial(
+    val prologue: String,
+    val summary: String,
+    val history: List<MessageRow>,
+)
+
 /** What the AI request carried besides the input, for `server_turn_completed`. */
 data class AiInputShape(
     val historyCount: Int,
@@ -407,11 +414,15 @@ class ChatService(
     /** Error code stored on a turn that was ended by someone else (recovery, another worker). */
     fun storedErrorCode(turnId: UUID): String? = repository.findTurnById(turnId)?.errorCode
 
-    /** AI request material (4-2-6): summary, un-summarized history before this input. */
-    fun history(started: TurnStart.Started): Pair<String, List<MessageRow>> {
+    /** AI request material (4-2-6): prologue, summary, un-summarized history before this input. */
+    fun aiMaterial(started: TurnStart.Started): AiMaterial {
         val summary = repository.summaryOf(started.roomId)
         val after = summary?.lastSummarizedSeq ?: 0
-        return (summary?.content ?: "") to repository.historyAfter(started.roomId, after, started.userMessageSeq)
+        return AiMaterial(
+            prologue = repository.prologueOf(started.roomId),
+            summary = summary?.content ?: "",
+            history = repository.historyAfter(started.roomId, after, started.userMessageSeq),
+        )
     }
 
     // 4-1-5 lost turn recovery

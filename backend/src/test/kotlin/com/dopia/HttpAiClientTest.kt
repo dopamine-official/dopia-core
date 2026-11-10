@@ -26,6 +26,7 @@ import kotlin.test.assertTrue
 class HttpAiClientTest {
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
     private val headers = ConcurrentHashMap<String, String>()
+    private val bodies = java.util.concurrent.CopyOnWriteArrayList<String>()
     private val serverSawDisconnect = CountDownLatch(1)
     private val mapper = JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build()
 
@@ -36,7 +37,7 @@ class HttpAiClientTest {
     ) {
         server.createContext("/api/v1/chat/turn") { exchange ->
             exchange.requestHeaders.forEach { (k, v) -> headers[k.lowercase()] = v.first() }
-            exchange.requestBody.readAllBytes()
+            bodies += String(exchange.requestBody.readAllBytes())
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             exchange.sendResponseHeaders(200, 0)
             try {
@@ -71,6 +72,7 @@ class HttpAiClientTest {
     private val request =
         AiTurnRequest(
             character = AiCharacter("A", "f", "p", "s", "w", false),
+            prologue = "opening",
             history = emptyList(),
             summary = "",
             userInput = "hi",
@@ -101,6 +103,10 @@ class HttpAiClientTest {
             )
         assertEquals("req-123", headers["x-request-id"])
         assertEquals(account.toString(), headers["x-account-id"])
+        val sent = mapper.readTree(bodies.single())
+        assertEquals("opening", sent.get("prologue").asString())
+        assertEquals(0, sent.get("history").size())
+        assertEquals("hi", sent.get("user_input").asString())
         assertEquals(listOf("t0", "t1"), tokens)
         assertEquals("done", result.output)
         assertEquals("chat_v1", result.meta.promptVersion)

@@ -33,6 +33,7 @@ def _failed(code: str, message: str) -> Event:
 def assemble_chat_prompt(assembler: PromptAssembler, turn: ChatTurnInput, trace: Trace) -> AssembledPrompt:
     prompt = assembler.chat(
         character=turn.character,
+        prologue=turn.prologue,
         history=turn.history,
         summary=turn.summary,
         user_input=turn.user_input,

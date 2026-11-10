@@ -17,6 +17,9 @@ from chat_ai.prompt.assembler import PROMPT_KEYS, TemplateError, load_prompt
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 ROUTE_NAMES = ("chat_general", "chat_adult", "compact")
+# Request fields the route's own keys or the code already set. A route's `params` may not repeat
+# them: the call would fail on every request, or silently override the route.
+RESERVED_PARAMS = ("model", "messages", "system", "stream", "timeout", "max_tokens", "max_completion_tokens")
 
 
 class SettingsError(Exception):
@@ -109,6 +112,10 @@ def load_routes(path: Path, missing: list[str]) -> dict[str, Route]:
         params = raw.get("params") or {}
         if not isinstance(params, dict):
             missing.append(f"routes.{name}.params must be a mapping in {path.name}")
+            continue
+        reserved = [k for k in RESERVED_PARAMS if k in params]
+        if reserved:
+            missing.extend(f"routes.{name}.params.{k} is not allowed in {path.name}" for k in reserved)
             continue
         routes[name] = Route(
             name=name,

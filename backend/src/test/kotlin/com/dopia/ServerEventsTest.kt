@@ -23,7 +23,6 @@ import java.time.Period
 import java.time.ZoneId
 import java.util.UUID
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -263,10 +262,11 @@ class ServerEventsTest(
         val consented = only(guest, "server_consents_recorded")
         assertEquals(listOf("terms", "privacy"), consented.properties["items"])
         assertEquals(true, consented.properties["is_guest"])
-        assertEquals("2026-11-10", consented.person["consent_terms_version"])
-        assertEquals("2026-11-10", consented.person["consent_privacy_version"])
-        assertEquals(false, consented.person["adult_verified"])
-        assertFalse("gender" in consented.person || "age" in consented.person)
+        // A consent sets only the consent versions.
+        assertEquals(
+            mapOf("consent_terms_version" to "2026-11-10", "consent_privacy_version" to "2026-11-10"),
+            consented.person,
+        )
         // Agreeing again records nothing new.
         browser.json(
             "POST",
@@ -278,7 +278,9 @@ class ServerEventsTest(
         val (member, token) = accounts.loginFresh(UUID.fromString(guest))
         browser.session = token
         // The guest's consents were copied: the member's person has them from the login on.
-        assertEquals("2026-11-10", only(member, "server_login_succeeded").person["consent_terms_version"])
+        val loginPerson = only(member, "server_login_succeeded").person
+        assertEquals("2026-11-10", loginPerson["consent_terms_version"])
+        assertEquals(false, loginPerson["adult_verified"])
 
         val birth = LocalDate.of(1990, 5, 5)
         browser.json("POST", "/account/me/adult_verification", """{"gender":"male","birth_date":"$birth"}""")
@@ -286,9 +288,8 @@ class ServerEventsTest(
         val submitted = only(member, "server_adult_verification_submitted")
         assertEquals(mapOf("result" to "passed", "gender" to "male", "age" to age), submitted.properties)
         assertEquals(
+            // Only what the verification changed, with the event's own age.
             mapOf(
-                "consent_terms_version" to "2026-11-10",
-                "consent_privacy_version" to "2026-11-10",
                 "adult_verification_result" to "passed",
                 "adult_verified" to true,
                 "gender" to "male",

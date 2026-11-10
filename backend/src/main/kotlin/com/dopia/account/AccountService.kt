@@ -179,7 +179,7 @@ class AccountService(
                 identity.accountId,
                 "server_consents_recorded",
                 mapOf("items" to recorded, "is_guest" to identity.isGuest),
-                person(identity.accountId, region),
+                consentPerson(identity.accountId),
             )
         }
         return me(identity, region)
@@ -231,7 +231,8 @@ class AccountService(
             identity.accountId,
             "server_adult_verification_submitted",
             mapOf("result" to if (verified) "passed" else "rejected", "gender" to gender, "age" to age),
-            person(identity.accountId, region),
+            // From this submission itself, the same age as the event: no read a parallel request could outrun.
+            verificationPerson(verified, gender!!, age),
         )
         // Passing turns adult mode on in the same update (TRACKING-PLAN 8-1-8).
         if (verified) events.record(identity.accountId, "server_safe_mode_changed", mapOf("adult_mode" to true))
@@ -418,30 +419,41 @@ class AccountService(
                 "had_guest" to hadGuest,
             ),
             // The browser redirect carries no region: the deployment's default one.
-            person(memberId, i18n.region(null)),
+            loginPerson(memberId, i18n.region(null)),
         )
         if (guestAccountId != null) events.alias(guestAccountId, memberId)
         return memberId
     }
 
-    /**
-     * PostHog person properties from the DB (TRACKING-PLAN 8-4): agreed versions, the adult
-     * verification result, gender and age. Never the birth date.
-     */
-    private fun person(
+    // PostHog person properties (TRACKING-PLAN 8-4). Each event sets only what it changed, so a
+    // late snapshot from a parallel request cannot undo another one. Never the birth date.
+
+    /** The latest agreed version of each item. */
+    private fun consentPerson(accountId: UUID): Map<String, Any> =
+        accounts.agreedVersions(accountId).entries.associate { (id, version) -> "consent_${id}_version" to version }
+
+    private fun verificationPerson(
+        passed: Boolean,
+        gender: String,
+        age: Int?,
+    ): Map<String, Any> =
+        buildMap {
+            put("adult_verification_result", if (passed) "passed" else "rejected")
+            put("adult_verified", passed)
+            put("gender", gender)
+            age?.let { put("age", it) }
+        }
+
+    /** Everything from the DB: the guest's consents were just copied, and the age moves on. */
+    private fun loginPerson(
         accountId: UUID,
         region: RegionConfig,
     ): Map<String, Any> {
-        val values = mutableMapOf<String, Any>()
-        accounts.agreedVersions(accountId).forEach { (id, version) -> values["consent_${id}_version"] = version }
-        values["adult_verified"] = false
-        accounts.verification(accountId)?.let { (gender, birth, passed) ->
-            values["adult_verification_result"] = if (passed) "passed" else "rejected"
-            values["adult_verified"] = passed
-            values["gender"] = gender
-            region.timeZone?.let { values["age"] = Period.between(birth, LocalDate.now(it)).years }
-        }
-        return values
+        val verification =
+            accounts.verification(accountId)?.let { (gender, birth, passed) ->
+                verificationPerson(passed, gender, region.timeZone?.let { Period.between(birth, LocalDate.now(it)).years })
+            } ?: mapOf("adult_verified" to false)
+        return consentPerson(accountId) + verification
     }
 
     private fun uniqueNickname(base: String): String {

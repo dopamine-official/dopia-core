@@ -16,6 +16,14 @@ def build_adapters(settings: Settings) -> dict[str, Adapter]:
             from chat_ai.llm.adapters.anthropic import AnthropicAdapter
 
             adapters["anthropic"] = AnthropicAdapter(api_key=settings.provider_api_keys["anthropic"])
+        elif route.provider == "openai":
+            from chat_ai.llm.adapters.openai import OpenAIAdapter
+
+            adapters["openai"] = OpenAIAdapter(api_key=settings.provider_api_keys["openai"])
+        elif route.provider == "openrouter":
+            from chat_ai.llm.adapters.openrouter import OpenRouterAdapter
+
+            adapters["openrouter"] = OpenRouterAdapter(api_key=settings.provider_api_keys["openrouter"])
         elif route.provider == "fake":
             from chat_ai.llm.adapters.fake import FakeAdapter
 

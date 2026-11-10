@@ -182,7 +182,10 @@ class GeminiAdapter:
             finally:
                 # Stops the provider's generation right away when the consumer left before the end.
                 for response in opened:
-                    await response.aclose()
+                    try:
+                        await response.aclose()
+                    except Exception:
+                        pass  # already gone on the other side: nothing left to close, not a call failure
                 # The call is over: later calls in this task must not pile their responses up here.
                 opened.clear()
                 _open_responses.set(None)

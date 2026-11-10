@@ -216,6 +216,20 @@ async def test_stream_is_closed_at_once_when_the_consumer_leaves() -> None:
     assert closed == ["call-0", "call-1"]
 
 
+async def test_a_failed_close_is_not_a_call_failure() -> None:
+    class GoneBody(SlowBody):
+        async def aclose(self) -> None:
+            raise httpx2.ReadError("connection already reset")
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, headers={"content-type": "text/event-stream"}, stream=GoneBody([], "gone"))
+
+    adapter = GeminiAdapter(api_key="k", http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)))
+    stream = adapter.stream(_request())
+    assert await anext(stream) == TextChunk("A")
+    await stream.aclose()  # must not raise
+
+
 async def test_stream_is_closed_when_the_time_limit_cancels_it() -> None:
     closed: list[str] = []
     with pytest.raises(TimeoutError):

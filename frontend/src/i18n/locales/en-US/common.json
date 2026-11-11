@@ -27,5 +27,7 @@
   "not_found": "The requested item could not be found.",
   "invalid_input": "Check your input and try again.",
   "too_many_requests": "Too many requests. Please try again shortly.",
-  "server_error": "The server encountered a problem. Please try again shortly."
+  "server_error": "The server encountered a problem. Please try again shortly.",
+  "theme_light": "Switch to light mode",
+  "theme_dark": "Switch to dark mode"
 }

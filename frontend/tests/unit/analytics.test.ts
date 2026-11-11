@@ -69,6 +69,12 @@ async function load() {
   return import("@/lib/analytics");
 }
 const named = (name: string) => calls.filter(([n]) => n === name);
+/** The page's `<html>`, whose `data-theme` the layout script sets before first paint. */
+function screenTheme(theme: "dark" | "light") {
+  const root = { dataset: { theme } };
+  vi.stubGlobal("document", { documentElement: root });
+  return root;
+}
 const lastRegister = () => main.superProperties;
 
 beforeEach(() => {
@@ -105,7 +111,23 @@ describe("analytics identity", () => {
       is_member: false,
       adult_mode: false,
       locale: "ko-KR",
+      // Dark is the default when nothing else is on screen.
+      theme: "dark",
     });
+  });
+
+  it("reports the theme on screen and follows a change", async () => {
+    const root = screenTheme("light");
+    const analytics = await load();
+    analytics.syncAnalyticsAccount(guest);
+    expect(lastRegister()).toMatchObject({ theme: "light" });
+    root.dataset.theme = "dark";
+    analytics.syncAnalyticsTheme();
+    expect(lastRegister()).toMatchObject({ theme: "dark" });
+    // reset() on logout wipes it; the next account's register puts it back.
+    analytics.syncAnalyticsAccount({ ...guest, account_id: "guest-2" });
+    analytics.track("home_viewed", "home");
+    expect(named("capture").at(-1)?.[2]).toMatchObject({ theme: "dark" });
   });
 
   it("merges the guest into the member on login and starts over as a new guest on logout", async () => {
@@ -174,6 +196,7 @@ describe("analytics events", () => {
   });
 
   it("records the session failure screen on a separate temporary instance", async () => {
+    screenTheme("light");
     const analytics = await load();
     analytics.setAnalyticsLocale("zh-TW");
     analytics.trackBeforeSession("error_screen_viewed", {
@@ -196,6 +219,7 @@ describe("analytics events", () => {
       page: "error",
       environment: "dev",
       locale: "zh-TW",
+      theme: "light",
     });
     // The account is unknown before the session exists.
     for (const [, , props] of sent) {

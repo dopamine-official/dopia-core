@@ -230,6 +230,25 @@ test("header, footer, profile menu and 404", async ({ page, analytics }) => {
     .selectOption("ko-KR");
   await sent(analytics, "locale_changed", { from: "en-US", to: "ko-KR" });
 
+  await page
+    .getByRole("button", { name: "라이트 모드로 전환", exact: true })
+    .click();
+  await sent(analytics, "theme_changed", {
+    from: "dark",
+    to: "light",
+    page: "home",
+    theme: "light",
+  });
+  await page
+    .getByRole("button", { name: "다크 모드로 전환", exact: true })
+    .click();
+  await sent(analytics, "theme_changed", {
+    from: "light",
+    to: "dark",
+    page: "home",
+    theme: "dark",
+  });
+
   const support = page.getByRole("button", { name: "고객센터", exact: true });
   await support.click();
   await sent(analytics, "footer_link_clicked", {

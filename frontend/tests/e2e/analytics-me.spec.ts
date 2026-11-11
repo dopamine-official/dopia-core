@@ -213,7 +213,7 @@ test("the profile menu logs out from any screen, in red", async ({
   const logout = page
     .getByRole("navigation", { name: "내 메뉴", exact: true })
     .getByRole("button", { name: "로그아웃", exact: true });
-  await expect(logout).toHaveCSS("color", "rgb(178, 58, 58)");
+  await expect(logout).toHaveCSS("color", "rgb(224, 114, 114)");
   await logout.click();
   await expect(logout).toBeHidden();
   await sent(analytics, "profile_menu_item_clicked", { item: "logout" });

@@ -15,6 +15,7 @@ import {
   Loading,
   Modal,
   ProfileMenu,
+  ThemeToggle,
   useSidebarShortcut,
 } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
@@ -382,6 +383,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
           )}
         </div>
         <div className="header_actions">
+          <ThemeToggle />
           <ProfileMenu />
         </div>
       </header>

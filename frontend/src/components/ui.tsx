@@ -26,7 +26,12 @@ import {
   ApiError,
 } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
-import { errorCode, track, type EventProperties } from "@/lib/analytics";
+import {
+  errorCode,
+  syncAnalyticsTheme,
+  track,
+  type EventProperties,
+} from "@/lib/analytics";
 import {
   clearLoginStart,
   pageForPath,
@@ -509,12 +514,15 @@ const watchTheme = (onChange: () => void) => {
 /** Shows the theme a click switches to: the sun in dark mode, the moon in light mode. */
 export function ThemeToggle() {
   const { t } = useSession();
+  const send = useTrack();
   const theme = useSyncExternalStore<Theme>(
     watchTheme,
     readTheme,
     () => "dark",
   );
   const next: Theme = theme === "dark" ? "light" : "dark";
+  // Also follows a change made in another tab.
+  useEffect(syncAnalyticsTheme, [theme]);
   return (
     <button
       type="button"
@@ -522,6 +530,9 @@ export function ThemeToggle() {
       aria-label={t(`common.theme_${next}`)}
       onClick={() => {
         document.documentElement.dataset.theme = next;
+        // After the switch, so the event carries the new `theme` like the screen does.
+        syncAnalyticsTheme();
+        send("theme_changed", { from: theme, to: next });
         try {
           localStorage.setItem("dopia:theme", next);
         } catch {

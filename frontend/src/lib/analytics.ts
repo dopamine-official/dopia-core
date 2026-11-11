@@ -48,6 +48,13 @@ function releaseProperties() {
 let current: { id: string; member: boolean } | null = null;
 let locale: string | null = null;
 
+/** The theme on screen; `layout.tsx` sets it before first paint, dark by default. */
+function currentTheme() {
+  return globalThis.document?.documentElement.dataset.theme === "light"
+    ? "light"
+    : "dark";
+}
+
 function bootstrap(account: Account) {
   return {
     distinctID: account.account_id,
@@ -71,6 +78,7 @@ function registerAll(account: Account) {
     ...releaseProperties(),
     ...accountProperties(account),
     ...(locale ? { locale } : {}),
+    theme: currentTheme(),
   });
 }
 
@@ -112,6 +120,12 @@ function restart(account: Account) {
 export function setAnalyticsLocale(next: string) {
   locale = next;
   if (enabled() && current !== null) posthog.register({ locale });
+}
+
+/** Keeps the `theme` common property in step with the theme on screen. */
+export function syncAnalyticsTheme() {
+  if (enabled() && current !== null)
+    posthog.register({ theme: currentTheme() });
 }
 
 /** Sends a web event with the common properties; `page` names the screen it happened on. */

@@ -787,7 +787,12 @@ export function Footer() {
 
 /** Required consents, before anything else on any screen (ACCOUNT web 2-2-6). */
 export function ConsentHost() {
-  const { account } = useSession();
+  const { account, accountRedirect } = useSession();
+  const pathname = usePathname();
+  // An account change on its way to another screen (a withdrawal goes home) opens the modal
+  // there, so it shows and is recorded on that screen, not the one being left.
+  if (accountRedirect !== null && pathname !== accountRedirect.split("?")[0])
+    return null;
   // A new showing (a new required version) starts with nothing checked.
   return account.consent_required ? <Consent /> : null;
 }

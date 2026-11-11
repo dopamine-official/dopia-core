@@ -48,6 +48,7 @@ test.describe("terms", () => {
 
   test("the browser remembers the consents after a logout, not after a withdrawal", async ({
     page,
+    analytics,
   }) => {
     await page.goto("/");
     const dialog = page.getByRole("dialog", { name: "서비스 이용 동의" });
@@ -79,6 +80,17 @@ test.describe("terms", () => {
       .getByRole("button", { name: "회원 탈퇴", exact: true })
       .click();
     await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL("/");
+    // Shown on home, where the withdrawal went, not on My Page.
+    await sent(analytics, "consent_modal_viewed", { page: "home" });
+    await settle(page);
+    expect(
+      analytics.filter(
+        (item) =>
+          item.event === "consent_modal_viewed" &&
+          item.properties.page === "me",
+      ),
+    ).toHaveLength(0);
     await page.reload();
     await expect(dialog).toBeVisible();
   });

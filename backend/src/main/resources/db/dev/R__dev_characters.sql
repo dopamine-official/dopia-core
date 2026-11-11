@@ -11,7 +11,7 @@ VALUES
  '{"ko-KR": "겉으로는 차갑고 무심하지만 손님을 세심하게 챙긴다."}',
  '{"ko-KR": "존댓말, 짧고 건조한 문장, 가끔 비꼬는 투."}',
  '{"ko-KR": "오래된 저택. 오후의 응접실에서 차를 내는 메이드."}',
- 'female', '/images/main_banner.png', 'Studio Chat', '/images/main_banner.png', true, false, true),
+ 'female', '/images/mock_gray.svg', 'Studio Chat', '/images/mock_gray.svg', true, false, true),
 ('3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d', 'ko-KR',
  '{"ko-KR": "겨울", "zh-TW": "冬", "en-US": "Winter"}',
  '{"ko-KR": "내가 귀찮게 구는 게 아니라, 네가 쓸데없이 편한 거야.", "zh-TW": "才不是想黏著你，只是跟你在一起太自在了。", "en-US": "I am not following you. You are just unusually easy to be around."}',

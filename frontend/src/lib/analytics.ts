@@ -7,7 +7,10 @@ const enabled = () => !!key && typeof window !== "undefined";
 
 /** Screen names for the `page` property (TRACKING-PLAN 3, 5, 6, 7). Never a path. */
 export type Page = "home" | "chat_room" | "me" | "not_found" | "error";
-export type EventProperties = Record<string, string | number | boolean | null>;
+export type EventProperties = Record<
+  string,
+  string | number | boolean | string[] | null
+>;
 
 // Shared by both instances: same-origin route (src/app/ingest) so ad blockers do not drop
 // events, and nothing loaded or collected beyond the events this app sends itself.

@@ -15,7 +15,7 @@ export type Character = {
 export const characters: Character[] = [
   {
     id: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
-    image_url: "/images/main_banner.png",
+    image_url: "/images/mock_gray.svg",
     creator_name: "Studio Chat",
     is_adult: false,
     texts: {

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -38,6 +39,7 @@ import {
   type LoginRequest,
 } from "./providers";
 import { useTrack } from "./page";
+import { forgetBrowserConsent } from "@/lib/consent";
 
 export function Icon({
   name,
@@ -181,6 +183,19 @@ export function SiteHeader({
         )}
       </div>
     </header>
+  );
+}
+/**
+ * Records an event of a modal drawn over every screen (consent, adult verification), on the
+ * screen under it (TRACKING-PLAN 9): those modals sit outside any screen's context.
+ */
+function useOverlayTrack() {
+  const page = pageForPath(usePathname());
+  return useCallback(
+    (event: string, properties?: EventProperties) => {
+      if (page) track(event, page, properties);
+    },
+    [page],
   );
 }
 /** Records a login event on the screen under the modal (TRACKING-PLAN 4). */
@@ -330,6 +345,7 @@ export function useLeave() {
         accountIdentitySchema,
         { method: "POST" },
       );
+      if (remove) forgetBrowserConsent();
       changeAccount(await readAccount(issued.account_id), "/");
       leaveInFlight = false;
     } catch (error) {
@@ -771,13 +787,28 @@ export function Footer() {
 
 /** Required consents, before anything else on any screen (ACCOUNT web 2-2-6). */
 export function ConsentHost() {
-  const { account } = useSession();
+  const { account, accountRedirect } = useSession();
+  const pathname = usePathname();
+  // An account change on its way to another screen (a withdrawal goes home) opens the modal
+  // there, so it shows and is recorded on that screen, not the one being left.
+  if (accountRedirect !== null && pathname !== accountRedirect.split("?")[0])
+    return null;
   // A new showing (a new required version) starts with nothing checked.
   return account.consent_required ? <Consent /> : null;
 }
 function Consent() {
   const { t, account, replaceAccount } = useSession();
+  const send = useOverlayTrack();
   const consentItems = account.consent_items;
+  // Once per showing (TRACKING-PLAN 9-1).
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (viewed.current) return;
+    viewed.current = true;
+    send("consent_modal_viewed", {
+      items: consentItems.map((item) => item.id),
+    });
+  }, [consentItems, send]);
   const [checked, setChecked] = useState<string[]>([]);
   // Items whose text is unfolded under them.
   const [shown, setShown] = useState<string[]>([]);
@@ -787,14 +818,21 @@ function Consent() {
   const ready = consentItems.every(
     (item) => !item.required || checked.includes(item.id),
   );
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    send("consent_checked", { item: id, checked: !checked.includes(id) });
     setChecked((current) =>
       current.includes(id)
         ? current.filter((value) => value !== id)
         : [...current, id],
     );
+  };
   async function agree() {
     if (busy || !ready) return;
+    send("consent_agree_clicked", {
+      items: consentItems
+        .filter((item) => checked.includes(item.id))
+        .map((item) => item.id),
+    });
     setBusy(true);
     setError("");
     try {
@@ -807,8 +845,9 @@ function Consent() {
         }),
       });
       replaceAccount(next);
-    } catch {
+    } catch (failure) {
       // 422 means this build's items differ from the server's: show the failure and keep going.
+      send("consent_failed", { code: errorCode(failure) });
       setError("account.consent.failed");
     } finally {
       setBusy(false);
@@ -826,9 +865,11 @@ function Consent() {
         <input
           type="checkbox"
           checked={all}
-          onChange={() =>
-            setChecked(all ? [] : consentItems.map((item) => item.id))
-          }
+          onChange={() => {
+            // One event for the whole row, not one per item (TRACKING-PLAN 9-2).
+            send("consent_checked", { item: "all", checked: !all });
+            setChecked(all ? [] : consentItems.map((item) => item.id));
+          }}
         />
         <span>{t("account.consent.all")}</span>
       </label>
@@ -861,13 +902,17 @@ function Consent() {
                   : "account.consent.view_item",
                 { name: t(`account.consent.item.${item.id}`) },
               )}
-              onClick={() =>
+              onClick={() => {
+                send("consent_detail_toggled", {
+                  item: item.id,
+                  open: !shown.includes(item.id),
+                });
                 setShown((current) =>
                   current.includes(item.id)
                     ? current.filter((value) => value !== item.id)
                     : [...current, item.id],
-                )
-              }
+                );
+              }}
             >
               {t(
                 shown.includes(item.id)
@@ -920,19 +965,30 @@ export function AdultVerificationHost() {
 }
 function AdultVerification({ request }: { request: AdultVerificationRequest }) {
   const { t, replaceAccount, closeAdultVerification } = useSession();
+  const send = useOverlayTrack();
   const queryClient = useQueryClient();
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (viewed.current) return;
+    viewed.current = true;
+    send("adult_verification_viewed");
+  }, [send]);
   const [gender, setGender] = useState<"male" | "female" | "">("");
   const [birthDate, setBirthDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState(false);
   const [error, setError] = useState("");
   const today = regionToday();
-  const close = () => {
-    if (!busy) closeAdultVerification();
+  // Closed without passing (TRACKING-PLAN 9-9); passing closes it through submit.
+  const close = (method: CloseReason | "cancel") => {
+    if (busy) return;
+    send("adult_verification_closed", { method, rejected });
+    closeAdultVerification();
   };
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || rejected || !gender || !birthDate) return;
+    send("adult_verification_submit_clicked");
     setBusy(true);
     setError("");
     let next;
@@ -954,6 +1010,7 @@ function AdultVerification({ request }: { request: AdultVerificationRequest }) {
         return;
       }
       setBusy(false);
+      send("adult_verification_failed", { code: errorCode(failure) });
       setError(
         failure instanceof ApiError && failure.status === 403
           ? "character.adult_mode_unavailable"
@@ -1023,7 +1080,11 @@ function AdultVerification({ request }: { request: AdultVerificationRequest }) {
           </p>
         )}
         <div className="modal_actions">
-          <button type="button" className="button" onClick={close}>
+          <button
+            type="button"
+            className="button"
+            onClick={() => close("cancel")}
+          >
             {t("common.cancel")}
           </button>
           <button

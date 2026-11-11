@@ -33,6 +33,7 @@ import {
   type LoginTrigger,
 } from "@/lib/login";
 import { errorMessageKey } from "@/lib/errors";
+import { withBrowserConsent } from "@/lib/consent";
 
 type Session = {
   account: Account;
@@ -169,7 +170,8 @@ export function Providers({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [toast]);
   const applyAccount = useCallback(
-    (next: Account) => {
+    (issued: Account) => {
+      const next = withBrowserConsent(issued);
       const previousId = accountRef.current?.account_id;
       const changed = previousId !== next.account_id;
       accountRef.current = next;

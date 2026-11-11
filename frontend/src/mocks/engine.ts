@@ -182,10 +182,19 @@ export function recordConsents(
       { field: "items", reason: "invalid" },
     ]);
   const record = compliance(state, user.account_id);
+  const recorded: string[] = [];
   for (const value of items) {
     const key = `${value.id}@${value.version}`;
-    if (!record.consents.includes(key)) record.consents.push(key);
+    if (record.consents.includes(key)) continue;
+    record.consents.push(key);
+    recorded.push(value.id);
   }
+  // Like the server (TRACKING-PLAN 8-1-9): only a new record counts.
+  if (recorded.length)
+    event(state, "consents_recorded", {
+      items: recorded,
+      is_guest: user.is_guest,
+    });
   return account(state);
 }
 /** Same rule as chat-server: full years on the UTC date, one submission per account. */
@@ -212,9 +221,16 @@ export function verifyAdult(state: State, gender: string, birthDate: string) {
     nowYear - year - (nowMonth * 100 + nowDay < month * 100 + day ? 1 : 0);
   record.gender = gender;
   record.birth_date = birthDate;
-  if (age >= ageConfig.adult_age) {
+  const passed = age >= ageConfig.adult_age;
+  event(state, "adult_verification_submitted", {
+    result: passed ? "passed" : "rejected",
+    gender,
+    age,
+  });
+  if (passed) {
     user.adult_verified = true;
     user.adult_mode = true;
+    event(state, "safe_mode_changed", { adult_mode: true });
   }
   return account(state);
 }
@@ -274,7 +290,7 @@ export function home(state: State, locale: Locale) {
     banner: {
       character_id: characters[0].id,
       name: characters[0].texts[locale].name,
-      image_url: "/images/main_banner.png",
+      image_url: "/images/mock_gray.svg",
     },
     sections: [
       {

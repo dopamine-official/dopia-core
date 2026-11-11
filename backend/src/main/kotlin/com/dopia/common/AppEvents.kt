@@ -10,6 +10,8 @@ data class AppEvent(
     val at: Instant,
     val accountId: UUID,
     val properties: Map<String, Any?>,
+    /** Person properties sent as `$set`. */
+    val person: Map<String, Any> = emptyMap(),
 )
 
 /**
@@ -23,17 +25,19 @@ class AppEvents(
 ) {
     private val events = CopyOnWriteArrayList<AppEvent>()
 
+    /** [person] goes to PostHog as `$set`, the person properties (TRACKING-PLAN 8-4). */
     fun record(
         accountId: UUID,
         name: String,
         properties: Map<String, Any?> = emptyMap(),
+        person: Map<String, Any> = emptyMap(),
     ) {
         // An unknown value (e.g. token counts the AI did not report) is left out, not sent as
-        // null; the dev preview's event list accepts only strings, numbers and booleans.
+        // null; the dev preview's event list accepts only strings, numbers, booleans and lists.
         val known = properties.filterValues { it != null }
-        val event = AppEvent(name, Instant.now(), accountId, known)
+        val event = AppEvent(name, Instant.now(), accountId, known, person)
         keep(event)
-        posthog.capture(accountId, name, known, event.at)
+        posthog.capture(accountId, name, if (person.isEmpty()) known else known + ("\$set" to person), event.at)
     }
 
     /** Dev preview only: shown on the preview page, never sent. */

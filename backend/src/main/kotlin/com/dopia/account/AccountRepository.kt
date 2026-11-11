@@ -266,11 +266,12 @@ class AccountRepository(
             .query { rs, _ -> rs.getString("consent_id") to rs.getString("version") }
             .set()
 
+    /** True when the record is new: an item and version already agreed to stays as it was. */
     fun insertConsent(
         accountId: UUID,
         consentId: String,
         version: String,
-    ) {
+    ): Boolean =
         jdbc
             .sql(
                 "INSERT INTO account_consents (account_id, consent_id, version) VALUES (:account, :consent, :version) " +
@@ -278,8 +279,31 @@ class AccountRepository(
             ).param("account", accountId)
             .param("consent", consentId)
             .param("version", version)
-            .update()
-    }
+            .update() > 0
+
+    /** The latest agreed version of each item (TRACKING-PLAN 8-4). */
+    fun agreedVersions(accountId: UUID): Map<String, String> =
+        jdbc
+            .sql(
+                """
+            SELECT DISTINCT ON (consent_id) consent_id, version FROM account_consents
+            WHERE account_id = :id ORDER BY consent_id, agreed_at DESC, version DESC
+            """,
+            ).param("id", accountId)
+            .query { rs, _ -> rs.getString("consent_id") to rs.getString("version") }
+            .list()
+            .toMap()
+
+    /** Gender, birth date and whether the verification passed; null before any submission. */
+    fun verification(accountId: UUID): Triple<String, LocalDate, Boolean>? =
+        jdbc
+            .sql(
+                "SELECT gender, birth_date, adult_verified_at IS NOT NULL AS passed FROM accounts WHERE id = :id AND birth_date IS NOT NULL",
+            ).param("id", accountId)
+            .query { rs, _ ->
+                Triple(rs.getString("gender"), rs.getObject("birth_date", LocalDate::class.java), rs.getBoolean("passed"))
+            }.optional()
+            .orElse(null)
 
     /** Copies every consent of [from] to [to] with its original time; ones [to] already has stay. */
     fun copyConsents(

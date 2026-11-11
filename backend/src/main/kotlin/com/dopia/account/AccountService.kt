@@ -5,6 +5,7 @@ import com.dopia.common.AppEvents
 import com.dopia.common.ConsentItem
 import com.dopia.common.Cookies
 import com.dopia.common.FieldError
+import com.dopia.common.I18n
 import com.dopia.common.Identity
 import com.dopia.common.RegionConfig
 import com.dopia.common.Tokens
@@ -64,6 +65,7 @@ class AccountService(
     private val properties: AppProperties,
     private val storage: PhotoStorage,
     private val events: AppEvents,
+    private val i18n: I18n,
 ) {
     private val log = LoggerFactory.getLogger(AccountService::class.java)
     private val headerAccount = "X-Preview-Account"
@@ -165,10 +167,20 @@ class AccountService(
         if (region.consentItems.any { it.required && it.id !in given }) {
             throw ApiException.invalidInput(FieldError("items", "required_missing"))
         }
-        tx.execute {
-            // Serialized with the login copying this guest's consents: none is left behind.
-            if (identity.isGuest) accounts.lock(identity.accountId)
-            items.distinct().forEach { (id, version) -> accounts.insertConsent(identity.accountId, id, version) }
+        val recorded =
+            tx.execute {
+                // Serialized with the login copying this guest's consents: none is left behind.
+                if (identity.isGuest) accounts.lock(identity.accountId)
+                items.distinct().filter { (id, version) -> accounts.insertConsent(identity.accountId, id, version) }.map { it.first }
+            }!!
+        // Agreeing again to what is already recorded is no new consent (TRACKING-PLAN 8-1-9).
+        if (recorded.isNotEmpty()) {
+            events.record(
+                identity.accountId,
+                "server_consents_recorded",
+                mapOf("items" to recorded, "is_guest" to identity.isGuest),
+                consentPerson(identity.accountId),
+            )
         }
         return me(identity, region)
     }
@@ -205,7 +217,8 @@ class AccountService(
             }
         if (birth == null || birth.isBefore(EARLIEST_BIRTH_DATE) || birth.isAfter(today)) errors += FieldError("birth_date", "invalid")
         if (errors.isNotEmpty()) throw ApiException.invalidInput(*errors.toTypedArray())
-        val verified = Period.between(birth!!, today).years >= adultAge
+        val age = Period.between(birth!!, today).years
+        val verified = age >= adultAge
         val stored = tx.execute { accounts.submitAdultVerification(identity.accountId, gender!!, birth, verified) }!!
         if (!stored) {
             throw ApiException(
@@ -214,6 +227,15 @@ class AccountService(
                 message = "adult verification was already submitted",
             )
         }
+        events.record(
+            identity.accountId,
+            "server_adult_verification_submitted",
+            mapOf("result" to if (verified) "passed" else "rejected", "gender" to gender, "age" to age),
+            // From this submission itself, the same age as the event: no read a parallel request could outrun.
+            verificationPerson(verified, gender!!, age),
+        )
+        // Passing turns adult mode on in the same update (TRACKING-PLAN 8-1-8).
+        if (verified) events.record(identity.accountId, "server_safe_mode_changed", mapOf("adult_mode" to true))
         return me(identity, region)
     }
 
@@ -396,9 +418,42 @@ class AccountService(
                 "is_new_member" to isNewMember,
                 "had_guest" to hadGuest,
             ),
+            // The browser redirect carries no region: the deployment's default one.
+            loginPerson(memberId, i18n.region(null)),
         )
         if (guestAccountId != null) events.alias(guestAccountId, memberId)
         return memberId
+    }
+
+    // PostHog person properties (TRACKING-PLAN 8-4). Each event sets only what it changed, so a
+    // late snapshot from a parallel request cannot undo another one. Never the birth date.
+
+    /** The latest agreed version of each item. */
+    private fun consentPerson(accountId: UUID): Map<String, Any> =
+        accounts.agreedVersions(accountId).entries.associate { (id, version) -> "consent_${id}_version" to version }
+
+    private fun verificationPerson(
+        passed: Boolean,
+        gender: String,
+        age: Int?,
+    ): Map<String, Any> =
+        buildMap {
+            put("adult_verification_result", if (passed) "passed" else "rejected")
+            put("adult_verified", passed)
+            put("gender", gender)
+            age?.let { put("age", it) }
+        }
+
+    /** Everything from the DB: the guest's consents were just copied, and the age moves on. */
+    private fun loginPerson(
+        accountId: UUID,
+        region: RegionConfig,
+    ): Map<String, Any> {
+        val verification =
+            accounts.verification(accountId)?.let { (gender, birth, passed) ->
+                verificationPerson(passed, gender, region.timeZone?.let { Period.between(birth, LocalDate.now(it)).years })
+            } ?: mapOf("adult_verified" to false)
+        return consentPerson(accountId) + verification
     }
 
     private fun uniqueNickname(base: String): String {

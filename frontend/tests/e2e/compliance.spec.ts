@@ -46,6 +46,41 @@ test.describe("terms", () => {
     ).toBeHidden();
   });
 
+  test("a logout keeps the consents, a withdrawal does not", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const dialog = page.getByRole("dialog", { name: "서비스 이용 동의" });
+    await dialog.getByRole("checkbox", { name: "전체 동의" }).check();
+    await dialog.getByRole("button", { name: "동의하고 시작하기" }).click();
+    await expect(dialog).toBeHidden();
+    await signIn(page);
+    await page.getByRole("button", { name: "내 프로필", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "내 메뉴", exact: true })
+      .getByRole("button", { name: "로그아웃", exact: true })
+      .click();
+    await expect(
+      page
+        .locator(".site_header")
+        .getByRole("button", { name: "로그인", exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("switch", { name: "세이프 모드" }),
+    ).toBeVisible();
+    await expect(dialog).toBeHidden();
+
+    await signIn(page);
+    await page.goto("/me");
+    await page.getByRole("button", { name: "회원 탈퇴", exact: true }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "회원 탈퇴", exact: true })
+      .click();
+    await expect(dialog).toBeVisible();
+  });
+
   test("the terms modal sends its events (TRACKING-PLAN 9-1 to 9-5)", async ({
     page,
     analytics,

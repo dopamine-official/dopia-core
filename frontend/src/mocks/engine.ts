@@ -249,7 +249,9 @@ export function logout(state: State, withdraw = false) {
     );
   } else event(state, "logout_succeeded");
   state.active_account_id = null;
-  guest(state);
+  const next = guest(state);
+  // A logout keeps this browser's consents; a withdrawal does not (ACCOUNT 4-1-9).
+  if (!withdraw) copyConsents(state, previous.account_id, next.account_id);
   return account(state);
 }
 export function updateProfile(

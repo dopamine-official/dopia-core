@@ -240,7 +240,7 @@ class AccountComplianceTest(
     }
 
     @Test
-    fun `consents follow login but not logout or withdrawal`() {
+    fun `consents follow login and logout but not withdrawal`() {
         val browser = Browser()
         browser.json("POST", "/account/guest")
         browser.json("POST", "/account/me/consents", consents)
@@ -255,7 +255,7 @@ class AccountComplianceTest(
 
         browser.json("POST", "/account/logout")
         browser.session = null
-        assertTrue(browser.json("GET", "/account/me").get("consent_required").asBoolean())
+        assertFalse(browser.json("GET", "/account/me").get("consent_required").asBoolean())
 
         val leaving = Browser()
         leaving.login()

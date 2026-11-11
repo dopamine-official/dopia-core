@@ -10,7 +10,16 @@ export const metadata: Metadata = {
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={defaultLocale} suppressHydrationWarning>
+    <html lang={defaultLocale} data-theme="dark" suppressHydrationWarning>
+      <head>
+        {/* Dark is the default; a saved light choice applies before first paint, and a
+            choice made in another tab applies here at once. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("dopia:theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}addEventListener("storage",function(e){if(e.key==="dopia:theme")document.documentElement.dataset.theme=e.newValue==="light"?"light":"dark"})`,
+          }}
+        />
+      </head>
       <body>
         <Providers>
           {children}

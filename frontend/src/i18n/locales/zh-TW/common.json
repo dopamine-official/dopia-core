@@ -27,5 +27,7 @@
   "not_found": "找不到您要求的項目。",
   "invalid_input": "請確認輸入內容後再試一次。",
   "too_many_requests": "請求次數過多，請稍後再試。",
-  "server_error": "伺服器發生問題，請稍後再試。"
+  "server_error": "伺服器發生問題，請稍後再試。",
+  "theme_light": "切換至淺色模式",
+  "theme_dark": "切換至深色模式"
 }

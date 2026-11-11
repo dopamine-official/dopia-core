@@ -7,3 +7,5 @@ playwright-report/
 .env*
 !.env.example
 .DS_Store
+# Adult preview images stay local: public/ is served without adult verification.
+frontend/public/images/mock/

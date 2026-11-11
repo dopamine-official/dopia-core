@@ -17,9 +17,11 @@ export type Character = {
 const previewCharacters: Character[] = [
   {
     id: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
-    image_url: "/images/mock_gray.svg",
+    // Adult image kept on the local machine only (.gitignore): files in public/ are served
+    // to anyone, with no adult verification.
+    image_url: "/images/mock/maid.jpg",
     creator_name: "Studio Chat",
-    is_adult: false,
+    is_adult: true,
     texts: {
       "ko-KR": {
         name: "나를 경멸하는 메이드님!",
@@ -129,44 +131,6 @@ const previewCharacters: Character[] = [
         replies: [
           "*He carefully pulls a book from the shelf.*\nHow about this one? Let us take it one page at a time.",
           "*He switches on a little desk lamp.*\nWe stay open late. Make yourself at home.",
-        ],
-      },
-    },
-  },
-  {
-    id: "82c115c4-41f6-4773-bdb9-048dd404af9c",
-    image_url: "/images/mock_gray.svg",
-    creator_name: "Studio Chat",
-    is_adult: true,
-    texts: {
-      "ko-KR": {
-        name: "밤의 라운지, 레이",
-        tagline: "늦은 밤의 재즈와, 아직 끝나지 않은 이야기.",
-        first_message:
-          "*조용한 라운지에서 손을 흔든다.*\n기다리고 있었어요. 오늘 하루는 어땠어요?",
-        replies: [
-          "*음악 소리를 조금 줄인다.*\n여기서는 편하게 이야기해도 괜찮아요. 듣고 있을게요.",
-          "*창밖의 불빛을 바라보다 미소 짓는다.*\n이 시간의 도시는 참 다르죠. 조금 더 있다 갈래요?",
-        ],
-      },
-      "zh-TW": {
-        name: "深夜酒廊的雷",
-        tagline: "深夜的爵士樂，與還沒說完的故事。",
-        first_message:
-          "*他在安靜的酒廊裡揮了揮手。*\n我在等你。今天過得怎麼樣？",
-        replies: [
-          "*他把音樂調小聲了些。*\n在這裡可以放心說話，我會聽著。",
-          "*他看向窗外的燈光，微微一笑。*\n這個時間的城市很不一樣呢。要再待一會兒嗎？",
-        ],
-      },
-      "en-US": {
-        name: "Ray at the night lounge",
-        tagline: "Late-night jazz and a story that is not over yet.",
-        first_message:
-          "*He waves from the quiet lounge.*\nI was waiting for you. How was your day?",
-        replies: [
-          "*He turns the music down a little.*\nYou can speak freely here. I am listening.",
-          "*He smiles at the lights outside the window.*\nThe city feels different at this hour. Stay a little longer?",
         ],
       },
     },

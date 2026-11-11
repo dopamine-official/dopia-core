@@ -256,6 +256,12 @@ class AccountComplianceTest(
         browser.json("POST", "/account/logout")
         browser.session = null
         assertFalse(browser.json("GET", "/account/me").get("consent_required").asBoolean())
+        // The next person to log in on this browser does not get the inherited consents.
+        val next = browser.json("GET", "/account/me").get("account_id").asString()
+        val (_, nextToken) = accounts.loginFresh(UUID.fromString(next))
+        browser.session = nextToken
+        assertTrue(browser.json("GET", "/account/me").get("consent_required").asBoolean())
+        browser.session = null
 
         val leaving = Browser()
         leaving.login()

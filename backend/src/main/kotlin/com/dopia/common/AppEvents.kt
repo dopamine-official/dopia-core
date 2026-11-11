@@ -10,8 +10,8 @@ data class AppEvent(
     val at: Instant,
     val accountId: UUID,
     val properties: Map<String, Any?>,
-    /** Person properties sent as `$set`. */
-    val person: Map<String, Any> = emptyMap(),
+    /** Person properties sent as `$set`; a null value clears one. */
+    val person: Map<String, Any?> = emptyMap(),
 )
 
 /**
@@ -30,7 +30,7 @@ class AppEvents(
         accountId: UUID,
         name: String,
         properties: Map<String, Any?> = emptyMap(),
-        person: Map<String, Any> = emptyMap(),
+        person: Map<String, Any?> = emptyMap(),
     ) {
         // An unknown value (e.g. token counts the AI did not report) is left out, not sent as
         // null; the dev preview's event list accepts only strings, numbers, booleans and lists.

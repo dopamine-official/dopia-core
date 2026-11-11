@@ -43,6 +43,8 @@ export type State = {
 };
 type Compliance = {
   consents: string[];
+  // Copied from a logged-out member; they never move on at the next login (ACCOUNT 4-1-9).
+  inherited?: string[];
   gender?: "male" | "female";
   birth_date?: string;
 };
@@ -142,7 +144,7 @@ export function login(state: State, provider: "google") {
     if (value.account_id === previous.account_id)
       value.account_id = member.account_id;
   });
-  copyConsents(state, previous.account_id, member.account_id);
+  copyConsents(state, previous.account_id, member.account_id, false);
   state.active_account_id = member.account_id;
   event(state, "login_succeeded", { provider });
   return account(state);
@@ -160,10 +162,20 @@ export function updateAdultMode(state: State, adultMode: boolean) {
   event(state, "safe_mode_changed", { adult_mode: adultMode });
   return user;
 }
-function copyConsents(state: State, from: string, to: string) {
+function copyConsents(
+  state: State,
+  from: string,
+  to: string,
+  inherited: boolean,
+) {
+  const source = compliance(state, from);
   const target = compliance(state, to);
-  for (const value of compliance(state, from).consents)
-    if (!target.consents.includes(value)) target.consents.push(value);
+  for (const value of source.consents) {
+    if (!inherited && source.inherited?.includes(value)) continue;
+    if (target.consents.includes(value)) continue;
+    target.consents.push(value);
+    if (inherited) (target.inherited ??= []).push(value);
+  }
 }
 export function recordConsents(
   state: State,
@@ -251,7 +263,8 @@ export function logout(state: State, withdraw = false) {
   state.active_account_id = null;
   const next = guest(state);
   // A logout keeps this browser's consents; a withdrawal does not (ACCOUNT 4-1-9).
-  if (!withdraw) copyConsents(state, previous.account_id, next.account_id);
+  if (!withdraw)
+    copyConsents(state, previous.account_id, next.account_id, true);
   return account(state);
 }
 export function updateProfile(
@@ -292,7 +305,7 @@ export function home(state: State, locale: Locale) {
     banner: {
       character_id: characters[0].id,
       name: characters[0].texts[locale].name,
-      image_url: "/images/main_banner.png",
+      image_url: "/images/mock_gray.svg",
     },
     sections: [
       {

@@ -305,20 +305,28 @@ class AccountRepository(
             }.optional()
             .orElse(null)
 
-    /** Copies every consent of [from] to [to] with its original time; ones [to] already has stay. */
+    /**
+     * Copies the consents of [from] to [to] with their original time; ones [to] already has stay.
+     * A logout copy ([inherited]) takes every record and marks it inherited. A login copy takes
+     * only the guest's own records, so consents inherited from a logged-out member never reach
+     * the next member on that browser (4-1-4, 4-1-9).
+     */
     fun copyConsents(
         from: UUID,
         to: UUID,
+        inherited: Boolean,
     ) {
         jdbc
             .sql(
                 """
-            INSERT INTO account_consents (account_id, consent_id, version, agreed_at)
-            SELECT :to, consent_id, version, agreed_at FROM account_consents WHERE account_id = :from
+            INSERT INTO account_consents (account_id, consent_id, version, agreed_at, inherited)
+            SELECT :to, consent_id, version, agreed_at, :inherited FROM account_consents
+            WHERE account_id = :from AND (:inherited OR NOT inherited)
             ON CONFLICT DO NOTHING
             """,
             ).param("from", from)
             .param("to", to)
+            .param("inherited", inherited)
             .update()
     }
 }

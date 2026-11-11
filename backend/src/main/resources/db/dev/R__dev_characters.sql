@@ -1,4 +1,4 @@
--- Dev-only sample data mirroring frontend/src/mocks/characters.ts.
+-- Dev-only sample data mirroring frontend/src/mocks/characters.fixture.ts.
 -- Repeatable migration: re-applied whenever this file changes.
 
 INSERT INTO characters (id, source_locale, name, tagline, first_message, personality, speech_style, world_setting,

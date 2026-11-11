@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n";
+import { fixtureCharacters } from "./characters.fixture";
 type Content = {
   name: string;
   tagline: string;
@@ -12,7 +13,8 @@ export type Character = {
   is_adult: boolean;
   texts: Record<Locale, Content>;
 };
-export const characters: Character[] = [
+// Characters shown in the local preview. Tests use ./characters.fixture.ts instead.
+const previewCharacters: Character[] = [
   {
     id: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
     image_url: "/images/mock_gray.svg",
@@ -170,6 +172,12 @@ export const characters: Character[] = [
     },
   },
 ];
+// NEXT_PUBLIC_MOCK_FIXTURES=test (vitest.config.ts, playwright.config.ts) swaps in the fixed
+// test characters, so editing the preview list never breaks a test.
+export const characters: Character[] =
+  process.env.NEXT_PUBLIC_MOCK_FIXTURES === "test"
+    ? fixtureCharacters
+    : previewCharacters;
 export function getCharacter(id: string) {
   return characters.find((character) => character.id === id);
 }

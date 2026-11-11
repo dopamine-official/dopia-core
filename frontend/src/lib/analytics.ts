@@ -164,6 +164,7 @@ export function trackBeforeSession(
     beforeSession?.register({
       ...releaseProperties(),
       ...(locale ? { locale } : {}),
+      theme: currentTheme(),
     });
   }
   // The account is unknown here, so is_member and adult_mode are left out.

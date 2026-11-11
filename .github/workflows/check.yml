@@ -54,5 +54,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --dir frontend exec playwright install --with-deps chromium
+      # --with-deps downloads system packages from the Ubuntu servers, which the runner
+      # sometimes cannot reach. The browser alone comes from elsewhere, so fall back to it
+      # and let the tests run.
+      - run: pnpm --dir frontend exec playwright install --with-deps chromium || pnpm --dir frontend exec playwright install chromium
       - run: npm run test:e2e -- --shard=${{ matrix.shard }}/3

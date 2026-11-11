@@ -39,6 +39,8 @@ export default defineConfig({
       NEXT_PUBLIC_APP_ENV: "dev",
       // PostHog's shortest batch interval; tests/e2e/fixtures.ts `settle` waits a few of them.
       NEXT_PUBLIC_POSTHOG_FLUSH_MS: "250",
+      // Tests run against src/mocks/characters.fixture.ts, not the preview characters.
+      NEXT_PUBLIC_MOCK_FIXTURES: "test",
     } as Record<string, string>,
     reuseExistingServer: false,
     timeout: 60_000,

@@ -44,6 +44,16 @@ function requestOptions(
     credentials: "same-origin",
   };
 }
+// The request never reached a mock handler, so any method is safe to resend.
+async function mockLost(response: Response): Promise<boolean> {
+  if (process.env.NEXT_PUBLIC_API_MODE === "server" || response.status !== 503)
+    return false;
+  const body = await response
+    .clone()
+    .json()
+    .catch(() => null);
+  return body?.code === "mock_not_initialized";
+}
 async function send(
   path: string,
   options: RequestInit,
@@ -53,6 +63,7 @@ async function send(
   const method = (options.method ?? "GET").toUpperCase();
   const canRetry =
     method === "GET" || (method === "POST" && path === "/account/guest");
+  let mockRestarted = false;
   while (true) {
     options.signal?.throwIfAborted();
     assertIdentity(version);
@@ -66,6 +77,13 @@ async function send(
       if (!(error instanceof TypeError)) throw error;
       if (!canRetry || retry.used) throw new ApiError("network_error", 0);
       retry.used = true;
+      continue;
+    }
+    if (!mockRestarted && (await mockLost(response))) {
+      mockRestarted = true;
+      await response.body?.cancel();
+      const { restartMockApi } = await import("@/mocks/browser");
+      await restartMockApi();
       continue;
     }
     if (!canRetry || retry.used || response.status < 500) return response;

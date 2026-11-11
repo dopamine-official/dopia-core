@@ -33,6 +33,11 @@ class PostHogClient(
     private val http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
     private val inFlight = ConcurrentHashMap.newKeySet<CompletableFuture<*>>()
 
+    // `$geoip_disable`: the request comes from this server, so PostHog's location lookup would
+    // put every user where the server is; only web events carry a location.
+    private val common =
+        mapOf("environment" to settings.environment, "app_release" to settings.release, "\$geoip_disable" to true)
+
     init {
         // PostHog hides `dev` from every chart, so a production server that fell back to it
         // would vanish; with a key the environment must be explicit (same rule as chat-ai).
@@ -55,8 +60,7 @@ class PostHogClient(
                     "event" to event,
                     "distinct_id" to distinctId.toString(),
                     "timestamp" to at.toString(),
-                    "properties" to
-                        properties + mapOf("environment" to settings.environment, "app_release" to settings.release),
+                    "properties" to properties + common,
                 ),
             )
         val request =

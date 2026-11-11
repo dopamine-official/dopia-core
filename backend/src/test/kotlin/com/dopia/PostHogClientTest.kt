@@ -26,7 +26,7 @@ class PostHogClientTest {
     )
 
     @Test
-    fun `sends the event with the account, environment and release`() {
+    fun `sends the event with the account, environment and release, without a location`() {
         val bodies = LinkedBlockingQueue<String>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/i/v0/e/") { exchange ->
@@ -47,6 +47,7 @@ class PostHogClientTest {
             assertEquals("dev", json.get("properties").get("environment").asString())
             assertEquals("abc123", json.get("properties").get("app_release").asString())
             assertEquals(1, json.get("properties").get("x").asInt())
+            assertEquals(true, json.get("properties").get("\$geoip_disable").asBoolean())
         } finally {
             server.stop(0)
         }

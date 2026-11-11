@@ -86,8 +86,7 @@ describe("account and conversation contracts", () => {
       adult_mode: false,
       adult_verified: false,
       adult_verification_rejected: false,
-      // A logout keeps the consents (ACCOUNT 4-1-9).
-      consent_required: false,
+      consent_required: true,
       consent_items: expect.any(Array),
     });
   });

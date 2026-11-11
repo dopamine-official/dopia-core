@@ -39,6 +39,7 @@ import {
   type LoginRequest,
 } from "./providers";
 import { useTrack } from "./page";
+import { forgetBrowserConsent } from "@/lib/consent";
 
 export function Icon({
   name,
@@ -344,6 +345,7 @@ export function useLeave() {
         accountIdentitySchema,
         { method: "POST" },
       );
+      if (remove) forgetBrowserConsent();
       changeAccount(await readAccount(issued.account_id), "/");
       leaveInFlight = false;
     } catch (error) {

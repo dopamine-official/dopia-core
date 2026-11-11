@@ -46,7 +46,7 @@ test.describe("terms", () => {
     ).toBeHidden();
   });
 
-  test("a logout keeps the consents, a withdrawal does not", async ({
+  test("the browser remembers the consents after a logout, not after a withdrawal", async ({
     page,
   }) => {
     await page.goto("/");
@@ -78,6 +78,8 @@ test.describe("terms", () => {
       .getByRole("dialog")
       .getByRole("button", { name: "회원 탈퇴", exact: true })
       .click();
+    await expect(dialog).toBeVisible();
+    await page.reload();
     await expect(dialog).toBeVisible();
   });
 

@@ -316,29 +316,4 @@ class ServerEventsTest(
         )
         only(minor, "server_adult_verification_submitted")
     }
-
-    @Test
-    fun `a logout hands its consents to the guest, not to the next member`() {
-        val browser = Browser()
-        browser.login()
-        browser.json(
-            "POST",
-            "/account/me/consents",
-            """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
-        )
-        browser.json("POST", "/account/logout")
-        browser.session = null
-        val guest = browser.json("GET", "/account/me").get("account_id").asString()
-        assertEquals(
-            mapOf("consent_terms_version" to "2026-11-10", "consent_privacy_version" to "2026-11-10"),
-            only(guest, "server_guest_created").person,
-        )
-
-        // Someone else logs in on this browser: none of the inherited versions stay on them.
-        val (next, _) = accounts.loginFresh(UUID.fromString(guest))
-        val person = only(next, "server_login_succeeded").person
-        assertTrue(person.containsKey("consent_terms_version"))
-        assertEquals(null, person["consent_terms_version"])
-        assertEquals(null, person["consent_privacy_version"])
-    }
 }

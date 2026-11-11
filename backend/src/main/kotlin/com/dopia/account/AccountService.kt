@@ -345,9 +345,7 @@ class AccountService(
                     accounts.revokeSession(Tokens.sha256(sessionToken))
                 }
                 val guestId = accounts.insertGuest(Tokens.sha256(guestToken))
-                // A logout keeps this browser's consents so the terms modal does not open again;
-                // a withdrawal leaves nothing behind (4-1-9).
-                if (!withdraw) accounts.copyConsents(identity.accountId, guestId, inherited = true)
+                // The next person on this browser agrees for themselves (4-1-9): no consent copy.
                 guestId
             }!!
         cookies.clearSession(response)
@@ -358,13 +356,7 @@ class AccountService(
         } else {
             events.record(identity.accountId, "server_logged_out")
         }
-        events.record(
-            guestId,
-            "server_guest_created",
-            mapOf("reason" to if (withdraw) "withdraw" else "logout"),
-            // The inherited consents (TRACKING-PLAN 8-4); a withdrawal leaves none.
-            if (withdraw) emptyMap() else consentPerson(guestId),
-        )
+        events.record(guestId, "server_guest_created", mapOf("reason" to if (withdraw) "withdraw" else "logout"))
         return IssuedAccount(guestId)
     }
 
@@ -408,7 +400,7 @@ class AccountService(
                     val guest = accounts.lock(guestAccountId)
                     if (guest != null && guest.isGuest && guest.deletedAt == null) {
                         hadGuest = true
-                        accounts.copyConsents(guestAccountId, memberId, inherited = false)
+                        accounts.copyConsents(guestAccountId, memberId)
                         // The guest ends here: once the session is gone this browser gets a new
                         // guest, never this one, so two people on one browser stay apart.
                         accounts.deleteGuestIdentifier(guestAccountId)
@@ -456,15 +448,12 @@ class AccountService(
     private fun loginPerson(
         accountId: UUID,
         region: RegionConfig,
-    ): Map<String, Any?> {
+    ): Map<String, Any> {
         val verification =
             accounts.verification(accountId)?.let { (gender, birth, passed) ->
                 verificationPerson(passed, gender, region.timeZone?.let { Period.between(birth, LocalDate.now(it)).years })
             } ?: mapOf("adult_verified" to false)
-        // Every item is set, null when not agreed: PostHog merges the guest's person into the
-        // member at login, and a version the guest inherited must not stay on this member.
-        val cleared = region.consentItems.associate { "consent_${it.id}_version" to null }
-        return cleared + consentPerson(accountId) + verification
+        return consentPerson(accountId) + verification
     }
 
     private fun uniqueNickname(base: String): String {

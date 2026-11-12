@@ -315,7 +315,9 @@ export function ownedRoom(state: State, roomId: string) {
     (value) =>
       value.room_id === roomId &&
       !value.deleted &&
-      value.owner_id === user.account_id,
+      value.owner_id === user.account_id &&
+      // A saved room can outlive its preview character (./characters.ts changes freely).
+      getCharacter(value.character_id),
   );
   if (!room) throw new ApiError("room_not_found", 404);
   return room;
@@ -414,7 +416,13 @@ export function recent(state: State, locale: Locale) {
   const user = account(state);
   return {
     chats: state.rooms
-      .filter((room) => !room.deleted && room.owner_id === user.account_id)
+      .filter(
+        (room) =>
+          !room.deleted &&
+          room.owner_id === user.account_id &&
+          // Like the backend, skip a room whose character cannot be found.
+          getCharacter(room.character_id),
+      )
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .map((room) => ({
         room_id: room.room_id,

@@ -54,6 +54,18 @@ const input = (content = "안녕!") => ({
   client_message_id: crypto.randomUUID(),
 });
 describe("account and conversation contracts", () => {
+  it("skips a saved room whose character no longer exists", () => {
+    const { state, roomId } = setup();
+    const gone = openRoom(state, characters[1].id, "ko-KR").room_id;
+    ownedRoom(state, gone).character_id = crypto.randomUUID();
+    expect(recent(state, "ko-KR").chats.map((value) => value.room_id)).toEqual([
+      roomId,
+    ]);
+    expect(() => roomView(state, gone, "ko-KR")).toThrow("room_not_found");
+    expect(() => startTurn(state, gone, input(), "ko-KR")).toThrow(
+      "room_not_found",
+    );
+  });
   it("starts guests and new members with SAFE ON and hides adult characters", () => {
     const state = initialState();
     guest(state);

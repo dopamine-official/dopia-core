@@ -331,6 +331,8 @@ export function chatter(state: State) {
 }
 export function openRoom(state: State, characterId: string, locale: Locale) {
   const user = chatter(state);
+  const character = getCharacter(characterId);
+  if (!character) throw new ApiError("character_not_found", 404);
   const existing = state.rooms
     .filter(
       (room) =>
@@ -340,8 +342,7 @@ export function openRoom(state: State, characterId: string, locale: Locale) {
     )
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
   if (existing) return { room_id: existing.room_id, created: false };
-  const character = getCharacter(characterId);
-  if (!character || (character.is_adult && !user.adult_mode))
+  if (character.is_adult && !user.adult_mode)
     throw new ApiError("character_not_found", 404);
   const room: StoredRoom = {
     room_id: id(),

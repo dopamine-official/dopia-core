@@ -57,7 +57,11 @@ describe("account and conversation contracts", () => {
   it("skips a saved room whose character no longer exists", () => {
     const { state, roomId } = setup();
     const gone = openRoom(state, characters[1].id, "ko-KR").room_id;
-    ownedRoom(state, gone).character_id = crypto.randomUUID();
+    const removed = crypto.randomUUID();
+    ownedRoom(state, gone).character_id = removed;
+    expect(() => openRoom(state, removed, "ko-KR")).toThrow(
+      "character_not_found",
+    );
     expect(recent(state, "ko-KR").chats.map((value) => value.room_id)).toEqual([
       roomId,
     ]);

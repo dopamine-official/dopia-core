@@ -2,7 +2,10 @@ import posthog, { type PostHog, type PostHogConfig } from "posthog-js";
 import { ApiError, type Account } from "./contracts";
 
 // Product analytics (TRACKING-PLAN 1, 2). Off when no key is set, e.g. local mock runs and tests.
-const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+// A deployment sets only its own key; with both set (a local .env.local) the dev key wins.
+const key =
+  process.env.NEXT_PUBLIC_DEV_POSTHOG_API_KEY ||
+  process.env.NEXT_PUBLIC_PROD_POSTHOG_API_KEY;
 const enabled = () => !!key && typeof window !== "undefined";
 
 /** Screen names for the `page` property (TRACKING-PLAN 3, 5, 6, 7). Never a path. */
@@ -23,9 +26,9 @@ const BASE_CONFIG: Partial<PostHogConfig> = {
   disable_surveys: true,
   advanced_disable_flags: true,
   disable_external_dependency_loading: true,
-  // PostHog drops automated browsers as bots. In dev, keep them so e2e can check events;
-  // PostHog hides `dev` records from every chart anyway.
-  opt_out_useragent_filter: process.env.NEXT_PUBLIC_APP_ENV === "dev",
+  // PostHog drops automated browsers as bots. Keep them on the dev server, where e2e runs
+  // and checks events; a build drops them.
+  opt_out_useragent_filter: process.env.NODE_ENV !== "production",
   // e2e sends each batch sooner so its checks wait less (playwright.config.ts). Unset, the
   // PostHog default (3 seconds) applies.
   ...(process.env.NEXT_PUBLIC_POSTHOG_FLUSH_MS
@@ -39,8 +42,6 @@ const BASE_CONFIG: Partial<PostHogConfig> = {
 
 function releaseProperties() {
   return {
-    // dev or prod; next.config.ts refuses to start without it when the key is set.
-    environment: process.env.NEXT_PUBLIC_APP_ENV,
     app_release: process.env.NEXT_PUBLIC_APP_RELEASE ?? "local",
   };
 }

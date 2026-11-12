@@ -25,7 +25,7 @@ def _trace(client: FakeClient) -> PostHogTrace:
         request_id="req-1",
         distinct_id="acct-1",
         input={"user_input": "hi"},
-        base={"app_release": "rel", "environment": "test", "model_route": "general"},
+        base={"app_release": "rel", "model_route": "general"},
     )
 
 

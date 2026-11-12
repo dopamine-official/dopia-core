@@ -20,7 +20,6 @@ def make_settings(*, chat_timeout: float = 5.0, compact_timeout: float = 5.0, ro
         return Route(name=name, provider="fake", model=model, max_output_tokens=256, timeout_seconds=route_timeout)
 
     return Settings(
-        app_env="test",
         app_release="test-release",
         port=0,
         chat_request_timeout_seconds=chat_timeout,

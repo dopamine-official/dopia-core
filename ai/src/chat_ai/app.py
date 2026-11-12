@@ -63,14 +63,10 @@ def create_app(
         else None
     )
     if tracer is None:
-        tracer = (
-            PostHogTracer(client, environment=resolved_settings.app_env, release=resolved_settings.app_release)
-            if client is not None
-            else NoopTracer()
-        )
+        tracer = PostHogTracer(client, release=resolved_settings.app_release) if client is not None else NoopTracer()
     if errors is None:
         errors = (
-            PostHogErrorReporter(client, environment=resolved_settings.app_env, release=resolved_settings.app_release)
+            PostHogErrorReporter(client, release=resolved_settings.app_release)
             if client is not None
             else NoopErrorReporter()
         )
@@ -80,8 +76,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info(
-            "chat-ai started env=%s release=%s routes=%s",
-            resolved_settings.app_env,
+            "chat-ai started release=%s routes=%s",
             resolved_settings.app_release,
             {n: f"{r.provider}/{r.model}" for n, r in resolved_settings.routes.items()},
         )

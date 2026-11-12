@@ -35,16 +35,7 @@ class PostHogClient(
 
     // `$geoip_disable`: the request comes from this server, so PostHog's location lookup would
     // put every user where the server is; only web events carry a location.
-    private val common =
-        mapOf("environment" to settings.environment, "app_release" to settings.release, "\$geoip_disable" to true)
-
-    init {
-        // PostHog hides `dev` from every chart, so a production server that fell back to it
-        // would vanish; with a key the environment must be explicit (same rule as chat-ai).
-        check(!enabled || settings.environment in setOf("dev", "prod")) {
-            "APP_ENV must be dev or prod when POSTHOG_API_KEY is set"
-        }
-    }
+    private val common = mapOf("app_release" to settings.release, "\$geoip_disable" to true)
 
     fun capture(
         distinctId: UUID,

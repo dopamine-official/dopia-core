@@ -28,9 +28,9 @@ class NoopErrorReporter:
 class PostHogErrorReporter:
     """Reports on the shared client (observe/posthog.py), which the app closes."""
 
-    def __init__(self, client: Any, *, environment: str, release: str) -> None:
+    def __init__(self, client: Any, *, release: str) -> None:
         self._client = client
-        self._props = {"service": "chat-ai", "environment": environment, "app_release": release}
+        self._props = {"service": "chat-ai", "app_release": release}
 
     def report(self, exc: BaseException, *, request_id: str, account_id: str, subtask: str) -> None:
         try:

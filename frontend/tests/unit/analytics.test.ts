@@ -84,8 +84,8 @@ beforeEach(() => {
   calls.length = 0;
   distinctId = "";
   vi.stubGlobal("window", {});
-  vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test");
-  vi.stubEnv("NEXT_PUBLIC_APP_ENV", "dev");
+  vi.stubEnv("NEXT_PUBLIC_DEV_POSTHOG_API_KEY", "phc_test");
+  vi.stubEnv("NEXT_PUBLIC_PROD_POSTHOG_API_KEY", "");
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -107,7 +107,6 @@ describe("analytics identity", () => {
     });
     expect(named("reset")).toHaveLength(0);
     expect(lastRegister()).toMatchObject({
-      environment: "dev",
       is_member: false,
       adult_mode: false,
       locale: "ko-KR",
@@ -146,7 +145,6 @@ describe("analytics identity", () => {
       page: "home",
       is_member: false,
       adult_mode: false,
-      environment: "dev",
       app_release: "local",
     });
   });
@@ -191,7 +189,6 @@ describe("analytics events", () => {
       load_result: "loaded",
       page: "home",
       is_member: false,
-      environment: "dev",
     });
   });
 
@@ -217,7 +214,6 @@ describe("analytics events", () => {
       target: "session",
       code: "unknown",
       page: "error",
-      environment: "dev",
       locale: "zh-TW",
       theme: "light",
     });
@@ -230,7 +226,7 @@ describe("analytics events", () => {
   });
 
   it("does nothing without a key", async () => {
-    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_DEV_POSTHOG_API_KEY", "");
     const analytics = await load();
     analytics.syncAnalyticsAccount(guest);
     analytics.track("home_viewed", "home");

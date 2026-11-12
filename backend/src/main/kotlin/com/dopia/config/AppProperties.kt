@@ -61,8 +61,6 @@ data class AppProperties(
     data class PostHog(
         val apiKey: String = "",
         val host: String = "https://us.i.posthog.com",
-        /** dev or prod; required when apiKey is set, because PostHog hides `dev` from charts. */
-        val environment: String = "",
         val release: String = "local",
     )
 

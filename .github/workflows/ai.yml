@@ -41,6 +41,9 @@ jobs:
       - name: Image boots and answers /health
         run: |
           docker build -t chat-ai:ci .
-          docker run -d --name chat-ai -p 8100:8100 -e DEV_ANTHROPIC_API_KEY=ci-dummy -e PORT=8100 chat-ai:ci
+          # A dummy key for every provider, so the image boots whichever one models.yaml names.
+          docker run -d --name chat-ai -p 8100:8100 -e PORT=8100 \
+            -e DEV_ANTHROPIC_API_KEY=ci-dummy -e DEV_OPENAI_API_KEY=ci-dummy \
+            -e DEV_OPENROUTER_API_KEY=ci-dummy -e DEV_GEMINI_API_KEY=ci-dummy chat-ai:ci
           for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8100/health && exit 0; sleep 1; done
           docker logs chat-ai; exit 1

@@ -8,7 +8,9 @@ from pathlib import Path
 import anthropic
 import httpx2
 import pytest
+import yaml
 
+from chat_ai.llm.adapters import build_adapters
 from chat_ai.llm.adapters.anthropic import classify, rejected
 from chat_ai.llm.adapters.fake import FakeAdapter
 from chat_ai.llm.types import TextChunk
@@ -93,17 +95,26 @@ def test_err_02_params_cannot_repeat_what_the_route_sets(tmp_path: Path, monkeyp
     assert "temperature" not in message and "routes.compact" not in message
 
 
-def test_err_02_real_config_loads_with_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.delenv("DEV_ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setenv("PROD_ANTHROPIC_API_KEY", "prod-key")
+async def test_err_02_real_config_loads_with_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Whatever config/models.yaml names: changing a model or a provider there needs no edit here.
     monkeypatch.delenv("MODELS_CONFIG_PATH", raising=False)
-    assert load_settings(env_file=tmp_path / "none.env").provider_api_keys == {"anthropic": "prod-key"}
+    raw = yaml.safe_load((ROOT_DIR / "config" / "models.yaml").read_text(encoding="utf-8"))
+    providers = {route["provider"] for route in raw["routes"].values()}
+    for provider in providers:
+        monkeypatch.delenv(f"DEV_{provider.upper()}_API_KEY", raising=False)
+        monkeypatch.setenv(f"PROD_{provider.upper()}_API_KEY", "prod-key")
+    assert load_settings(env_file=tmp_path / "none.env").provider_api_keys == dict.fromkeys(providers, "prod-key")
     # With both set, as in a local .env.local, the dev key is used.
-    monkeypatch.setenv("DEV_ANTHROPIC_API_KEY", "dev-key")
+    for provider in providers:
+        monkeypatch.setenv(f"DEV_{provider.upper()}_API_KEY", "dev-key")
     settings = load_settings(env_file=tmp_path / "none.env")
-    assert settings.provider_api_keys == {"anthropic": "dev-key"}
+    assert settings.provider_api_keys == dict.fromkeys(providers, "dev-key")
     assert set(settings.routes) == {"chat_general", "chat_adult", "compact"}
-    assert settings.routes["chat_general"].provider == "anthropic"
+    # Every provider it names has an adapter that accepts its params.
+    adapters = build_adapters(settings)
+    assert set(adapters) == providers
+    for adapter in adapters.values():
+        await adapter.close()
     assert settings.prompt_dir == ROOT_DIR / "prompt"
     assert (ROOT_DIR / "config" / "models.fake.yaml").is_file()
 

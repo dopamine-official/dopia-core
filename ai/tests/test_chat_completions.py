@@ -34,7 +34,12 @@ def _chunk(content: str | None = None, finish: str | None = None, **extra: Any) 
     } | extra
 
 
-USAGE = {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18}
+USAGE = {
+    "prompt_tokens": 11,
+    "completion_tokens": 7,
+    "total_tokens": 18,
+    "prompt_tokens_details": {"cached_tokens": 9},
+}
 USAGE_CHUNK = {"id": "g", "object": "chat.completion.chunk", "created": 1, "model": "served-model", "choices": []}
 
 
@@ -88,6 +93,7 @@ async def test_openrouter_stream_sends_the_route_and_reads_the_reply() -> None:
     assert done.result.text == "Hello" and done.result.provider == "openrouter"
     assert done.result.model == "served-model" and done.result.finish_reason == "stop"
     assert (done.result.usage.input_tokens, done.result.usage.output_tokens) == (11, 7)
+    assert done.result.usage.cache_read_tokens == 9
 
 
 async def test_openai_stream_asks_for_usage_and_calls_openai() -> None:

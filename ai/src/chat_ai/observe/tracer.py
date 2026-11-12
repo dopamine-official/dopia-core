@@ -280,6 +280,8 @@ class PostHogTrace:
             properties["$ai_input_tokens"] = usage.input_tokens
         if usage is not None and usage.output_tokens is not None:
             properties["$ai_output_tokens"] = usage.output_tokens
+        if usage is not None and usage.cache_read_tokens is not None:
+            properties["$ai_cache_read_input_tokens"] = usage.cache_read_tokens
         if error is not None:
             properties["$ai_error"] = error
         self._capture("$ai_generation", properties)

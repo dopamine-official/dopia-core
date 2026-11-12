@@ -129,7 +129,11 @@ class _Reply:
             text="".join(self.parts),
             model=self.model or request.model,
             provider=provider,
-            usage=LlmUsage(usage.prompt_token_count if usage is not None else None, output),
+            usage=LlmUsage(
+                usage.prompt_token_count if usage is not None else None,
+                output,
+                usage.cached_content_token_count if usage is not None else None,
+            ),
             finish_reason=self.finish,
         )
 

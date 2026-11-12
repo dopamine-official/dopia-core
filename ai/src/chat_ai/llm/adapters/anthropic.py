@@ -48,6 +48,11 @@ def rejected(stop_reason: str | None, stop_details: Any) -> LlmError | None:
     )
 
 
+def usage_of(usage: Any) -> LlmUsage:
+    # input_tokens here leaves out the tokens read from the cache; they are reported separately.
+    return LlmUsage(usage.input_tokens, usage.output_tokens, getattr(usage, "cache_read_input_tokens", None))
+
+
 class AnthropicAdapter:
     name = "anthropic"
 
@@ -85,7 +90,7 @@ class AnthropicAdapter:
                 text=text,
                 model=message.model,
                 provider=self.name,
-                usage=LlmUsage(message.usage.input_tokens, message.usage.output_tokens),
+                usage=usage_of(message.usage),
                 finish_reason=message.stop_reason,
             )
         )
@@ -103,7 +108,7 @@ class AnthropicAdapter:
             text=text,
             model=message.model,
             provider=self.name,
-            usage=LlmUsage(message.usage.input_tokens, message.usage.output_tokens),
+            usage=usage_of(message.usage),
             finish_reason=message.stop_reason,
         )
 

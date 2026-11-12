@@ -24,7 +24,13 @@ PROMPT = AssembledPrompt(
     messages=[Message("user", "hi"), Message("assistant", "yo"), Message("user", "again")],
 )
 USAGE = {
-    "usageMetadata": {"promptTokenCount": 11, "candidatesTokenCount": 7, "thoughtsTokenCount": 5, "totalTokenCount": 23}
+    "usageMetadata": {
+        "promptTokenCount": 11,
+        "cachedContentTokenCount": 9,
+        "candidatesTokenCount": 7,
+        "thoughtsTokenCount": 5,
+        "totalTokenCount": 23,
+    }
 }
 
 
@@ -104,6 +110,7 @@ async def test_stream_sends_the_route_and_reads_the_reply() -> None:
     assert done.result.model == "gemini-served" and done.result.finish_reason == "STOP"
     # Output counts the thinking tokens too: they are billed as output.
     assert (done.result.usage.input_tokens, done.result.usage.output_tokens) == (11, 12)
+    assert done.result.usage.cache_read_tokens == 9
 
 
 async def test_complete_reads_the_reply() -> None:

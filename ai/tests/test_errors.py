@@ -11,9 +11,9 @@ import pytest
 import yaml
 
 from chat_ai.llm.adapters import build_adapters
-from chat_ai.llm.adapters.anthropic import classify, rejected
+from chat_ai.llm.adapters.anthropic import classify, rejected, usage_of
 from chat_ai.llm.adapters.fake import FakeAdapter
-from chat_ai.llm.types import TextChunk
+from chat_ai.llm.types import LlmUsage, TextChunk
 from chat_ai.settings import ROOT_DIR, SettingsError, load_settings
 from tests.conftest import CHAT_PROMPT_VERSION, SRC_DIR, chat_body, compact_body, ids
 
@@ -43,6 +43,12 @@ def test_err_01_adapter_error_classification() -> None:
     refusal = rejected("refusal", type("Details", (), {"category": "general_harms"})())
     assert refusal is not None and refusal.code == "provider_rejected"
     assert rejected("end_turn", None) is None
+
+
+def test_err_04_anthropic_usage_carries_cache_reads() -> None:
+    usage = anthropic.types.Usage(input_tokens=5, output_tokens=7, cache_read_input_tokens=40)
+    assert usage_of(usage) == LlmUsage(5, 7, 40)
+    assert usage_of(anthropic.types.Usage(input_tokens=5, output_tokens=7)).cache_read_tokens is None
 
 
 def test_err_02_settings_errors_list_every_missing_item(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

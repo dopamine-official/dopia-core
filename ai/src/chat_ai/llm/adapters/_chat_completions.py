@@ -87,7 +87,12 @@ def rejected(finish_reason: str | None, text: str, refusal: str | None) -> LlmEr
 def _usage(usage: Any) -> LlmUsage:
     if usage is None:
         return LlmUsage(None, None)
-    return LlmUsage(getattr(usage, "prompt_tokens", None), getattr(usage, "completion_tokens", None))
+    details = getattr(usage, "prompt_tokens_details", None)
+    return LlmUsage(
+        getattr(usage, "prompt_tokens", None),
+        getattr(usage, "completion_tokens", None),
+        getattr(details, "cached_tokens", None),
+    )
 
 
 class ChatCompletions:

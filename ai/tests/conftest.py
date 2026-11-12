@@ -12,7 +12,11 @@ from chat_ai.app import create_app
 from chat_ai.llm.adapters.fake import FakeAdapter
 from chat_ai.observe.errors import NoopErrorReporter
 from chat_ai.observe.tracer import MemoryTracer
+from chat_ai.prompt.assembler import load_prompt
 from chat_ai.settings import ROOT_DIR, Route, Settings
+
+# Read from the template, so bumping its version needs no test edit.
+CHAT_PROMPT_VERSION = load_prompt("chat", ROOT_DIR / "prompt").version
 
 
 def make_settings(*, chat_timeout: float = 5.0, compact_timeout: float = 5.0, route_timeout: float = 5.0) -> Settings:

@@ -36,7 +36,6 @@ export default defineConfig({
     env: {
       ...process.env,
       NEXT_PUBLIC_POSTHOG_KEY: "phc_e2e",
-      NEXT_PUBLIC_APP_ENV: "dev",
       // PostHog's shortest batch interval; tests/e2e/fixtures.ts `settle` waits a few of them.
       NEXT_PUBLIC_POSTHOG_FLUSH_MS: "250",
       // Tests run against src/mocks/characters.fixture.ts, not the preview characters.

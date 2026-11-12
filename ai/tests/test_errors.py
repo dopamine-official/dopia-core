@@ -105,24 +105,6 @@ def test_err_02_real_config_loads_with_key(monkeypatch: pytest.MonkeyPatch, tmp_
     assert os.environ["ANTHROPIC_API_KEY"] == "test-key"
 
 
-def test_err_02_posthog_needs_an_explicit_app_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    # PostHog hides `dev`: a production server that fell back to it would vanish from every chart.
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.delenv("MODELS_CONFIG_PATH", raising=False)
-    monkeypatch.setenv("POSTHOG_API_KEY", "phc_test")
-    monkeypatch.delenv("APP_ENV", raising=False)
-    with pytest.raises(SettingsError, match="APP_ENV \\(required when POSTHOG_API_KEY is set\\)"):
-        load_settings(env_file=tmp_path / "none.env")
-    monkeypatch.setenv("APP_ENV", "production")
-    with pytest.raises(SettingsError, match="APP_ENV must be one of dev, prod"):
-        load_settings(env_file=tmp_path / "none.env")
-    monkeypatch.setenv("APP_ENV", "prod")
-    assert load_settings(env_file=tmp_path / "none.env").app_env == "prod"
-    monkeypatch.delenv("POSTHOG_API_KEY")
-    monkeypatch.delenv("APP_ENV")
-    assert load_settings(env_file=tmp_path / "none.env").app_env == "dev"
-
-
 async def test_err_03_internal_error_before_and_after_sse(harness_factory, monkeypatch: pytest.MonkeyPatch) -> None:
     h = harness_factory()
 

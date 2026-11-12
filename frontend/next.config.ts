@@ -2,15 +2,6 @@ import path from "node:path";
 import type { NextConfig } from "next";
 // pnpm links packages from the workspace root, so Turbopack must resolve from there.
 const workspaceRoot = path.join(import.meta.dirname, "..");
-// With PostHog on, every record must say which environment sent it: PostHog hides `dev`,
-// so a production build that silently fell back to `dev` would vanish from every chart.
-if (
-  process.env.NEXT_PUBLIC_POSTHOG_KEY &&
-  !["dev", "prod"].includes(process.env.NEXT_PUBLIC_APP_ENV ?? "")
-)
-  throw new Error(
-    "NEXT_PUBLIC_APP_ENV must be dev or prod when NEXT_PUBLIC_POSTHOG_KEY is set",
-  );
 const config: NextConfig = {
   // `page.e2e.tsx` screens exist only for e2e runs on the dev server, never in a build.
   pageExtensions:

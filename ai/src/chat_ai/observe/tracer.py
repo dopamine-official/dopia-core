@@ -189,7 +189,7 @@ class PostHogTrace:
         self._trace_id = request_id
         self._distinct_id = distinct_id
         self._input = input
-        self._base = base  # metadata + app_release + environment, added to every event
+        self._base = base  # metadata + app_release, added to every event
         self._started = time.monotonic()
         self._generation: dict[str, Any] | None = None
 
@@ -315,9 +315,9 @@ class PostHogTracer:
     Records on the shared client (observe/posthog.py), which the app closes.
     """
 
-    def __init__(self, client: Any, *, environment: str, release: str) -> None:
+    def __init__(self, client: Any, *, release: str) -> None:
         self._client = client
-        self._props = {"environment": environment, "app_release": release}
+        self._props = {"app_release": release}
 
     def start(self, *, name: str, request_id: str, distinct_id: str, input: Any, metadata: dict[str, Any]) -> Trace:
         base = {**self._props, **{k: v for k, v in metadata.items() if v is not None}}

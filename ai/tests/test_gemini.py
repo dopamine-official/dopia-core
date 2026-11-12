@@ -254,7 +254,6 @@ def test_invalid_route_params_stop_the_server_at_startup(tmp_path: Path) -> None
             name="chat_general", provider="gemini", model="m", max_output_tokens=8, timeout_seconds=1, params=params
         )
         return Settings(
-            app_env="dev",
             app_release="local",
             port=8100,
             chat_request_timeout_seconds=90,

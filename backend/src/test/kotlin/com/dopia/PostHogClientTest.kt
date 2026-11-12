@@ -12,21 +12,19 @@ import java.util.UUID
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class PostHogClientTest {
     private fun client(
         host: String,
         key: String = "phc_test",
-        environment: String = "dev",
     ) = PostHogClient(
-        AppProperties(posthog = AppProperties.PostHog(apiKey = key, host = host, environment = environment, release = "abc123")),
+        AppProperties(posthog = AppProperties.PostHog(apiKey = key, host = host, release = "abc123")),
         JsonMapper(),
     )
 
     @Test
-    fun `sends the event with the account, environment and release, without a location`() {
+    fun `sends the event with the account and release, without a location`() {
         val bodies = LinkedBlockingQueue<String>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/i/v0/e/") { exchange ->
@@ -44,18 +42,12 @@ class PostHogClientTest {
             assertEquals("server_logged_out", json.get("event").asString())
             assertEquals(account.toString(), json.get("distinct_id").asString())
             assertEquals("1970-01-01T00:00:00Z", json.get("timestamp").asString())
-            assertEquals("dev", json.get("properties").get("environment").asString())
             assertEquals("abc123", json.get("properties").get("app_release").asString())
             assertEquals(1, json.get("properties").get("x").asInt())
             assertEquals(true, json.get("properties").get("\$geoip_disable").asBoolean())
         } finally {
             server.stop(0)
         }
-    }
-
-    @Test
-    fun `a key without an explicit environment refuses to start`() {
-        assertFailsWith<IllegalStateException> { client("http://127.0.0.1:1", environment = "") }
     }
 
     @Test

@@ -84,7 +84,8 @@ beforeEach(() => {
   calls.length = 0;
   distinctId = "";
   vi.stubGlobal("window", {});
-  vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test");
+  vi.stubEnv("NEXT_PUBLIC_DEV_POSTHOG_API_KEY", "phc_test");
+  vi.stubEnv("NEXT_PUBLIC_PROD_POSTHOG_API_KEY", "");
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -225,7 +226,7 @@ describe("analytics events", () => {
   });
 
   it("does nothing without a key", async () => {
-    vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_DEV_POSTHOG_API_KEY", "");
     const analytics = await load();
     analytics.syncAnalyticsAccount(guest);
     analytics.track("home_viewed", "home");

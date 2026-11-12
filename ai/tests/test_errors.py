@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 
@@ -45,7 +44,7 @@ def test_err_01_adapter_error_classification() -> None:
 
 
 def test_err_02_settings_errors_list_every_missing_item(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("ANTHROPIC_API_KEY", "MODELS_CONFIG_PATH"):
+    for name in ("DEV_ANTHROPIC_API_KEY", "PROD_ANTHROPIC_API_KEY", "MODELS_CONFIG_PATH"):
         monkeypatch.delenv(name, raising=False)
     config = tmp_path / "models.yaml"
     prompt_dir = tmp_path / "prompt"
@@ -70,7 +69,7 @@ def test_err_02_settings_errors_list_every_missing_item(tmp_path: Path, monkeypa
         load_settings(env_file=tmp_path / "none.env")
     assert "compact.md needs a <!-- user --> section" in str(info.value)
     assert "compact.md" in message
-    assert "ANTHROPIC_API_KEY" in message
+    assert "DEV_ANTHROPIC_API_KEY or PROD_ANTHROPIC_API_KEY" in message
 
 
 def test_err_02_params_cannot_repeat_what_the_route_sets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -95,14 +94,18 @@ def test_err_02_params_cannot_repeat_what_the_route_sets(tmp_path: Path, monkeyp
 
 
 def test_err_02_real_config_loads_with_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.delenv("DEV_ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("PROD_ANTHROPIC_API_KEY", "prod-key")
     monkeypatch.delenv("MODELS_CONFIG_PATH", raising=False)
+    assert load_settings(env_file=tmp_path / "none.env").provider_api_keys == {"anthropic": "prod-key"}
+    # With both set, as in a local .env.local, the dev key is used.
+    monkeypatch.setenv("DEV_ANTHROPIC_API_KEY", "dev-key")
     settings = load_settings(env_file=tmp_path / "none.env")
+    assert settings.provider_api_keys == {"anthropic": "dev-key"}
     assert set(settings.routes) == {"chat_general", "chat_adult", "compact"}
     assert settings.routes["chat_general"].provider == "anthropic"
     assert settings.prompt_dir == ROOT_DIR / "prompt"
     assert (ROOT_DIR / "config" / "models.fake.yaml").is_file()
-    assert os.environ["ANTHROPIC_API_KEY"] == "test-key"
 
 
 async def test_err_03_internal_error_before_and_after_sse(harness_factory, monkeypatch: pytest.MonkeyPatch) -> None:

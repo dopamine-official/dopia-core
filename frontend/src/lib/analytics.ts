@@ -2,7 +2,10 @@ import posthog, { type PostHog, type PostHogConfig } from "posthog-js";
 import { ApiError, type Account } from "./contracts";
 
 // Product analytics (TRACKING-PLAN 1, 2). Off when no key is set, e.g. local mock runs and tests.
-const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+// A deployment sets only its own key; with both set (a local .env.local) the dev key wins.
+const key =
+  process.env.NEXT_PUBLIC_DEV_POSTHOG_API_KEY ||
+  process.env.NEXT_PUBLIC_PROD_POSTHOG_API_KEY;
 const enabled = () => !!key && typeof window !== "undefined";
 
 /** Screen names for the `page` property (TRACKING-PLAN 3, 5, 6, 7). Never a path. */

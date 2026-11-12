@@ -35,7 +35,7 @@ export default defineConfig({
     // Analytics on, so tests can read events; tests/e2e/fixtures.ts keeps them in the browser.
     env: {
       ...process.env,
-      NEXT_PUBLIC_POSTHOG_KEY: "phc_e2e",
+      NEXT_PUBLIC_DEV_POSTHOG_API_KEY: "phc_e2e",
       // PostHog's shortest batch interval; tests/e2e/fixtures.ts `settle` waits a few of them.
       NEXT_PUBLIC_POSTHOG_FLUSH_MS: "250",
       // Tests run against src/mocks/characters.fixture.ts, not the preview characters.

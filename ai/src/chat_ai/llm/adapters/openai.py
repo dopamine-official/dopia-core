@@ -1,4 +1,4 @@
-"""OpenAI adapter: calls the OpenAI API directly with OPENAI_API_KEY.
+"""OpenAI adapter: calls the OpenAI API directly with the OPENAI_API_KEY key.
 
 Kept apart from the OpenRouter adapter so OpenAI-only features can be added here without
 touching the other provider.

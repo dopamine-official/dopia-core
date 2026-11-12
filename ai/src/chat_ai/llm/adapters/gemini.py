@@ -1,4 +1,4 @@
-"""Gemini adapter: the only place the Google GenAI SDK is imported. Calls the Gemini API with GEMINI_API_KEY.
+"""Gemini adapter: the only place the Google GenAI SDK is imported. Calls the Gemini API with the GEMINI_API_KEY key.
 
 The route's `params` are GenerateContentConfig fields (`temperature`, `thinking_config`,
 `safety_settings`, …).

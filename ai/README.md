@@ -31,7 +31,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 # 1) API 키 없이 (고정 답변)
 MODELS_CONFIG_PATH=config/models.fake.yaml .venv/bin/uvicorn chat_ai.app:app --port 8100
 
-# 2) 실제 모델: ai/.env.local 에 ANTHROPIC_API_KEY=... 를 적고
+# 2) 실제 모델: ai/.env.local 에 DEV_ANTHROPIC_API_KEY=... 를 적고
 .venv/bin/uvicorn chat_ai.app:app --port 8100
 
 curl http://127.0.0.1:8100/health
@@ -62,14 +62,14 @@ curl http://127.0.0.1:8100/health
 
 | 변수 | 기본값 | 뜻 |
 |---|---|---|
-| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` | 없음 | `models.yaml`에 그 제공사(`anthropic`, `openai`, `openrouter`, `gemini`) 경로가 있으면 필수. 없으면 기동 실패 |
+| `DEV_<제공사>_API_KEY`, `PROD_<제공사>_API_KEY` | 없음 | 제공사는 `ANTHROPIC`, `OPENAI`, `OPENROUTER`, `GEMINI`. `models.yaml`에 그 제공사 경로가 있으면 둘 중 하나가 필수이고 없으면 기동 실패. 배포 환경에는 그 환경의 키만 넣고, 둘 다 있으면 `DEV_` 키를 씀 |
 | `MODELS_CONFIG_PATH` | `config/models.yaml` | 경로 파일 위치. `config/models.fake.yaml`이면 키 없이 동작 |
 | `PROMPT_DIR` | `prompt` | 템플릿 폴더 |
 | `PORT` | `8100` | 수신 포트. Railway가 넣어 줌 |
 | `APP_RELEASE` | `RAILWAY_GIT_COMMIT_SHA` 또는 `local` | PostHog AI 호출 기록과 오류 보고의 `app_release` |
 | `CHAT_REQUEST_TIMEOUT_SECONDS` | `90` | 채팅 요청 전체 한도. 넘으면 `failed` `timeout` |
 | `COMPACT_REQUEST_TIMEOUT_SECONDS` | `60` | 요약 요청 전체 한도. 넘으면 502 `timeout` |
-| `POSTHOG_API_KEY`, `POSTHOG_HOST` | 없음 | 있으면 요청마다 AI 호출 기록(`$ai_trace`, `$ai_span`, `$ai_generation`)과 내부 오류 전송. 요청 헤더 `X-Account-Id`가 `distinct_id` |
+| `DEV_POSTHOG_API_KEY`, `PROD_POSTHOG_API_KEY`, `POSTHOG_HOST` | 없음 | 키 규칙은 위와 같음. 키가 있으면 요청마다 AI 호출 기록(`$ai_trace`, `$ai_span`, `$ai_generation`)과 내부 오류 전송. 요청 헤더 `X-Account-Id`가 `distinct_id` |
 
 ## 배포
 

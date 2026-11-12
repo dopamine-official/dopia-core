@@ -91,6 +91,12 @@ def _env(name: str, default: str | None = None) -> str | None:
     return value.strip()
 
 
+def _key(name: str) -> str | None:
+    """A secret key, named DEV_<name> or PROD_<name>. A deployment sets only its own; with both
+    set (a local .env.local) the dev key wins, so local runs never spend or record as prod."""
+    return _env(f"DEV_{name}") or _env(f"PROD_{name}")
+
+
 def _float_env(name: str, default: float, missing: list[str]) -> float:
     raw = _env(name)
     if raw is None:
@@ -167,10 +173,11 @@ def load_settings(env_file: Path | None = None) -> Settings:
         if route.provider == "fake":
             continue
         env_name = f"{route.provider.upper()}_API_KEY"
-        api_key = _env(env_name)
+        api_key = _key(env_name)
         if api_key is None:
-            if env_name not in missing:
-                missing.append(env_name)
+            item = f"DEV_{env_name} or PROD_{env_name}"
+            if item not in missing:
+                missing.append(item)
             continue
         provider_api_keys[route.provider] = api_key
 
@@ -183,7 +190,7 @@ def load_settings(env_file: Path | None = None) -> Settings:
         prompt_dir=prompt_dir,
         routes=routes,
         provider_api_keys=provider_api_keys,
-        posthog_api_key=_env("POSTHOG_API_KEY"),
+        posthog_api_key=_key("POSTHOG_API_KEY"),
         posthog_host=_env("POSTHOG_HOST"),
     )
     if missing:

@@ -94,16 +94,20 @@ def test_err_02_params_cannot_repeat_what_the_route_sets(tmp_path: Path, monkeyp
 
 
 def test_err_02_real_config_loads_with_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.delenv("DEV_ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setenv("PROD_ANTHROPIC_API_KEY", "prod-key")
+    monkeypatch.delenv("DEV_OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("PROD_OPENROUTER_API_KEY", "prod-key")
     monkeypatch.delenv("MODELS_CONFIG_PATH", raising=False)
-    assert load_settings(env_file=tmp_path / "none.env").provider_api_keys == {"anthropic": "prod-key"}
+    assert load_settings(env_file=tmp_path / "none.env").provider_api_keys == {"openrouter": "prod-key"}
     # With both set, as in a local .env.local, the dev key is used.
-    monkeypatch.setenv("DEV_ANTHROPIC_API_KEY", "dev-key")
+    monkeypatch.setenv("DEV_OPENROUTER_API_KEY", "dev-key")
     settings = load_settings(env_file=tmp_path / "none.env")
-    assert settings.provider_api_keys == {"anthropic": "dev-key"}
+    assert settings.provider_api_keys == {"openrouter": "dev-key"}
     assert set(settings.routes) == {"chat_general", "chat_adult", "compact"}
-    assert settings.routes["chat_general"].provider == "anthropic"
+    assert settings.routes["chat_general"].provider == "openrouter"
+    assert settings.routes["chat_general"].params == {"reasoning": {"effort": "none"}}
+    # compact picks the same candidate and overrides its limits.
+    assert settings.routes["compact"].model == settings.routes["chat_general"].model
+    assert settings.routes["compact"].max_output_tokens == 1024
     assert settings.prompt_dir == ROOT_DIR / "prompt"
     assert (ROOT_DIR / "config" / "models.fake.yaml").is_file()
 

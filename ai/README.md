@@ -31,7 +31,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 # 1) API 키 없이 (고정 답변)
 MODELS_CONFIG_PATH=config/models.fake.yaml .venv/bin/uvicorn chat_ai.app:app --port 8100
 
-# 2) 실제 모델: ai/.env.local 에 DEV_ANTHROPIC_API_KEY=... 를 적고
+# 2) 실제 모델: ai/.env.local 에 DEV_OPENROUTER_API_KEY=... 를 적고
 .venv/bin/uvicorn chat_ai.app:app --port 8100
 
 curl http://127.0.0.1:8100/health

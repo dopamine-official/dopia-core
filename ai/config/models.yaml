@@ -1,6 +1,9 @@
 # Model routes. Code refers to routes by name only; what each route calls lives here.
 # Changing a model = edit this file, commit, redeploy. No code change.
 #
+# `models` is the list of candidates, each defined once. `routes` picks one per route with
+# `<<: *name`. The server reads `routes` only.
+#
 # provider: an adapter name (anthropic, openai, openrouter, gemini, fake). API keys come from
 #           environment variables named DEV_<PROVIDER>_API_KEY or PROD_<PROVIDER>_API_KEY.
 # model:    for openrouter, the OpenRouter slug (vendor/model).
@@ -10,31 +13,109 @@
 #           params cannot repeat what the route already sets (model, stream, timeout, max_tokens, …):
 #           the server refuses to start.
 
+# Reasoning efforts are the ones OpenRouter lists for each model (checked 2026-11-13).
+# gpt-6.1-sol cannot turn reasoning off, so it has no `none`.
+models:
+  luna_none: &luna_none
+    provider: openrouter
+    model: openai/gpt-6-luna
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: none
+  luna_low: &luna_low
+    provider: openrouter
+    model: openai/gpt-6-luna
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: low
+  luna_medium: &luna_medium
+    provider: openrouter
+    model: openai/gpt-6-luna
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: medium
+  luna_high: &luna_high
+    provider: openrouter
+    model: openai/gpt-6-luna
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: high
+
+  terra_none: &terra_none
+    provider: openrouter
+    model: openai/gpt-6.1-terra
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: none
+  terra_low: &terra_low
+    provider: openrouter
+    model: openai/gpt-6.1-terra
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: low
+  terra_medium: &terra_medium
+    provider: openrouter
+    model: openai/gpt-6.1-terra
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: medium
+  terra_high: &terra_high
+    provider: openrouter
+    model: openai/gpt-6.1-terra
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: high
+
+  sol_low: &sol_low
+    provider: openrouter
+    model: openai/gpt-6.1-sol
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: low
+  sol_medium: &sol_medium
+    provider: openrouter
+    model: openai/gpt-6.1-sol
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: medium
+  sol_high: &sol_high
+    provider: openrouter
+    model: openai/gpt-6.1-sol
+    max_output_tokens: 2048
+    timeout_seconds: 60
+    params:
+      reasoning:
+        effort: high
+
 routes:
   chat_general:
-    provider: anthropic
-    model: claude-sonnet-5-5
-    max_output_tokens: 2048
-    timeout_seconds: 60
-    params:
-      output_config:
-        effort: low
+    <<: *luna_none
 
-  # TBD: a provider that allows adult content. Same model as general until then.
+  # TBD: which model allows adult content. Same model as general until then.
   chat_adult:
-    provider: anthropic
-    model: claude-sonnet-5-5
-    max_output_tokens: 2048
-    timeout_seconds: 60
-    params:
-      output_config:
-        effort: low
+    <<: *luna_none
 
   compact:
-    provider: anthropic
-    model: claude-haiku-5-5
+    <<: *luna_none
     max_output_tokens: 1024
     timeout_seconds: 30
-    params:
-      output_config:
-        effort: low

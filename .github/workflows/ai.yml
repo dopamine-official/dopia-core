@@ -41,6 +41,6 @@ jobs:
       - name: Image boots and answers /health
         run: |
           docker build -t chat-ai:ci .
-          docker run -d --name chat-ai -p 8100:8100 -e DEV_ANTHROPIC_API_KEY=ci-dummy -e PORT=8100 chat-ai:ci
+          docker run -d --name chat-ai -p 8100:8100 -e DEV_OPENROUTER_API_KEY=ci-dummy -e PORT=8100 chat-ai:ci
           for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8100/health && exit 0; sleep 1; done
           docker logs chat-ai; exit 1

@@ -39,7 +39,7 @@ def test_completed_turn_sends_span_generation_and_trace() -> None:
     params = {"max_output_tokens": 10, "output_config": {"effort": "low"}}
     trace.generation_started(model="m", provider="p", parameters=params, prompt=PROMPT)
     trace.first_token()
-    trace.generation_finished(output="hello", usage=LlmUsage(12, 3), error=None, stop_reason="end_turn")
+    trace.generation_finished(output="hello", usage=LlmUsage(12, 3, 8), error=None, stop_reason="end_turn")
     trace.finish(outcome="completed", output="hello", error_code=None)
 
     assert [e[0] for e in client.events] == ["$ai_span", "$ai_generation", "$ai_trace"]
@@ -51,6 +51,7 @@ def test_completed_turn_sends_span_generation_and_trace() -> None:
     assert generation["$ai_input"] == [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}]
     assert generation["$ai_output_choices"] == [{"role": "assistant", "content": "hello"}]
     assert generation["$ai_input_tokens"] == 12 and generation["$ai_output_tokens"] == 3
+    assert generation["$ai_cache_read_input_tokens"] == 8
     assert generation["$ai_stop_reason"] == "end_turn" and generation["$ai_is_error"] is False
     assert "$ai_time_to_first_token" in generation and generation["prompt_version"] == "chat_v1"
     assert generation["model_parameters"] == params

@@ -46,6 +46,8 @@ class LlmRequest:
 class LlmUsage:
     input_tokens: int | None
     output_tokens: int | None
+    # Input tokens the provider read from its prompt cache; None when it does not say.
+    cache_read_tokens: int | None = None
 
 
 @dataclass(frozen=True)

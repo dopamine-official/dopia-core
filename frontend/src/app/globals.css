@@ -1336,8 +1336,13 @@ p {
     padding: 0 10px;
     gap: 6px;
   }
+  /* A long name (English) goes to two lines rather than push the buttons out;
+     keep-all stops Korean and Chinese breaking inside the word. */
   .site_header .brand {
     font-size: 17px;
+    white-space: normal;
+    word-break: keep-all;
+    line-height: 1.05;
   }
   .header_start {
     gap: 3px;
@@ -1591,6 +1596,29 @@ p {
   }
   .account_row {
     flex-wrap: wrap;
+  }
+}
+/* The narrowest phones (320px): the English header still needs a little more room. */
+@media (max-width: 340px) {
+  .site_header {
+    padding: 0 6px;
+    gap: 4px;
+  }
+  .site_header .brand {
+    font-size: 14px;
+  }
+  /* The buttons keep their size; the name takes the squeeze. */
+  .site_header .header_actions {
+    flex-shrink: 0;
+  }
+  .language_select select {
+    max-width: 58px;
+  }
+  .login_link {
+    padding: 9px 7px;
+  }
+  .safe_toggle {
+    gap: 3px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

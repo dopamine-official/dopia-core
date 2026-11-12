@@ -372,6 +372,9 @@ export function openRoom(state: State, characterId: string, locale: Locale) {
   return { room_id: room.room_id, created: true };
 }
 export function settle(state: State, now = Date.now()) {
+  // A room whose preview character was removed is hidden everywhere, so nobody could
+  // delete it: drop it from storage here.
+  state.rooms = state.rooms.filter((room) => getCharacter(room.character_id));
   for (const room of state.rooms)
     for (const turn of room.turns) {
       if (turn.status !== "generating" || turn.finishes_at > now) continue;

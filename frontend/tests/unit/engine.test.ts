@@ -69,6 +69,9 @@ describe("account and conversation contracts", () => {
     expect(() => startTurn(state, gone, input(), "ko-KR")).toThrow(
       "room_not_found",
     );
+    // The next read of the saved state removes it for good.
+    settle(state);
+    expect(state.rooms.map((value) => value.room_id)).toEqual([roomId]);
   });
   it("starts guests and new members with SAFE ON and hides adult characters", () => {
     const state = initialState();

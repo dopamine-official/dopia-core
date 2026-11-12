@@ -12,7 +12,7 @@ from chat_ai.chat.inputs import ChatTurnInput
 from chat_ai.llm.adapters.fake import FakeAdapter
 from chat_ai.llm.types import PROVIDER_ERROR, LlmError, LlmUsage
 from chat_ai.prompt.assembler import Message
-from tests.conftest import chat_body, ids, make_settings, read_sse
+from tests.conftest import CHAT_PROMPT_VERSION, chat_body, ids, make_settings, read_sse
 
 
 async def test_chat_01_input_errors_return_422_without_model_call(harness) -> None:
@@ -75,10 +75,13 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
     ]
     system = request.prompt.system
     assert "Name: 林語彤\n" in system and "Personality: calm\n" in system
-    assert "we met yesterday" in system and "## Story So Far" in system
+    # The summary is the last block: it is the part of the system prompt that changes within a
+    # room, so everything before it stays the same from turn to turn (provider prompt caching).
+    assert system.rstrip().endswith("we met yesterday")
+    assert system.index("## Priority Order") < system.index("# Story So Far")
     # The prologue is trimmed and placed in the system prompt only, before the summary.
     assert "## Prologue" in system and "\n*She looks up.* You came.\n" in system
-    assert system.index("## Prologue") < system.index("## Story So Far")
+    assert system.index("## Prologue") < system.index("# Story So Far")
     assert all("You came." not in m.content for m in request.prompt.messages)
     assert "This chat is not rated adult" in system and "This chat is rated adult" not in system
     assert "{{" not in system
@@ -93,7 +96,7 @@ async def test_chat_03_summary_omitted_and_adult_block(harness) -> None:
             headers=ids("r"),
         )
     system = harness.adapter.calls[0].prompt.system
-    assert "## Story So Far" not in system
+    assert "# Story So Far" not in system
     assert "## Prologue" in system
     assert "This chat is rated adult" in system and "not rated adult" not in system
 
@@ -133,7 +136,11 @@ async def test_chat_05_normal_stream_and_int_01(harness_factory) -> None:
         completed = events[3][1]
         assert completed["output"] == "*她抬起頭，合上手中的書。*\n你今天來得真早呢。"
         meta = completed["meta"]
-        assert meta["model"] == "fake-general" and meta["provider"] == "fake" and meta["prompt_version"] == "v0.2"
+        assert (
+            meta["model"] == "fake-general"
+            and meta["provider"] == "fake"
+            and meta["prompt_version"] == CHAT_PROMPT_VERSION
+        )
         assert meta["input_token_count"] == usage.input_tokens and meta["output_token_count"] == usage.output_tokens
         assert isinstance(meta["ttft_ms"], int) and isinstance(meta["generation_ms"], int)
         assert meta["finish_reason"] == "stop"

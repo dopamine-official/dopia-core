@@ -315,7 +315,9 @@ export function ownedRoom(state: State, roomId: string) {
     (value) =>
       value.room_id === roomId &&
       !value.deleted &&
-      value.owner_id === user.account_id,
+      value.owner_id === user.account_id &&
+      // A saved room can outlive its preview character (./characters.ts changes freely).
+      getCharacter(value.character_id),
   );
   if (!room) throw new ApiError("room_not_found", 404);
   return room;
@@ -329,6 +331,8 @@ export function chatter(state: State) {
 }
 export function openRoom(state: State, characterId: string, locale: Locale) {
   const user = chatter(state);
+  const character = getCharacter(characterId);
+  if (!character) throw new ApiError("character_not_found", 404);
   const existing = state.rooms
     .filter(
       (room) =>
@@ -338,8 +342,7 @@ export function openRoom(state: State, characterId: string, locale: Locale) {
     )
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
   if (existing) return { room_id: existing.room_id, created: false };
-  const character = getCharacter(characterId);
-  if (!character || (character.is_adult && !user.adult_mode))
+  if (character.is_adult && !user.adult_mode)
     throw new ApiError("character_not_found", 404);
   const room: StoredRoom = {
     room_id: id(),
@@ -369,6 +372,9 @@ export function openRoom(state: State, characterId: string, locale: Locale) {
   return { room_id: room.room_id, created: true };
 }
 export function settle(state: State, now = Date.now()) {
+  // A room whose preview character was removed is hidden everywhere, so nobody could
+  // delete it: drop it from storage here.
+  state.rooms = state.rooms.filter((room) => getCharacter(room.character_id));
   for (const room of state.rooms)
     for (const turn of room.turns) {
       if (turn.status !== "generating" || turn.finishes_at > now) continue;
@@ -414,7 +420,13 @@ export function recent(state: State, locale: Locale) {
   const user = account(state);
   return {
     chats: state.rooms
-      .filter((room) => !room.deleted && room.owner_id === user.account_id)
+      .filter(
+        (room) =>
+          !room.deleted &&
+          room.owner_id === user.account_id &&
+          // Like the backend, skip a room whose character cannot be found.
+          getCharacter(room.character_id),
+      )
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .map((room) => ({
         room_id: room.room_id,

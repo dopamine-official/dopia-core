@@ -260,12 +260,14 @@ class ChatFlowTest(
             jdbc
                 .sql(
                     """
-                    INSERT INTO characters (id, source_locale, name, tagline, first_message, personality, speech_style,
-                                            world_setting, gender, image_url, creator_name, is_public,
-                                            status_window_enabled, status_window_format, status_window_rules)
-                    VALUES (:id, 'ko-KR', '{"ko-KR": "n"}', '{"ko-KR": "t"}', '{"ko-KR": "f"}', '{"ko-KR": "p"}',
-                            '{"ko-KR": "s"}', '{"ko-KR": "w"}', 'female', '/images/mock_gray.svg', 'c', false,
-                            :enabled, CAST(:format AS jsonb), CAST(:rules AS jsonb))
+                    INSERT INTO characters (id, source_locale, name, character_name, tagline, first_message, personality,
+                                            speech_style, world_setting, gender, age, image_url, creator_id, status,
+                                            status_window_enabled, status_window_format, status_window_initial,
+                                            status_window_rules)
+                    VALUES (:id, 'ko-KR', '{"ko-KR": "n"}', '{"ko-KR": "c"}', '{"ko-KR": "t"}', '{"ko-KR": "f"}',
+                            '{"ko-KR": "p"}', '{"ko-KR": "s"}', '{"ko-KR": "w"}', 'female', 20, '/images/mock_gray.svg',
+                            '00000000-0000-4000-8000-000000000001', 'pending',
+                            :enabled, CAST(:format AS jsonb), '{"ko-KR": "i"}', CAST(:rules AS jsonb))
                     """.trimIndent(),
                 ).param("id", id)
                 .param("enabled", enabled)
@@ -300,7 +302,7 @@ class ChatFlowTest(
     @Test
     fun `the AI gets the character's own name, or the card name when none is set`() {
         val winterId = UUID.fromString(winter)
-        // A character made before the column existed has no name of its own.
+        // The sample's own name is the same as its card name.
         val before = characters.forChat(winterId, "ko-KR", adultAllowed = false)
         assertEquals("겨울", before.name)
         assertEquals("겨울", before.characterName)
@@ -314,7 +316,10 @@ class ChatFlowTest(
             assertEquals("한겨울", after.characterName)
             assertEquals("韓冬", characters.forChat(winterId, "zh-TW", adultAllowed = false).characterName)
         } finally {
-            jdbc.sql("UPDATE characters SET character_name = '{}' WHERE id = :id").param("id", winterId).update()
+            jdbc
+                .sql("""UPDATE characters SET character_name = '{"ko-KR": "겨울", "zh-TW": "冬", "en-US": "Winter"}' WHERE id = :id""")
+                .param("id", winterId)
+                .update()
         }
     }
 

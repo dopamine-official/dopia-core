@@ -109,6 +109,7 @@ class TurnRunner(
                         AiCharacter(
                             character.characterName,
                             character.gender,
+                            character.age,
                             character.personality,
                             character.speechStyle,
                             character.worldSetting,

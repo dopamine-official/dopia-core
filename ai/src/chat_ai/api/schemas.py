@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
 
 
 class StatusWindow(BaseModel):
@@ -19,6 +19,8 @@ class Character(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: StrictStr
     gender: StrictStr
+    # Optional: characters saved before the field existed have none.
+    age: StrictInt | None = None
     personality: StrictStr
     speech_style: StrictStr
     world_setting: StrictStr

@@ -17,6 +17,8 @@ data class AppProperties(
     val home: Home = Home(),
     val oauth: OAuth = OAuth(),
     val posthog: PostHog = PostHog(),
+    val character: Character = Character(),
+    val flags: Map<String, Boolean> = emptyMap(),
 ) {
     data class Cookie(
         val secure: Boolean = true,
@@ -62,6 +64,18 @@ data class AppProperties(
         val apiKey: String = "",
         val host: String = "https://us.i.posthog.com",
         val release: String = "local",
+    )
+
+    /** CHARACTER 6-3. */
+    data class Character(
+        val imageMaxBytes: Long = 5L * 1024 * 1024,
+        /** Width x height a received image may have; checked from the header before decoding. */
+        val imageMaxPixels: Long = 25_000_000,
+        val thumbnailMaxPx: Int = 1024,
+        val imageMaxPx: Int = 2048,
+        val imageMaxCount: Int = 100,
+        /** Same value as the characters_adult_age CHECK. */
+        val adultMinAge: Int = 20,
     )
 
     data class Home(

@@ -128,7 +128,7 @@ class ChatService(
             tx.execute {
                 val character =
                     try {
-                        characters.forChat(characterId, locale.locale, characters.adultAllowed(identity, locale))
+                        characters.forChat(characterId, locale.locale, characters.adultAllowed(identity, locale), identity.accountId)
                     } catch (error: CharacterNotFound) {
                         throw notFound()
                     }

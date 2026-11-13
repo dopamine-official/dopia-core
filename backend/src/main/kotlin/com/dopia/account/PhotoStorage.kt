@@ -30,8 +30,15 @@ fun detectImageType(bytes: ByteArray): ImageType? {
     }
 }
 
-/** Profile photo storage. Local disk now; Supabase Storage becomes another implementation chosen by env. */
+/** Public file storage for profile photos and character images. Local disk, or R2 when configured. */
 interface PhotoStorage {
+    /** Stores [bytes] under [key] and returns the public URL. A key is never written twice. */
+    fun put(
+        key: String,
+        bytes: ByteArray,
+        contentType: String,
+    ): String
+
     /** Stores the file and returns its public URL. */
     fun store(
         accountId: UUID,
@@ -54,12 +61,18 @@ class LocalDiskPhotoStorage(
         accountId: UUID,
         bytes: ByteArray,
         type: ImageType,
+    ): String = put("profiles/$accountId-${UUID.randomUUID()}.${type.extension}", bytes, "")
+
+    override fun put(
+        key: String,
+        bytes: ByteArray,
+        contentType: String,
     ): String {
-        val name = "profiles/$accountId-${UUID.randomUUID()}.${type.extension}"
-        val target = root.resolve(name)
+        val target = root.resolve(key).normalize()
+        require(target.startsWith(root)) { "key leaves the storage root" }
         Files.createDirectories(target.parent)
         Files.write(target, bytes)
-        return "${properties.storage.publicBaseUrl.trimEnd('/')}/$name"
+        return "${properties.storage.publicBaseUrl.trimEnd('/')}/$key"
     }
 
     override fun delete(url: String) {

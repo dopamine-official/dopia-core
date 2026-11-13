@@ -72,7 +72,7 @@ class HttpAiClientTest {
 
     private val request =
         AiTurnRequest(
-            character = AiCharacter("A", "f", "p", "s", "w", false),
+            character = AiCharacter("A", "f", null, "p", "s", "w", false),
             prologue = "opening",
             history = emptyList(),
             summary = "",

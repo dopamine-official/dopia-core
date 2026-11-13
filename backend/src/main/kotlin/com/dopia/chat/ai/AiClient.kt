@@ -7,6 +7,9 @@ import com.fasterxml.jackson.annotation.JsonInclude
 data class AiCharacter(
     val name: String,
     val gender: String,
+    /** Left out when unknown: the prompt then has no age line. */
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    val age: Int?,
     val personality: String,
     val speechStyle: String,
     val worldSetting: String,

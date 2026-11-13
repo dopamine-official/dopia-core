@@ -66,6 +66,7 @@ class AccountService(
     private val storage: PhotoStorage,
     private val events: AppEvents,
     private val i18n: I18n,
+    private val characters: com.dopia.character.CharacterRepository,
 ) {
     private val log = LoggerFactory.getLogger(AccountService::class.java)
     private val headerAccount = "X-Preview-Account"
@@ -92,7 +93,7 @@ class AccountService(
                 throw ApiException("account_changed", HttpStatus.UNAUTHORIZED, message = "cookie belongs to another account")
             }
         }
-        return Identity(row.id, row.isGuest, !row.isGuest && row.adultMode)
+        return Identity(row.id, row.isGuest, !row.isGuest && row.adultMode, !row.isGuest && row.adultVerifiedAt != null)
     }
 
     /** Chat is for members only (CHAT 4-1-1, 4-1-3): a guest is sent to the login modal. */
@@ -341,6 +342,8 @@ class AccountService(
                 if (withdraw) {
                     accounts.revokeAllSessions(identity.accountId)
                     accounts.markDeleted(identity.accountId)
+                    // CHARACTER 4-1-6: in the same transaction, so a failure keeps the account.
+                    characters.softDeleteByCreator(identity.accountId)
                 } else if (sessionToken != null) {
                     accounts.revokeSession(Tokens.sha256(sessionToken))
                 }

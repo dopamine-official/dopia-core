@@ -1,5 +1,6 @@
 package com.dopia.character
 
+import com.dopia.account.AccountRepository
 import com.dopia.common.I18n
 import com.dopia.common.Identity
 import com.dopia.common.RequestLocale
@@ -22,6 +23,7 @@ data class HomeCharacter(
     val name: String,
     val tagline: String,
     val imageUrl: String,
+    val creatorId: UUID,
     val creatorName: String,
 )
 
@@ -51,6 +53,7 @@ data class ChatCharacter(
     val characterName: String,
     val imageUrl: String,
     val gender: String,
+    val age: Int?,
     val personality: String,
     val speechStyle: String,
     val worldSetting: String,
@@ -68,6 +71,7 @@ class CharacterNotFound(
 @Service
 class CharacterService(
     private val repository: CharacterRepository,
+    private val accounts: AccountRepository,
     private val properties: AppProperties,
     private val tx: TransactionTemplate,
 ) {
@@ -103,7 +107,10 @@ class CharacterService(
         locale: String,
         adultAllowed: Boolean,
     ): HomeResponse {
-        val characters = repository.visibleCharacters().filter { adultAllowed || !it.isAdult }.associateBy { it.id }
+        val visible = repository.visibleCharacters().filter { adultAllowed || !it.isAdult }
+        // The creator's current nickname (4-1-1 step 7). A character whose creator is gone is left out.
+        val creators = accounts.profiles(visible.map { it.creatorId }.toSet())
+        val characters = visible.filter { it.creatorId in creators }.associateBy { it.id }
         val membership = repository.sectionCharacters().groupBy { it.sectionId }
         val sections =
             repository.publicSections().mapNotNull { section ->
@@ -118,8 +125,9 @@ class CharacterService(
                                 id = it.id,
                                 name = I18n.resolveText(it.name, it.sourceLocale, locale),
                                 tagline = I18n.resolveText(it.tagline, it.sourceLocale, locale),
-                                imageUrl = it.imageUrl,
-                                creatorName = it.creatorName,
+                                imageUrl = it.imageUrl.orEmpty(),
+                                creatorId = it.creatorId,
+                                creatorName = creators.getValue(it.creatorId).first,
                             )
                         },
                 )
@@ -131,42 +139,56 @@ class CharacterService(
         return HomeResponse(banner, sections)
     }
 
-    /** Uncached per-call lookup for CHAT (4-1-2). */
+    /**
+     * Uncached per-call lookup for CHAT (4-1-4). [requesterId] is the account opening a room: a
+     * creator may open one with their own character before it is approved. A draft does not exist
+     * for CHAT.
+     */
     fun forChat(
         characterId: UUID,
         locale: String,
         adultAllowed: Boolean,
+        requesterId: UUID? = null,
     ): ChatCharacter {
-        val row = repository.find(characterId) ?: throw CharacterNotFound(characterId)
-        return toChat(row, locale, adultAllowed)
+        val row = repository.find(characterId)?.takeIf { it.status != "draft" } ?: throw CharacterNotFound(characterId)
+        return toChat(row, locale, adultAllowed, requesterId)
     }
 
     fun forChat(
         ids: Collection<UUID>,
         locale: String,
-    ): Map<UUID, ChatCharacter> = repository.findAll(ids).mapValues { (_, row) -> toChat(row, locale, adultAllowed = false) }
+    ): Map<UUID, ChatCharacter> =
+        repository
+            .findAll(ids)
+            .filterValues { it.status != "draft" }
+            .mapValues { (_, row) -> toChat(row, locale, adultAllowed = false, requesterId = null) }
 
     private fun toChat(
         row: CharacterRow,
         locale: String,
         adultAllowed: Boolean,
+        requesterId: UUID?,
     ): ChatCharacter {
         fun text(texts: tools.jackson.databind.JsonNode) = I18n.resolveText(texts, row.sourceLocale, locale)
         val name = text(row.name)
         val statusWindowFormat = if (row.statusWindowEnabled) text(row.statusWindowFormat).trim().ifEmpty { null } else null
+        // The creator writes only the values; the tags are ours (4-1-4 step 3-1).
+        val initial = if (statusWindowFormat != null) text(row.statusWindowInitial).trim() else ""
+        val firstMessage = text(row.firstMessage)
         return ChatCharacter(
             id = row.id,
             name = name,
             characterName = text(row.characterName).trim().ifEmpty { name },
-            imageUrl = row.imageUrl,
-            gender = row.gender,
+            imageUrl = row.imageUrl.orEmpty(),
+            gender = row.gender.orEmpty(),
+            age = row.age,
             personality = text(row.personality),
             speechStyle = text(row.speechStyle),
             worldSetting = text(row.worldSetting),
             statusWindow = statusWindowFormat?.let { StatusWindow(it, text(row.statusWindowRules).trim().ifEmpty { null }) },
-            firstMessage = text(row.firstMessage),
+            firstMessage = if (initial.isEmpty()) firstMessage else "$firstMessage\n<status>\n$initial\n</status>",
             isAdult = row.isAdult,
-            canOpenNewRoom = !row.deleted && row.isPublic && (!row.isAdult || adultAllowed),
+            canOpenNewRoom = !row.deleted && (row.approved || row.creatorId == requesterId) && (!row.isAdult || adultAllowed),
         )
     }
 }

@@ -7,6 +7,7 @@ import { api, readStream, request } from "@/lib/api";
 import { ApiError, roomSchema, type Message, type Room } from "@/lib/contracts";
 import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
+import { splitStatusWindow, visibleWhileStreaming } from "@/lib/status-window";
 import { Screen } from "./page";
 import { useMembersOnly, useSession } from "./providers";
 import {
@@ -76,6 +77,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
   const [draft, setDraft] = useState(saved.draft);
   const [pending, setPending] = useState<Pending | null>(saved.pending);
   const [partial, setPartial] = useState("");
+  const streamingText = visibleWhileStreaming(partial);
   const [error, setError] = useState("");
   const [atBottom, setAtBottom] = useState(true);
   const pendingRef = useRef<Pending | null>(saved.pending);
@@ -482,9 +484,9 @@ function ChatRoom({ roomId }: { roomId: string }) {
                     locale={locale}
                   />
                 )}
-                {partial && !hasPendingReply ? (
+                {streamingText && !hasPendingReply ? (
                   <p className="message assistant streaming" aria-live="off">
-                    <MessageText content={partial} />
+                    <MessageText content={streamingText} />
                   </p>
                 ) : generating && !hasPendingReply ? (
                   <div
@@ -605,11 +607,28 @@ function MessageText({ content }: { content: string }) {
   );
 }
 function Bubble({ message, locale }: { message: Message; locale: string }) {
+  const { t } = useSession();
+  // Only the character writes a status window; a user's text is shown as typed.
+  const { body, status } =
+    message.role === "assistant"
+      ? splitStatusWindow(message.content)
+      : { body: message.content, status: null };
   return (
     <div className={`message_wrap ${message.role}`}>
-      <p className={`message ${message.role}`}>
-        <MessageText content={message.content} />
-      </p>
+      {body && (
+        <p className={`message ${message.role}`}>
+          <MessageText content={body} />
+        </p>
+      )}
+      {status && (
+        <p
+          className="status_window"
+          role="note"
+          aria-label={t("chat.status_window")}
+        >
+          {status}
+        </p>
+      )}
       <time dateTime={message.created_at}>
         {new Intl.DateTimeFormat(locale, {
           hour: "numeric",

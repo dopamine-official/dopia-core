@@ -65,7 +65,7 @@ async def test_cmp_03_normal_response_and_int_02(harness_factory) -> None:
     body = r.json()
     assert body["summary"] == "사용자는 지난달 타이베이로 이사함."
     meta = body["meta"]
-    assert meta["model"] == "fake-compact" and meta["provider"] == "fake" and meta["prompt_version"] == "compact_v1"
+    assert meta["model"] == "fake-compact" and meta["provider"] == "fake" and meta["prompt_version"] == "compact_v2"
     assert meta["input_token_count"] == 120 and meta["output_token_count"] == 30
     assert "ttft_ms" not in meta and isinstance(meta["generation_ms"], int)
 
@@ -108,3 +108,13 @@ async def test_cmp_05_cancel_is_not_502(harness_factory) -> None:
     with pytest.raises(asyncio.CancelledError):
         await task
     assert h.tracer.records[0].outcome == "cancelled"
+
+
+async def test_cmp_06_summary_is_told_to_keep_the_last_status_window(harness) -> None:
+    async with harness.client() as client:
+        r = await client.post("/api/v1/chat/compact", json=compact_body(), headers=ids("r"))
+    assert r.status_code == 200
+    system = harness.adapter.calls[0].prompt.system
+    assert "`<status>`" in system and "`</status>`" in system
+    assert "copied character for character" in system
+    assert "Only blocks in assistant messages count" in system

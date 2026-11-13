@@ -172,7 +172,7 @@ async def test_err_04_trace_records_fields_and_no_prompt_text_in_logs(harness_fa
     assert chat.outcome == "completed" and chat.duration_ms is not None and chat.first_token_at is not None
     assert chat.distinct_id == "acct-1" and chat.metadata["model_route"] == "general"
     assert chat.stop_reason is not None
-    assert comp.name == "chat_compact" and comp.outcome == "completed" and comp.prompt_version == "compact_v1"
+    assert comp.name == "chat_compact" and comp.outcome == "completed" and comp.prompt_version == "compact_v2"
     joined = "\n".join(caplog.messages)
     assert "trace-1" in joined and "trace-2" in joined
     assert "bookshop" not in joined and "hello" not in joined

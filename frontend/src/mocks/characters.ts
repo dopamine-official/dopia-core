@@ -59,6 +59,7 @@ const previewCharacters: Character[] = [
     },
   },
   {
+    // This one has a status window, so the preview shows how the block is displayed.
     id: "3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d",
     image_url: "/images/mock_gray.svg",
     creator_name: "Studio Chat",
@@ -68,20 +69,20 @@ const previewCharacters: Character[] = [
         name: "겨울",
         tagline: "내가 귀찮게 구는 게 아니라, 네가 쓸데없이 편한 거야.",
         first_message:
-          "*주머니에 손을 넣은 채 다가온다.*\n또 만났네. 오늘은 어디 가는 길이야?",
+          "*주머니에 손을 넣은 채 다가온다.*\n또 만났네. 오늘은 어디 가는 길이야?\n<status>\n관계: 아는 사이\n호감도: 10/100\n</status>",
         replies: [
-          "*옆으로 한 발 비켜 자리를 내준다.*\n그냥 같이 걷자. 나도 딱히 급한 일은 없으니까.",
-          "*잠시 하늘을 올려다본다.*\n오늘 공기 좋다. 너랑 있으면 이런 것도 눈에 들어오네.",
+          "*옆으로 한 발 비켜 자리를 내준다.*\n그냥 같이 걷자. 나도 딱히 급한 일은 없으니까.\n<status>\n관계: 아는 사이\n호감도: 14/100\n</status>",
+          "*잠시 하늘을 올려다본다.*\n오늘 공기 좋다. 너랑 있으면 이런 것도 눈에 들어오네.\n<status>\n관계: 친구\n호감도: 31/100\n</status>",
         ],
       },
       "zh-TW": {
         name: "冬",
         tagline: "才不是想黏著你，只是跟你在一起太自在了。",
         first_message:
-          "*她把手插在口袋裡，慢慢走近。*\n又見面了。今天要去哪裡？",
+          "*她把手插在口袋裡，慢慢走近。*\n又見面了。今天要去哪裡？\n<status>\n關係: 認識的人\n好感度: 10/100\n</status>",
         replies: [
-          "*她往旁邊挪了一步，留出位置。*\n一起走吧，反正我也不趕時間。",
-          "*她抬頭望了一下天空。*\n今天的空氣真好。和你在一起，連這些都注意到了。",
+          "*她往旁邊挪了一步，留出位置。*\n一起走吧，反正我也不趕時間。\n<status>\n關係: 認識的人\n好感度: 14/100\n</status>",
+          "*她抬頭望了一下天空。*\n今天的空氣真好。和你在一起，連這些都注意到了。\n<status>\n關係: 朋友\n好感度: 31/100\n</status>",
         ],
       },
       "en-US": {
@@ -89,10 +90,10 @@ const previewCharacters: Character[] = [
         tagline:
           "I am not following you. You are just unusually easy to be around.",
         first_message:
-          "*She approaches with her hands in her pockets.*\nYou again. Where are you heading today?",
+          "*She approaches with her hands in her pockets.*\nYou again. Where are you heading today?\n<status>\nRelationship: acquaintance\nAffinity: 10/100\n</status>",
         replies: [
-          "*She steps aside to make room for you.*\nLet us walk together. I am not in a hurry.",
-          "*She glances up at the sky.*\nNice air today. I notice things like that when you are around.",
+          "*She steps aside to make room for you.*\nLet us walk together. I am not in a hurry.\n<status>\nRelationship: acquaintance\nAffinity: 14/100\n</status>",
+          "*She glances up at the sky.*\nNice air today. I notice things like that when you are around.\n<status>\nRelationship: friend\nAffinity: 31/100\n</status>",
         ],
       },
     },

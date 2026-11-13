@@ -7,6 +7,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 
 
+class StatusWindow(BaseModel):
+    """Sent only for a character whose creator turned the status window on."""
+
+    model_config = ConfigDict(extra="ignore")
+    format: StrictStr
+    rules: StrictStr | None = None
+
+
 class Character(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: StrictStr
@@ -14,6 +22,7 @@ class Character(BaseModel):
     personality: StrictStr
     speech_style: StrictStr
     world_setting: StrictStr
+    status_window: StatusWindow | None = None
     is_adult: StrictBool
 
 

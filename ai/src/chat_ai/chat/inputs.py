@@ -11,13 +11,19 @@ from chat_ai.prompt.assembler import Message
 class ChatTurnInput:
     request_id: str
     account_id: str
-    character: dict[str, str]  # name, gender, personality, speech_style, world_setting
+    # name, gender, personality, speech_style, world_setting, plus status_window_format and
+    # status_window_rules from the request's status_window (both empty when it has none)
+    character: dict[str, str]
     prologue: str  # the room's first message; never part of history
     history: list[Message]
     summary: str
     user_input: str
     locale: str
     is_adult: bool
+
+    @property
+    def has_status_window(self) -> bool:
+        return bool(self.character.get("status_window_format"))
 
     @property
     def route_name(self) -> str:

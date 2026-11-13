@@ -1,6 +1,7 @@
 package com.dopia.chat.ai
 
 import com.dopia.chat.AiMeta
+import com.fasterxml.jackson.annotation.JsonInclude
 
 /** Request body of POST /api/v1/chat/turn (AI 5-2). */
 data class AiCharacter(
@@ -10,6 +11,15 @@ data class AiCharacter(
     val speechStyle: String,
     val worldSetting: String,
     val isAdult: Boolean,
+    /** Left out of the request when null (CHAT BE 4-2): the status window is turned off. */
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    val statusWindow: AiStatusWindow? = null,
+)
+
+data class AiStatusWindow(
+    val format: String,
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    val rules: String? = null,
 )
 
 data class AiHistoryItem(

@@ -6,6 +6,7 @@ import { api, request } from "@/lib/api";
 import { recentSchema, type RecentResponse } from "@/lib/contracts";
 import { useSession } from "./providers";
 import { errorMessageKey } from "@/lib/errors";
+import { splitStatusWindow } from "@/lib/status-window";
 import { errorCode } from "@/lib/analytics";
 import { useRetry, useScreenOnce, useTrack } from "./page";
 import { ErrorState, Icon, Loading, Modal, type CloseReason } from "./ui";
@@ -66,7 +67,10 @@ export function RecentChats({
             <img src={chat.character.image_url} alt="" />
             <span className="recent_copy">
               <strong>{chat.character.name}</strong>
-              <span>{chat.last_message?.replace(/\*/g, "")}</span>
+              <span>
+                {chat.last_message &&
+                  splitStatusWindow(chat.last_message).body.replace(/\*/g, "")}
+              </span>
             </span>
           </>
         );

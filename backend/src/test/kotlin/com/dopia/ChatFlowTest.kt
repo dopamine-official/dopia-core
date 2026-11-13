@@ -1,12 +1,16 @@
 package com.dopia
 
 import com.dopia.account.AccountService
+import com.dopia.character.CharacterService
+import com.dopia.character.StatusWindow
 import com.dopia.chat.ChatRepository
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.context.annotation.Import
+import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.test.context.ActiveProfiles
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
@@ -17,6 +21,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -29,6 +34,8 @@ class ChatFlowTest(
     @LocalServerPort private val port: Int,
     @Autowired private val accounts: AccountService,
     @Autowired private val chats: ChatRepository,
+    @Autowired private val characters: CharacterService,
+    @Autowired private val jdbc: JdbcClient,
 ) {
     private val mapper = ObjectMapper()
     private val winter = "3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d"
@@ -240,6 +247,75 @@ class ChatFlowTest(
         assertEquals(listOf("하나", "둘"), history.filter { it.role == "user" }.map { it.content })
         assertTrue(history.none { it.content == firstMessage })
         assertEquals(firstMessage, chats.prologueOf(roomId))
+    }
+
+    @Test
+    fun `status window settings reach chat only while the creator has it turned on`() {
+        fun character(
+            enabled: Boolean,
+            format: String,
+            rules: String,
+        ): UUID {
+            val id = UUID.randomUUID()
+            jdbc
+                .sql(
+                    """
+                    INSERT INTO characters (id, source_locale, name, tagline, first_message, personality, speech_style,
+                                            world_setting, gender, image_url, creator_name, is_public,
+                                            status_window_enabled, status_window_format, status_window_rules)
+                    VALUES (:id, 'ko-KR', '{"ko-KR": "n"}', '{"ko-KR": "t"}', '{"ko-KR": "f"}', '{"ko-KR": "p"}',
+                            '{"ko-KR": "s"}', '{"ko-KR": "w"}', 'female', '/images/mock_gray.svg', 'c', false,
+                            :enabled, CAST(:format AS jsonb), CAST(:rules AS jsonb))
+                    """.trimIndent(),
+                ).param("id", id)
+                .param("enabled", enabled)
+                .param("format", format)
+                .param("rules", rules)
+                .update()
+            return id
+        }
+
+        fun window(
+            id: UUID,
+            locale: String = "ko-KR",
+        ) = characters.forChat(id, locale, adultAllowed = false).statusWindow
+        val format = """{"ko-KR": " 관계: <단계> "}"""
+        val rules = """{"ko-KR": "천천히"}"""
+
+        val on = character(true, format, rules)
+        assertEquals(StatusWindow("관계: <단계>", "천천히"), window(on))
+        // The texts fall back to the source locale like every other text.
+        assertEquals(StatusWindow("관계: <단계>", "천천히"), window(on, "zh-TW"))
+        assertEquals(StatusWindow("관계: <단계>", null), window(character(true, format, "{}")))
+
+        // Turned off: what the creator wrote is kept in the row but chat gets nothing.
+        assertEquals(null, window(character(false, format, rules)))
+        assertEquals(null, window(UUID.fromString(winter)))
+
+        // It cannot be turned on without a format in the language the character was written in.
+        assertFailsWith<DataIntegrityViolationException> { character(true, "{}", rules) }
+        assertFailsWith<DataIntegrityViolationException> { character(true, """{"zh-TW": "關係"}""", rules) }
+    }
+
+    @Test
+    fun `the AI gets the character's own name, or the card name when none is set`() {
+        val winterId = UUID.fromString(winter)
+        // A character made before the column existed has no name of its own.
+        val before = characters.forChat(winterId, "ko-KR", adultAllowed = false)
+        assertEquals("겨울", before.name)
+        assertEquals("겨울", before.characterName)
+        try {
+            jdbc
+                .sql("""UPDATE characters SET character_name = '{"ko-KR": " 한겨울 ", "zh-TW": "韓冬"}' WHERE id = :id""")
+                .param("id", winterId)
+                .update()
+            val after = characters.forChat(winterId, "ko-KR", adultAllowed = false)
+            assertEquals("겨울", after.name) // the card still shows its own text
+            assertEquals("한겨울", after.characterName)
+            assertEquals("韓冬", characters.forChat(winterId, "zh-TW", adultAllowed = false).characterName)
+        } finally {
+            jdbc.sql("UPDATE characters SET character_name = '{}' WHERE id = :id").param("id", winterId).update()
+        }
     }
 
     @Test

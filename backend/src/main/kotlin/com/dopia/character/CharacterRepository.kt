@@ -12,11 +12,15 @@ data class CharacterRow(
     val id: UUID,
     val sourceLocale: String,
     val name: JsonNode,
+    val characterName: JsonNode,
     val tagline: JsonNode,
     val firstMessage: JsonNode,
     val personality: JsonNode,
     val speechStyle: JsonNode,
     val worldSetting: JsonNode,
+    val statusWindowEnabled: Boolean,
+    val statusWindowFormat: JsonNode,
+    val statusWindowRules: JsonNode,
     val gender: String,
     val imageUrl: String,
     val creatorName: String,
@@ -47,6 +51,7 @@ class CharacterRepository(
 ) {
     private val columns =
         "id, source_locale, name, tagline, first_message, personality, speech_style, world_setting, " +
+            "status_window_enabled, status_window_format, status_window_rules, character_name, " +
             "gender, image_url, creator_name, banner_image_url, is_banner, is_adult, is_public, deleted_at"
 
     private fun json(
@@ -60,11 +65,15 @@ class CharacterRepository(
                 id = rs.getObject("id", UUID::class.java),
                 sourceLocale = rs.getString("source_locale"),
                 name = json(rs, "name"),
+                characterName = json(rs, "character_name"),
                 tagline = json(rs, "tagline"),
                 firstMessage = json(rs, "first_message"),
                 personality = json(rs, "personality"),
                 speechStyle = json(rs, "speech_style"),
                 worldSetting = json(rs, "world_setting"),
+                statusWindowEnabled = rs.getBoolean("status_window_enabled"),
+                statusWindowFormat = json(rs, "status_window_format"),
+                statusWindowRules = json(rs, "status_window_rules"),
                 gender = rs.getString("gender"),
                 imageUrl = rs.getString("image_url"),
                 creatorName = rs.getString("creator_name"),

@@ -6,6 +6,7 @@ import com.dopia.chat.ai.AiClient
 import com.dopia.chat.ai.AiFailure
 import com.dopia.chat.ai.AiGeneration
 import com.dopia.chat.ai.AiHistoryItem
+import com.dopia.chat.ai.AiStatusWindow
 import com.dopia.chat.ai.AiTurnListener
 import com.dopia.chat.ai.AiTurnRequest
 import com.dopia.common.ErrorBody
@@ -106,12 +107,13 @@ class TurnRunner(
                 AiTurnRequest(
                     character =
                         AiCharacter(
-                            character.name,
+                            character.characterName,
                             character.gender,
                             character.personality,
                             character.speechStyle,
                             character.worldSetting,
                             started.isAdult,
+                            character.statusWindow?.let { AiStatusWindow(it.format, it.rules) },
                         ),
                     prologue = material.prologue,
                     history = material.history.map { AiHistoryItem(it.role, it.content) },

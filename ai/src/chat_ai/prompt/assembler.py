@@ -95,13 +95,10 @@ def parse_template(version: str, text: str) -> Template:
 
 
 def render(text: str, values: dict[str, Any]) -> str:
-    def block(match: re.Match[str]) -> str:
-        kind, key, body = match.group(1), match.group(2), match.group(3)
-        truthy = bool(values.get(key))
-        keep = truthy if kind == "#" else not truthy
-        return render(body, values) if keep else ""
+    """Fills a template in one pass, so a substituted value is never read as template syntax.
 
-    out = BLOCK_RE.sub(block, text)
+    Character text is written by creators and the summary by a model; either may contain `{{`.
+    """
 
     def var(match: re.Match[str]) -> str:
         key = match.group(1)
@@ -110,8 +107,17 @@ def render(text: str, values: dict[str, Any]) -> str:
         value = values[key]
         return "" if value is None or isinstance(value, bool) else str(value)
 
-    out = VAR_RE.sub(var, out)
-    return re.sub(r"\n{3,}", "\n\n", out).strip() + "\n"
+    parts: list[str] = []
+    position = 0
+    for match in BLOCK_RE.finditer(text):
+        parts.append(VAR_RE.sub(var, text[position : match.start()]))
+        kind, key, body = match.group(1), match.group(2), match.group(3)
+        truthy = bool(values.get(key))
+        if truthy if kind == "#" else not truthy:
+            parts.append(render(body, values))
+        position = match.end()
+    parts.append(VAR_RE.sub(var, text[position:]))
+    return re.sub(r"\n{3,}", "\n\n", "".join(parts)).strip() + "\n"
 
 
 class PromptAssembler:

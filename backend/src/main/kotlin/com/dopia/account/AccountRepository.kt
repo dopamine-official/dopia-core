@@ -49,6 +49,19 @@ class AccountRepository(
             .optional()
             .orElse(null)
 
+    /** Nickname and photo of each live member in [ids] (4-2-11). Guests and withdrawn accounts are left out. */
+    fun profiles(ids: Collection<UUID>): Map<UUID, Pair<String, String?>> =
+        if (ids.isEmpty()) {
+            emptyMap()
+        } else {
+            jdbc
+                .sql("SELECT id, nickname, photo_url FROM accounts WHERE id = ANY(:ids) AND NOT is_guest AND deleted_at IS NULL")
+                .param("ids", ids.toTypedArray())
+                .query { rs, _ -> rs.getObject("id", UUID::class.java) to (rs.getString("nickname") to rs.getString("photo_url")) }
+                .list()
+                .toMap()
+        }
+
     fun createdAt(id: UUID): java.time.Instant? =
         jdbc
             .sql("SELECT created_at FROM accounts WHERE id = :id")

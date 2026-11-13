@@ -7,6 +7,8 @@ data class Identity(
     val accountId: UUID,
     val isGuest: Boolean,
     val adultMode: Boolean,
+    /** Passed adult verification (ACCOUNT 4-1-7). Needed to make an adult character. */
+    val adultVerified: Boolean = false,
 ) {
     val isMember get() = !isGuest
 }

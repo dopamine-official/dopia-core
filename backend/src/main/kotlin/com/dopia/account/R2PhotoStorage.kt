@@ -46,14 +46,24 @@ class R2PhotoStorage(
         accountId: UUID,
         bytes: ByteArray,
         type: ImageType,
+    ): String =
+        put(
+            "profiles/$accountId/${UUID.randomUUID()}.${type.extension}",
+            bytes,
+            "image/${if (type == ImageType.JPEG) "jpeg" else type.extension}",
+        )
+
+    override fun put(
+        key: String,
+        bytes: ByteArray,
+        contentType: String,
     ): String {
-        val key = "profiles/$accountId/${UUID.randomUUID()}.${type.extension}"
         client.putObject(
             PutObjectRequest
                 .builder()
                 .bucket(storage.r2Bucket)
                 .key(key)
-                .contentType("image/${if (type == ImageType.JPEG) "jpeg" else type.extension}")
+                .contentType(contentType)
                 .cacheControl("public, max-age=31536000, immutable")
                 .build(),
             RequestBody.fromBytes(bytes),

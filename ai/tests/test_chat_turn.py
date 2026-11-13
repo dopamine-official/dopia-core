@@ -52,6 +52,7 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
         character={
             "name": "  林語彤 ",
             "gender": "female",
+            "age": 24,
             "personality": " calm ",
             "speech_style": "short",
             "world_setting": "bookshop",
@@ -79,6 +80,7 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
     ]
     system = request.prompt.system
     assert "Name: 林語彤\n" in system and "<personality>\ncalm\n</personality>" in system
+    assert "- Gender: female\n- Age: 24\n" in system
     # The summary is the last block: it is the part of the system prompt that changes within a
     # room, so everything before it stays the same from turn to turn (provider prompt caching).
     assert system.rstrip().endswith("we met yesterday")

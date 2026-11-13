@@ -93,3 +93,6 @@ app:
   cookie:
     # http://127.0.0.1 cannot receive Secure cookies.
     secure: false
+  # Local runs have no PostHog to ask.
+  flags:
+    character_creation_enabled: true

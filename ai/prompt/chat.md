@@ -1,5 +1,5 @@
 ---
-version: v0.5
+version: v0.4
 ---
 <!-- system -->
 You are roleplaying as {{name}} in a one-on-one chat with the user. The user plays their own character. Stay in character for the whole reply.

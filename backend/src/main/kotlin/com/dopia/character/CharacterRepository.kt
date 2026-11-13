@@ -31,8 +31,6 @@ data class CharacterRow(
     val gender: String?,
     val age: Int?,
     val imageUrl: String?,
-    val bannerImageUrl: String?,
-    val isBanner: Boolean,
     val isAdult: Boolean,
     val deleted: Boolean,
     val updatedAt: Instant,
@@ -46,6 +44,12 @@ data class CharacterImageRow(
     val description: String,
     val imageUrl: String,
     val position: Int,
+)
+
+data class BannerRow(
+    val id: UUID,
+    val imageUrl: String,
+    val linkUrl: String?,
 )
 
 data class SectionRow(
@@ -101,7 +105,7 @@ class CharacterRepository(
     private val columns =
         "id, creator_id, status, rejection_reason, source_locale, name, tagline, first_message, personality, speech_style, " +
             "world_setting, status_window_enabled, status_window_format, status_window_initial, status_window_rules, " +
-            "character_name, gender, age, image_url, banner_image_url, is_banner, is_adult, deleted_at, updated_at"
+            "character_name, gender, age, image_url, is_adult, deleted_at, updated_at"
 
     private fun json(
         rs: ResultSet,
@@ -130,8 +134,6 @@ class CharacterRepository(
                 gender = rs.getString("gender"),
                 age = rs.getObject("age") as Int?,
                 imageUrl = rs.getString("image_url"),
-                bannerImageUrl = rs.getString("banner_image_url"),
-                isBanner = rs.getBoolean("is_banner"),
                 isAdult = rs.getBoolean("is_adult"),
                 deleted = rs.getObject("deleted_at") != null,
                 updatedAt = rs.getObject("updated_at", OffsetDateTime::class.java).toInstant(),
@@ -243,7 +245,7 @@ class CharacterRepository(
             params["image_url"] = it
         }
         // The status trigger does the same; written here too so the rule is in one statement (3-2-4).
-        if (change.submit) sets += "status = 'pending', submitted_at = now(), rejection_reason = NULL, is_banner = false"
+        if (change.submit) sets += "status = 'pending', submitted_at = now(), rejection_reason = NULL"
         if (sets.isEmpty()) return
         var statement = jdbc.sql("UPDATE characters SET ${sets.joinToString()} WHERE id = :id")
         params.forEach { (name, value) -> statement = statement.param(name, value) }
@@ -256,13 +258,13 @@ class CharacterRepository(
     }
 
     fun softDelete(id: UUID) {
-        jdbc.sql("UPDATE characters SET deleted_at = now(), is_banner = false WHERE id = :id").param("id", id).update()
+        jdbc.sql("UPDATE characters SET deleted_at = now() WHERE id = :id").param("id", id).update()
     }
 
     /** A creator who withdraws takes their characters off every list; rooms that exist keep working (4-1-6). */
     fun softDeleteByCreator(creatorId: UUID) {
         jdbc
-            .sql("UPDATE characters SET deleted_at = now(), is_banner = false WHERE creator_id = :creator AND deleted_at IS NULL")
+            .sql("UPDATE characters SET deleted_at = now() WHERE creator_id = :creator AND deleted_at IS NULL")
             .param("creator", creatorId)
             .update()
     }
@@ -321,6 +323,14 @@ class CharacterRepository(
     fun deleteImage(imageId: UUID) {
         jdbc.sql("DELETE FROM character_images WHERE id = :id").param("id", imageId).update()
     }
+
+    /** The banner the home page shows: the newest public one. A banner is not a character (3-2-10). */
+    fun banner(): BannerRow? =
+        jdbc
+            .sql("SELECT id, image_url, link_url FROM home_banners WHERE is_public ORDER BY created_at DESC, id LIMIT 1")
+            .query { rs, _ -> BannerRow(rs.getObject("id", UUID::class.java), rs.getString("image_url"), rs.getString("link_url")) }
+            .optional()
+            .orElse(null)
 
     fun publicSections(): List<SectionRow> =
         jdbc

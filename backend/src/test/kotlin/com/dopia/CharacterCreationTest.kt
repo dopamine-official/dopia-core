@@ -473,4 +473,44 @@ class CharacterCreationTest(
         assertTrue(deleted)
         assertEquals(404 to "creator_not_found", code(Browser().login().send("GET", "/creators/${creator.memberId}")))
     }
+
+    @Test
+    fun `the home banner is a picture with an optional link, the same for everyone`() {
+        // CH-BE-01, CH-BE-03, CH-BE-09
+        fun banner(browser: Browser): JsonNode {
+            characters.clearCache()
+            return json(browser.send("GET", "/home")).get("banner")
+        }
+        val guest = Browser()
+        guest.send("POST", "/account/guest")
+        val member = Browser().login()
+
+        jdbc.sql("DELETE FROM home_banners").update()
+        jdbc
+            .sql(
+                "INSERT INTO home_banners (image_url, link_url, is_public) VALUES ('/b/hidden.webp', 'https://example.com/a', false)",
+            ).update()
+        assertTrue(banner(guest).isNull)
+
+        jdbc
+            .sql(
+                "INSERT INTO home_banners (image_url, link_url, created_at) VALUES " +
+                    "('/b/old.webp', '/me', now() - interval '1 hour'), ('/b/new.webp', NULL, now())",
+            ).update()
+        listOf(guest, member).forEach {
+            val shown = banner(it)
+            assertEquals("/b/new.webp", shown.get("image_url").asString())
+            assertTrue(shown.get("link_url").isNull)
+            assertNotNull(UUID.fromString(shown.get("id").asString()))
+        }
+        // Taking the newest one down brings the one before it back, link and all.
+        jdbc.sql("UPDATE home_banners SET is_public = false WHERE image_url = '/b/new.webp'").update()
+        assertEquals("/me", banner(guest).get("link_url").asString())
+
+        listOf("javascript:alert(1)", "//evil.example", "http://example.com", "me").forEach { link ->
+            assertFailsWith<DataIntegrityViolationException>(link) {
+                jdbc.sql("INSERT INTO home_banners (image_url, link_url) VALUES ('/b/x.webp', :link)").param("link", link).update()
+            }
+        }
+    }
 }

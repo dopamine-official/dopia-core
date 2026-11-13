@@ -1,6 +1,5 @@
 {
   "original": "오리지널",
-  "tagline": "당신의 하루에, 새로운 이야기",
   "start": "{name} 대화 시작",
   "safe": "세이프 모드",
   "adult_verification_required": "SAFE를 끄려면 성인 인증이 필요해요.",
@@ -20,5 +19,6 @@
   "adult": "성인 캐릭터",
   "adult_mode_unavailable": "현재 성인 모드를 사용할 수 없어요.",
   "not_found": "이 캐릭터는 현재 대화할 수 없어요.",
-  "adult_verification_rejected": "성인 인증 조건을 충족하지 않아 SAFE를 끌 수 없어요."
+  "adult_verification_rejected": "성인 인증 조건을 충족하지 않아 SAFE를 끌 수 없어요.",
+  "banner": "배너"
 }

@@ -7,7 +7,7 @@ VALUES ('00000000-0000-4000-8000-000000000001', false, 'Studio Chat')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO characters (id, source_locale, name, character_name, tagline, first_message, personality, speech_style, world_setting,
-                        gender, age, image_url, creator_id, banner_image_url, is_banner, is_adult, status, approved_at)
+                        gender, age, image_url, creator_id, is_adult, status, approved_at)
 VALUES
 ('7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d', 'ko-KR',
  '{"ko-KR": "나를 경멸하는 메이드님!", "zh-TW": "鄙視我的女僕小姐！", "en-US": "The unimpressed maid"}',
@@ -17,7 +17,7 @@ VALUES
  '{"ko-KR": "겉으로는 차갑고 무심하지만 손님을 세심하게 챙긴다."}',
  '{"ko-KR": "존댓말, 짧고 건조한 문장, 가끔 비꼬는 투."}',
  '{"ko-KR": "오래된 저택. 오후의 응접실에서 차를 내는 메이드."}',
- 'female', 24, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', '/images/mock_gray.svg', true, false, 'approved', now()),
+ 'female', 24, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', false, 'approved', now()),
 ('3f2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d', 'ko-KR',
  '{"ko-KR": "겨울", "zh-TW": "冬", "en-US": "Winter"}',
  '{"ko-KR": "겨울", "zh-TW": "冬", "en-US": "Winter"}',
@@ -26,7 +26,7 @@ VALUES
  '{"ko-KR": "무뚝뚝하지만 곁에 있는 것을 좋아한다."}',
  '{"ko-KR": "반말, 짧은 문장, 감정을 돌려 말한다."}',
  '{"ko-KR": "겨울의 도시. 자주 마주치는 골목길."}',
- 'female', 24, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', NULL, false, false, 'approved', now()),
+ 'female', 24, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', false, 'approved', now()),
 ('db5b1830-d826-4b1a-b67a-3bf7899a87f2', 'ko-KR',
  '{"ko-KR": "골목 서점의 유진", "zh-TW": "巷口書店的宇辰", "en-US": "Eugene at the bookshop"}',
  '{"ko-KR": "유진", "zh-TW": "宇辰", "en-US": "Eugene"}',
@@ -35,7 +35,7 @@ VALUES
  '{"ko-KR": "조용하고 다정하다. 책 이야기를 즐긴다."}',
  '{"ko-KR": "부드러운 존댓말, 느긋한 속도."}',
  '{"ko-KR": "타이베이 골목의 작은 서점."}',
- 'male', 27, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', NULL, false, false, 'approved', now()),
+ 'male', 27, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', false, 'approved', now()),
 ('82c115c4-41f6-4773-bdb9-048dd404af9c', 'ko-KR',
  '{"ko-KR": "밤의 라운지, 레이", "zh-TW": "深夜酒廊的雷", "en-US": "Ray at the night lounge"}',
  '{"ko-KR": "레이", "zh-TW": "雷", "en-US": "Ray"}',
@@ -44,7 +44,7 @@ VALUES
  '{"ko-KR": "여유롭고 능숙하게 대화를 이끈다."}',
  '{"ko-KR": "낮고 부드러운 존댓말."}',
  '{"ko-KR": "늦은 밤의 재즈 라운지."}',
- 'male', 27, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', NULL, false, true, 'approved', now())
+ 'male', 27, '/images/mock_gray.svg', '00000000-0000-4000-8000-000000000001', true, 'approved', now())
 ON CONFLICT (id) DO UPDATE SET
     source_locale = EXCLUDED.source_locale,
     name = EXCLUDED.name,
@@ -58,8 +58,6 @@ ON CONFLICT (id) DO UPDATE SET
     age = EXCLUDED.age,
     image_url = EXCLUDED.image_url,
     creator_id = EXCLUDED.creator_id,
-    banner_image_url = EXCLUDED.banner_image_url,
-    is_banner = EXCLUDED.is_banner,
     is_adult = EXCLUDED.is_adult,
     status = EXCLUDED.status,
     rejection_reason = NULL,
@@ -81,3 +79,11 @@ VALUES ('5d6e7f80-1a2b-4c3d-8e9f-0a1b2c3d4e5f', '7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4
        ('5d6e7f80-1a2b-4c3d-8e9f-0a1b2c3d4e5f', 'db5b1830-d826-4b1a-b67a-3bf7899a87f2', 3),
        ('5d6e7f80-1a2b-4c3d-8e9f-0a1b2c3d4e5f', '82c115c4-41f6-4773-bdb9-048dd404af9c', 4)
 ON CONFLICT (section_id, character_id) DO UPDATE SET position = EXCLUDED.position;
+
+-- A banner with no link: a picture only.
+INSERT INTO home_banners (id, image_url, link_url)
+VALUES ('9c1e4b7a-2d3f-4a5b-8c6d-0e1f2a3b4c5d', '/images/mock_gray.svg', NULL)
+ON CONFLICT (id) DO UPDATE SET
+    image_url = EXCLUDED.image_url,
+    link_url = EXCLUDED.link_url,
+    is_public = true;

@@ -13,9 +13,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 // Home list (4-2-2)
 data class HomeBanner(
-    val characterId: UUID,
-    val name: String,
+    val id: UUID,
     val imageUrl: String,
+    /** Null for a banner that is only a picture. */
+    val linkUrl: String?,
 )
 
 data class HomeCharacter(
@@ -132,10 +133,8 @@ class CharacterService(
                         },
                 )
             }
-        val banner =
-            characters.values.firstOrNull { it.isBanner && it.bannerImageUrl != null }?.let {
-                HomeBanner(it.id, I18n.resolveText(it.name, it.sourceLocale, locale), it.bannerImageUrl!!)
-            }
+        // The same banner for everyone: it is not a character, so nothing filters it.
+        val banner = repository.banner()?.let { HomeBanner(it.id, it.imageUrl, it.linkUrl) }
         return HomeResponse(banner, sections)
     }
 

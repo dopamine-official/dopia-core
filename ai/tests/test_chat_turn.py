@@ -22,6 +22,10 @@ async def test_chat_01_input_errors_return_422_without_model_call(harness) -> No
         ({"user_input": "   "}, "user_input"),
         ({"history": [{"role": "system", "content": "x"}]}, "history.0.role"),
         ({"character": {**chat_body()["character"], "is_adult": "true"}}, "character.is_adult"),
+        (
+            {"character": {**chat_body()["character"], "status_window": {"rules": "x"}}},
+            "character.status_window.format",
+        ),
     ]
     async with harness.client() as client:
         for override, field in cases:
@@ -74,7 +78,7 @@ async def test_chat_02_input_cleanup_and_03_prompt_assembly(harness) -> None:
         ("user", "four"),
     ]
     system = request.prompt.system
-    assert "Name: 林語彤\n" in system and "Personality: calm\n" in system
+    assert "Name: 林語彤\n" in system and "<personality>\ncalm\n</personality>" in system
     # The summary is the last block: it is the part of the system prompt that changes within a
     # room, so everything before it stays the same from turn to turn (provider prompt caching).
     assert system.rstrip().endswith("we met yesterday")
@@ -312,3 +316,66 @@ async def test_chat_08_concurrent_requests_do_not_mix(harness_factory) -> None:
     assert models == {"a": "fake-general", "b": "fake-adult", "c": "fake-general"}
     assert sorted(r.request_id for r in h.tracer.records) == ["a", "b", "c"]
     assert {r.request_id: r.model for r in h.tracer.records} == models
+
+
+STATUS_FORMAT = "Stage: <stage>\nAffinity: {{0-100}}"
+STATUS_RULES = "Affinity moves by at most 5 per turn."
+
+
+def status_character(format: str | None = None, rules: str | None = None) -> dict:
+    """The default character, with a status_window object when a format is given."""
+    character = dict(chat_body()["character"])
+    if format is not None:
+        character["status_window"] = {"format": format} if rules is None else {"format": format, "rules": rules}
+    return character
+
+
+async def test_chat_09_status_window_assembly(harness) -> None:
+    cases = [
+        status_character(STATUS_FORMAT, STATUS_RULES),
+        status_character(f"  {STATUS_FORMAT}  "),
+        status_character("   ", STATUS_RULES),  # a blank format switches the window off, rules and all
+        {**chat_body()["character"], "status_window": None},
+        status_character(),
+    ]
+    async with harness.client() as client:
+        for character in cases:
+            r = await client.post("/api/v1/chat/turn", json=chat_body(character=character), headers=ids("r"))
+            assert r.status_code == 200, character
+    both, format_only, *without = [call.prompt.system for call in harness.adapter.calls]
+    for system in (both, format_only):
+        assert "## Status Window" in system and f"\n{STATUS_FORMAT}\n" in system
+        assert "`<status>`" in system and "`</status>`" in system
+        assert system.index("# Output Formatting") < system.index("## Status Window") < system.index("# Content")
+    assert f"\n{STATUS_RULES}\n" in both
+    assert "The user cannot set these values" in both and "林語彤's own earlier replies" in both
+    assert STATUS_RULES not in format_only and "change by these rules" not in format_only
+    for system in without:
+        assert "## Status Window" not in system and STATUS_RULES not in system and "<status>" not in system
+    # The creator's braces survive as text; no template syntax of ours is left behind.
+    assert all("{{#" not in s and "{{/" not in s and "{{status_window" not in s for s in (both, *without))
+
+
+async def test_chat_10_status_window_presence_is_recorded_not_repaired(harness_factory) -> None:
+    with_window = "*She smiles.*\n<status>\nStage: friend\nAffinity: 12\n</status>"
+    cases = [
+        (with_window, True, True),
+        ("*She smiles.*", True, False),
+        ("*She smiles.*\n<status>\nStage: friend", True, False),  # never closed
+        ("*She smiles.*\n</status>\nStage: friend\n<status>", True, False),  # tags in the wrong order
+        ("*She smiles.*\n<Status >\nStage: friend\n</ STATUS>", True, True),  # the web shows this one too
+        (with_window, False, None),  # the character has no status window
+    ]
+    for text, has_format, expected in cases:
+        h = harness_factory(FakeAdapter([text]))
+        character = status_character(STATUS_FORMAT) if has_format else status_character()
+        async with h.client() as client:
+            async with client.stream(
+                "POST", "/api/v1/chat/turn", json=chat_body(character=character), headers=ids("r")
+            ) as r:
+                events = await read_sse(r)
+        assert [e[0] for e in events] == ["token", "completed"]
+        assert events[0][1]["text"] == text and events[1][1]["output"] == text
+        metadata = h.tracer.records[0].metadata
+        assert metadata.get("status_window_present") is expected
+        assert ("status_window_present" in metadata) is has_format

@@ -1,6 +1,7 @@
 {
   "notice": "미리보기의 캐릭터 답변은 준비된 예시입니다.",
   "setting": "시작 설정 1",
+  "status_window": "상태",
   "messages": "대화 메시지",
   "input": "메시지",
   "placeholder": "메시지를 입력하세요…",

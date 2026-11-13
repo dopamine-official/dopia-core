@@ -41,7 +41,11 @@ class Trace(Protocol):
         """The call was cancelled from outside. finish() settles the record with the trace outcome."""
         ...
 
-    def finish(self, *, outcome: Outcome, output: Any, error_code: str | None) -> None: ...
+    def finish(
+        self, *, outcome: Outcome, output: Any, error_code: str | None, extra: dict[str, Any] | None = None
+    ) -> None:
+        """`extra` adds properties known only at the end, such as status_window_present."""
+        ...
 
 
 class Tracer(Protocol):
@@ -70,7 +74,9 @@ class NoopTrace:
     def generation_interrupted(self, *, output: str | None) -> None:
         return None
 
-    def finish(self, *, outcome: Outcome, output: Any, error_code: str | None) -> None:
+    def finish(
+        self, *, outcome: Outcome, output: Any, error_code: str | None, extra: dict[str, Any] | None = None
+    ) -> None:
         return None
 
 
@@ -147,9 +153,12 @@ class MemoryTrace:
         self.record.generation_output = output
         self.record.generation_interrupted = True
 
-    def finish(self, *, outcome: Outcome, output: Any, error_code: str | None) -> None:
+    def finish(
+        self, *, outcome: Outcome, output: Any, error_code: str | None, extra: dict[str, Any] | None = None
+    ) -> None:
         if self.record.generation_interrupted and outcome == "failed":
             self.record.generation_error = error_code
+        self.record.metadata.update(extra or {})
         self.record.outcome = outcome
         self.record.output = output
         self.record.error_code = error_code
@@ -286,7 +295,9 @@ class PostHogTrace:
             properties["$ai_error"] = error
         self._capture("$ai_generation", properties)
 
-    def finish(self, *, outcome: Outcome, output: Any, error_code: str | None) -> None:
+    def finish(
+        self, *, outcome: Outcome, output: Any, error_code: str | None, extra: dict[str, Any] | None = None
+    ) -> None:
         if self._generation is not None and "interrupted" in self._generation:
             # Cancelled from outside: a backend disconnect is not an error; a request time limit is,
             # and carries the trace's code (timeout) rather than a provider error.
@@ -307,6 +318,7 @@ class PostHogTrace:
                 "$ai_is_error": outcome == "failed",
                 "$ai_error": error_code,
                 "outcome": outcome,
+                **(extra or {}),
             },
         )
 

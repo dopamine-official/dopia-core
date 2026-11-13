@@ -3,6 +3,7 @@ package com.dopia
 import com.dopia.chat.ai.AiCharacter
 import com.dopia.chat.ai.AiFailure
 import com.dopia.chat.ai.AiGeneration
+import com.dopia.chat.ai.AiStatusWindow
 import com.dopia.chat.ai.AiTurnListener
 import com.dopia.chat.ai.AiTurnRequest
 import com.dopia.chat.ai.HttpAiClient
@@ -107,9 +108,51 @@ class HttpAiClientTest {
         assertEquals("opening", sent.get("prologue").asString())
         assertEquals(0, sent.get("history").size())
         assertEquals("hi", sent.get("user_input").asString())
+        // A character with the status window off: the object is left out, not sent as null.
+        assertEquals(false, sent.get("character").has("status_window"))
         assertEquals(listOf("t0", "t1"), tokens)
         assertEquals("done", result.output)
         assertEquals("chat_v1", result.meta.promptVersion)
+    }
+
+    @Test
+    fun `status window settings are sent with the character when it has them`() {
+        serve(tokens = 1, gapMs = 0)
+        val withWindow = request.copy(character = request.character.copy(statusWindow = AiStatusWindow("Stage: <stage>", "slow")))
+        client().turn(
+            "req-status",
+            UUID.randomUUID(),
+            withWindow,
+            UUID.randomUUID(),
+            object : AiTurnListener {
+                override fun onToken(text: String) {}
+
+                override fun stillWanted() = true
+            },
+        )
+        val window = mapper.readTree(bodies.single()).get("character").get("status_window")
+        assertEquals("Stage: <stage>", window.get("format").asString())
+        assertEquals("slow", window.get("rules").asString())
+    }
+
+    @Test
+    fun `status window rules are left out when the character has none`() {
+        serve(tokens = 1, gapMs = 0)
+        val formatOnly = request.copy(character = request.character.copy(statusWindow = AiStatusWindow("Stage: <stage>")))
+        client().turn(
+            "req-status",
+            UUID.randomUUID(),
+            formatOnly,
+            UUID.randomUUID(),
+            object : AiTurnListener {
+                override fun onToken(text: String) {}
+
+                override fun stillWanted() = true
+            },
+        )
+        val window = mapper.readTree(bodies.single()).get("character").get("status_window")
+        assertEquals("Stage: <stage>", window.get("format").asString())
+        assertEquals(false, window.has("rules"))
     }
 
     @Test

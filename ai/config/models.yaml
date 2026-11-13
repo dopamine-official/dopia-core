@@ -19,7 +19,7 @@ models:
   luna_none: &luna_none
     provider: openrouter
     model: openai/gpt-6-luna
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -27,7 +27,7 @@ models:
   luna_low: &luna_low
     provider: openrouter
     model: openai/gpt-6-luna
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -35,7 +35,7 @@ models:
   luna_medium: &luna_medium
     provider: openrouter
     model: openai/gpt-6-luna
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -43,7 +43,7 @@ models:
   luna_high: &luna_high
     provider: openrouter
     model: openai/gpt-6-luna
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -52,7 +52,7 @@ models:
   terra_none: &terra_none
     provider: openrouter
     model: openai/gpt-6.1-terra
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -60,7 +60,7 @@ models:
   terra_low: &terra_low
     provider: openrouter
     model: openai/gpt-6.1-terra
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -68,7 +68,7 @@ models:
   terra_medium: &terra_medium
     provider: openrouter
     model: openai/gpt-6.1-terra
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -76,7 +76,7 @@ models:
   terra_high: &terra_high
     provider: openrouter
     model: openai/gpt-6.1-terra
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -85,7 +85,7 @@ models:
   sol_low: &sol_low
     provider: openrouter
     model: openai/gpt-6.1-sol
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -93,7 +93,7 @@ models:
   sol_medium: &sol_medium
     provider: openrouter
     model: openai/gpt-6.1-sol
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:
@@ -101,7 +101,7 @@ models:
   sol_high: &sol_high
     provider: openrouter
     model: openai/gpt-6.1-sol
-    max_output_tokens: 2048
+    max_output_tokens: 4096
     timeout_seconds: 60
     params:
       reasoning:

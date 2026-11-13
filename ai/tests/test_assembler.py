@@ -20,6 +20,13 @@ def test_render_rejects_unknown_placeholder() -> None:
         render("{{nope}}", {})
 
 
+def test_render_leaves_braces_in_values_alone() -> None:
+    # Creators and the summary model can write "{{...}}"; it is text, not a placeholder.
+    text = "{{#format}}\n{{format}}\n{{/format}}\n{{name}}"
+    out = render(text, {"format": "Affinity: {{affinity}}", "name": "{{char}}"})
+    assert out == "Affinity: {{affinity}}\n{{char}}\n"
+
+
 def test_parse_template_requires_system_section() -> None:
     with pytest.raises(TemplateError):
         parse_template("v", "just text")

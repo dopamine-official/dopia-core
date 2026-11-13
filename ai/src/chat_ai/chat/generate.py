@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections.abc import AsyncIterator
 from contextlib import aclosing
@@ -18,6 +19,8 @@ from chat_ai.observe.tracer import Trace
 from chat_ai.prompt.assembler import AssembledPrompt, PromptAssembler
 
 log = logging.getLogger("chat_ai.chat")
+# Same tolerance as the web parser: case and spaces inside the tags do not matter.
+STATUS_WINDOW_RE = re.compile(r"<\s*status\s*>.*?<\s*/\s*status\s*>", re.IGNORECASE | re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -117,7 +120,16 @@ async def generate_turn(
 
     outcome = "completed" if final.name == "completed" else "failed"
     code = None if outcome == "completed" else final.data["code"]
-    trace.finish(outcome=outcome, output=final.data if outcome == "failed" else final.data["output"], error_code=code)
+    extra: dict[str, Any] = {}
+    if outcome == "completed" and turn.has_status_window:
+        # Recorded only, never repaired: a reply without the window is still a completed reply.
+        extra["status_window_present"] = STATUS_WINDOW_RE.search(final.data["output"]) is not None
+    trace.finish(
+        outcome=outcome,
+        output=final.data if outcome == "failed" else final.data["output"],
+        error_code=code,
+        extra=extra,
+    )
     log.info(
         "request_id=%s subtask=chat outcome=%s code=%s ms=%d",
         turn.request_id,

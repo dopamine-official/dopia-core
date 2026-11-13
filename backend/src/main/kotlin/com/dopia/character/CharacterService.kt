@@ -36,15 +36,26 @@ data class HomeResponse(
     val sections: List<HomeSection>,
 )
 
+/** What the character's status window shows ([format]) and how its values move ([rules], optional). */
+data class StatusWindow(
+    val format: String,
+    val rules: String?,
+)
+
 // Character for CHAT (4-2-3)
 data class ChatCharacter(
     val id: UUID,
+    /** Shown on the card and in lists. May read like a title. */
     val name: String,
+    /** What the character is called in the story; the AI gets this one. Falls back to [name]. */
+    val characterName: String,
     val imageUrl: String,
     val gender: String,
     val personality: String,
     val speechStyle: String,
     val worldSetting: String,
+    /** Null when the creator has the status window turned off. */
+    val statusWindow: StatusWindow?,
     val firstMessage: String,
     val isAdult: Boolean,
     val canOpenNewRoom: Boolean,
@@ -139,16 +150,23 @@ class CharacterService(
         row: CharacterRow,
         locale: String,
         adultAllowed: Boolean,
-    ) = ChatCharacter(
-        id = row.id,
-        name = I18n.resolveText(row.name, row.sourceLocale, locale),
-        imageUrl = row.imageUrl,
-        gender = row.gender,
-        personality = I18n.resolveText(row.personality, row.sourceLocale, locale),
-        speechStyle = I18n.resolveText(row.speechStyle, row.sourceLocale, locale),
-        worldSetting = I18n.resolveText(row.worldSetting, row.sourceLocale, locale),
-        firstMessage = I18n.resolveText(row.firstMessage, row.sourceLocale, locale),
-        isAdult = row.isAdult,
-        canOpenNewRoom = !row.deleted && row.isPublic && (!row.isAdult || adultAllowed),
-    )
+    ): ChatCharacter {
+        fun text(texts: tools.jackson.databind.JsonNode) = I18n.resolveText(texts, row.sourceLocale, locale)
+        val name = text(row.name)
+        val statusWindowFormat = if (row.statusWindowEnabled) text(row.statusWindowFormat).trim().ifEmpty { null } else null
+        return ChatCharacter(
+            id = row.id,
+            name = name,
+            characterName = text(row.characterName).trim().ifEmpty { name },
+            imageUrl = row.imageUrl,
+            gender = row.gender,
+            personality = text(row.personality),
+            speechStyle = text(row.speechStyle),
+            worldSetting = text(row.worldSetting),
+            statusWindow = statusWindowFormat?.let { StatusWindow(it, text(row.statusWindowRules).trim().ifEmpty { null }) },
+            firstMessage = text(row.firstMessage),
+            isAdult = row.isAdult,
+            canOpenNewRoom = !row.deleted && row.isPublic && (!row.isAdult || adultAllowed),
+        )
+    }
 }

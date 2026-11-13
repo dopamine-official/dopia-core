@@ -1,6 +1,7 @@
 {
   "notice": "預覽中的角色回覆為預先準備的範例。",
   "setting": "初始設定 1",
+  "status_window": "狀態",
   "messages": "對話訊息",
   "input": "訊息",
   "placeholder": "輸入訊息…",

@@ -53,8 +53,16 @@ def _clean_history(items: list[HistoryItem]) -> list[Message]:
 
 
 def chat_input(request_id: str, account_id: str, body: ChatTurnRequest) -> ChatTurnInput:
-    character = {k: v.strip() for k, v in body.character.model_dump(exclude={"is_adult"}).items()}
+    settings = body.character.model_dump(exclude={"is_adult", "status_window"})
+    character = {k: v.strip() for k, v in settings.items()}
     detail = [{"field": f"character.{k}", "reason": "empty"} for k, v in character.items() if not v]
+    # Template values: both empty when the character has no status window. Rules mean nothing
+    # without a format, so a blank format switches the whole window off.
+    window = body.character.status_window
+    character["status_window_format"] = window.format.strip() if window else ""
+    character["status_window_rules"] = (
+        (window.rules or "").strip() if window and character["status_window_format"] else ""
+    )
     user_input = body.user_input.strip()
     if not user_input:
         detail.append({"field": "user_input", "reason": "empty"})

@@ -37,6 +37,8 @@ class CharacterCreationTest(
     @LocalServerPort private val port: Int,
     @Autowired private val accounts: AccountService,
     @Autowired private val characters: CharacterService,
+    @Autowired private val editor: com.dopia.character.CharacterEditor,
+    @Autowired private val properties: com.dopia.config.AppProperties,
     @Autowired private val flags: FeatureFlags,
     @Autowired private val jdbc: JdbcClient,
 ) {
@@ -612,6 +614,20 @@ class CharacterCreationTest(
         val mine = json(creator.send("GET", "/characters/mine")).get("characters").first { it.get("id").asString() == id }
         assertEquals("새 제목", mine.get("name").asString())
         assertEquals("pending", mine.get("revision_status").asString())
+        // The recent list follows the same rule: the creator's room shows the revision, a visitor's the public one.
+        val open = """{"character_id":"$id"}""".toByteArray()
+
+        fun recent(browser: Browser) =
+            json(browser.send("GET", "/chats/recent"))
+                .get("chats")
+                .first { it.get("character").get("id").asString() == id }
+                .get("character")
+        assertEquals(200, creator.send("POST", "/chats/open", open, "application/json").statusCode())
+        assertEquals(200, visitor.send("POST", "/chats/open", open, "application/json").statusCode())
+        assertEquals("새 제목", recent(creator).get("name").asString())
+        assertEquals(revisionImage, recent(creator).get("image_url").asString())
+        assertEquals("눈 내리는 도시", recent(visitor).get("name").asString())
+        assertEquals(publicImage, recent(visitor).get("image_url").asString())
 
         // CH-BE-41: it waits in the same queue as first submissions.
         val kind =
@@ -642,6 +658,35 @@ class CharacterCreationTest(
         assertEquals("approved", detail().get("status").asString())
         assertEquals(revisionImage, detail().get("image_url").asString())
         assertEquals(firstApproval, approvedAt())
+        // CH-BE-42: the thumbnail the edit replaced is deleted, the new one stays.
+        assertEquals(200, served(publicImage))
+        editor.deleteDiscardedFiles()
+        assertEquals(404, served(publicImage))
+        assertEquals(200, served(revisionImage))
+        // A file that could not be deleted stays on the list and goes on a later run.
+        val stuck = "stuck-${UUID.randomUUID()}"
+        val folder =
+            java.nio.file.Files
+                .createDirectories(
+                    java.nio.file.Path
+                        .of(properties.storage.localDir, stuck),
+                )
+        val blocker =
+            java.nio.file.Files
+                .createFile(folder.resolve("blocker"))
+
+        fun waiting() = jdbc.sql("SELECT count(*) FROM discarded_files").query(Int::class.java).single()
+        jdbc.sql("INSERT INTO discarded_files (url) VALUES (:url)").param("url", "${properties.storage.publicBaseUrl}/$stuck").update()
+        editor.deleteDiscardedFiles()
+        assertEquals(1, waiting())
+        java.nio.file.Files
+            .delete(blocker)
+        editor.deleteDiscardedFiles()
+        assertEquals(0, waiting())
+        assertTrue(
+            !java.nio.file.Files
+                .exists(folder),
+        )
         assertFailsWith<org.springframework.dao.DataAccessException> { operator("approve_character(:id)") }
 
         // CH-BE-40: the creator can drop a revision; its own file goes, the public one stays.
@@ -655,10 +700,14 @@ class CharacterCreationTest(
         assertEquals(404 to "revision_not_found", code(creator.send("DELETE", "/characters/$id/revision")))
 
         // Taking a public character down drops its revision; so does deleting it.
-        creator.save(mapOf("name" to "내려가기 전"), id, action = "submit")
+        val takenDown = json(creator.save(mapOf("name" to "내려가기 전"), id, action = "submit", thumbnail = picture(12, 12)))
+        val takenDownImage = takenDown.get("image_url").asString()
         assertEquals(1, revisions())
         jdbc.sql("UPDATE characters SET status = 'rejected', rejection_reason = '내림' WHERE id = :id").param("id", uuid).update()
         assertEquals(0, revisions())
+        editor.deleteDiscardedFiles()
+        assertEquals(404, served(takenDownImage))
+        assertEquals(200, served(revisionImage))
         approve(id)
         val unapproved = json(creator.save(mapOf("name" to "지우기 전"), id, action = "submit", thumbnail = picture(8, 8)))
         val unapprovedImage = unapproved.get("image_url").asString()

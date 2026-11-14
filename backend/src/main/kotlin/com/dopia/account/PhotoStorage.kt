@@ -46,8 +46,11 @@ interface PhotoStorage {
         type: ImageType,
     ): String
 
-    /** Best effort removal of a previously returned URL. */
-    fun delete(url: String)
+    /**
+     * Best effort removal of a previously returned URL. False when the file may still be there;
+     * true when it is gone or was never ours.
+     */
+    fun delete(url: String): Boolean
 }
 
 @Component
@@ -75,11 +78,11 @@ class LocalDiskPhotoStorage(
         return "${properties.storage.publicBaseUrl.trimEnd('/')}/$key"
     }
 
-    override fun delete(url: String) {
+    override fun delete(url: String): Boolean {
         val base = properties.storage.publicBaseUrl.trimEnd('/') + "/"
-        if (!url.startsWith(base)) return
+        if (!url.startsWith(base)) return true
         val target = root.resolve(url.removePrefix(base)).normalize()
-        if (!target.startsWith(root)) return
-        runCatching { Files.deleteIfExists(target) }.onFailure { log.warn("could not delete {}", target, it) }
+        if (!target.startsWith(root)) return true
+        return runCatching { Files.deleteIfExists(target) }.onFailure { log.warn("could not delete {}", target, it) }.isSuccess
     }
 }

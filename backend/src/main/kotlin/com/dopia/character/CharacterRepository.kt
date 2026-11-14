@@ -395,6 +395,22 @@ class CharacterRepository(
     fun deleteRevision(characterId: UUID): Boolean =
         jdbc.sql("DELETE FROM character_revisions WHERE character_id = :id").param("id", characterId).update() > 0
 
+    /**
+     * Up to [limit] files the database noted for deletion (3-2-12), oldest first, as id to URL.
+     * The rows stay locked until the transaction ends; rows another server holds are skipped.
+     */
+    fun discardedFiles(limit: Int): List<Pair<UUID, String>> =
+        jdbc
+            .sql("SELECT id, url FROM discarded_files ORDER BY created_at LIMIT :limit FOR UPDATE SKIP LOCKED")
+            .param("limit", limit)
+            .query { rs, _ -> rs.getObject("id", UUID::class.java) to rs.getString("url") }
+            .list()
+
+    fun forgetDiscardedFiles(ids: Collection<UUID>) {
+        if (ids.isEmpty()) return
+        jdbc.sql("DELETE FROM discarded_files WHERE id = ANY(:ids)").param("ids", ids.toTypedArray()).update()
+    }
+
     /** Marks the row changed: image edits belong to the character's last change time. */
     fun touch(id: UUID) {
         jdbc.sql("UPDATE characters SET updated_at = now() WHERE id = :id").param("id", id).update()

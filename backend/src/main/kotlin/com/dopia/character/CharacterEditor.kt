@@ -12,6 +12,7 @@ import com.dopia.config.AppProperties
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.http.HttpStatus
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
@@ -417,6 +418,19 @@ class CharacterEditor(
                 listOfNotNull(revision.imageUrl.takeIf { it != live.imageUrl })
             }!!
         file.forEach(storage::delete)
+    }
+
+    /**
+     * Deletes the pictures an operator's approval or takedown left without a user (4-1-9). The
+     * operator works in the console, so the database only notes them and this does the deleting.
+     */
+    @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT1M")
+    fun deleteDiscardedFiles() {
+        tx.execute {
+            // A file leaves the list only once it is gone, so a failed delete is tried again next time.
+            val deleted = repository.discardedFiles(100).filter { (_, url) -> storage.delete(url) }
+            repository.forgetDiscardedFiles(deleted.map { it.first })
+        }
     }
 
     private fun editable(

@@ -71,9 +71,9 @@ class R2PhotoStorage(
         return "$publicBase/$key"
     }
 
-    override fun delete(url: String) {
-        if (!url.startsWith("$publicBase/")) return
-        runCatching {
+    override fun delete(url: String): Boolean {
+        if (!url.startsWith("$publicBase/")) return true
+        return runCatching {
             client.deleteObject(
                 DeleteObjectRequest
                     .builder()
@@ -81,6 +81,6 @@ class R2PhotoStorage(
                     .key(url.removePrefix("$publicBase/"))
                     .build(),
             )
-        }.onFailure { log.warn("could not delete {}", url, it) }
+        }.onFailure { log.warn("could not delete {}", url, it) }.isSuccess
     }
 }

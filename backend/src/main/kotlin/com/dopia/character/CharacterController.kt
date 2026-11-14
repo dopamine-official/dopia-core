@@ -93,6 +93,16 @@ class CharacterController(
     }
 
     @RequiresMember
+    @DeleteMapping("/characters/{characterId}/revision")
+    fun cancelRevision(
+        identity: Identity,
+        @PathVariable characterId: String,
+    ): ResponseEntity<Void> {
+        editor.cancelRevision(identity, id(characterId))
+        return ResponseEntity.noContent().build()
+    }
+
+    @RequiresMember
     @PostMapping("/characters/{characterId}/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun addImage(
         identity: Identity,

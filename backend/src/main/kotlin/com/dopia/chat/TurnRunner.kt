@@ -101,7 +101,7 @@ class TurnRunner(
                 sendStoredFailure(started, stream)
                 return
             }
-            val character = characters.forChat(started.characterId, started.locale, adultAllowed = true)
+            val character = characters.forChat(started.characterId, started.locale, adultAllowed = true, requesterId = started.accountId)
             val material = chat.aiMaterial(started)
             val request =
                 AiTurnRequest(

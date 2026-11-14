@@ -13,9 +13,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 // Home list (4-2-2)
 data class HomeBanner(
-    val characterId: UUID,
-    val name: String,
+    val id: UUID,
     val imageUrl: String,
+    /** Null for a banner that is only a picture. */
+    val linkUrl: String?,
 )
 
 data class HomeCharacter(
@@ -132,10 +133,8 @@ class CharacterService(
                         },
                 )
             }
-        val banner =
-            characters.values.firstOrNull { it.isBanner && it.bannerImageUrl != null }?.let {
-                HomeBanner(it.id, I18n.resolveText(it.name, it.sourceLocale, locale), it.bannerImageUrl!!)
-            }
+        // The same banner for everyone: it is not a character, so nothing filters it.
+        val banner = repository.banner()?.let { HomeBanner(it.id, it.imageUrl, it.linkUrl) }
         return HomeResponse(banner, sections)
     }
 
@@ -151,17 +150,20 @@ class CharacterService(
         requesterId: UUID? = null,
     ): ChatCharacter {
         val row = repository.find(characterId)?.takeIf { it.status != "draft" } ?: throw CharacterNotFound(characterId)
-        return toChat(row, locale, adultAllowed, requesterId)
+        // The creator gets what they last submitted; everyone else what is public (4-1-4 step 2).
+        val seen = if (row.approved && row.creatorId == requesterId) row.with(repository.revision(row.id)) else row
+        return toChat(seen, locale, adultAllowed, requesterId)
     }
 
     fun forChat(
         ids: Collection<UUID>,
         locale: String,
-    ): Map<UUID, ChatCharacter> =
-        repository
-            .findAll(ids)
-            .filterValues { it.status != "draft" }
-            .mapValues { (_, row) -> toChat(row, locale, adultAllowed = false, requesterId = null) }
+        requesterId: UUID? = null,
+    ): Map<UUID, ChatCharacter> {
+        val rows = repository.findAll(ids).filterValues { it.status != "draft" }
+        val revisions = repository.revisions(rows.values.filter { it.approved && it.creatorId == requesterId }.map { it.id })
+        return rows.mapValues { (id, row) -> toChat(row.with(revisions[id]), locale, adultAllowed = false, requesterId = requesterId) }
+    }
 
     private fun toChat(
         row: CharacterRow,

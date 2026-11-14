@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { homeSchema, openSchema } from "@/lib/contracts";
@@ -134,7 +135,7 @@ function HomeScreen() {
     return () => media.removeEventListener("change", update);
   }, []);
   useSidebarShortcut(() => toggleSidebar(!sidebarOpen));
-  async function open(characterId: string, source: "banner" | "card") {
+  async function open(characterId: string, source: "card") {
     // Chat is for members: a guest logs in first, and the chat they chose opens right after
     // (CHARACTER web 2-2).
     if (account.is_guest) {
@@ -170,7 +171,7 @@ function HomeScreen() {
       setOpening(null);
     }
   }
-  // Back from a login started by a guest's card or banner: open the chat they chose, once.
+  // Back from a login started by a guest's card: open the chat they chose, once.
   useEffect(() => {
     if (account.is_guest) {
       // A new visitor on this tab: their own login may name the same character again.
@@ -186,7 +187,6 @@ function HomeScreen() {
     const characterId = params.get(CHAT_AFTER_LOGIN);
     if (!characterId || target === chatOpenedFor) return;
     chatOpenedFor = target;
-    const source = params.get("source") === "banner" ? "banner" : "card";
     const here = new URLSearchParams(window.location.search);
     here.delete(CHAT_AFTER_LOGIN);
     here.delete("source");
@@ -199,7 +199,7 @@ function HomeScreen() {
     void Promise.resolve().then(() => {
       // Read: a later guest redirect (session expiry) must not land here again.
       if (accountRedirect?.startsWith("/?")) clearAccountRedirect();
-      return open(characterId, source);
+      return open(characterId, "card");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per arrival
   }, [account.is_guest, accountRedirect]);
@@ -253,31 +253,7 @@ function HomeScreen() {
           <ErrorState error={result.error} retry={retry} />
         ) : (
           <>
-            {result.data.banner && (
-              <button
-                className="hero"
-                disabled={!!opening}
-                aria-label={t("character.start", {
-                  name: result.data.banner.name,
-                })}
-                onClick={() => {
-                  if (openingRef.current) return;
-                  const id = result.data.banner!.character_id;
-                  track("banner_clicked", "home", { character_id: id });
-                  void open(id, "banner");
-                }}
-              >
-                <img src={result.data.banner.image_url} alt="" />
-                <span className="hero_copy">
-                  <span>CHARACTER CHAT</span>
-                  <strong>{t("character.tagline")}</strong>
-                  <span className="hero_cta">
-                    {opening ? t("character.opening") : result.data.banner.name}{" "}
-                    <span aria-hidden="true">↗</span>
-                  </span>
-                </span>
-              </button>
-            )}
+            {result.data.banner && <Banner banner={result.data.banner} />}
             {result.data.sections.length ? (
               result.data.sections.map((section) => (
                 <section key={section.id}>
@@ -360,5 +336,52 @@ function HomeScreen() {
         <Footer />
       </main>
     </div>
+  );
+}
+
+/**
+ * The home banner: a picture, and a link only when the operator gave one (CHARACTER web 2-2).
+ * It never opens a chat.
+ */
+function Banner({
+  banner,
+}: {
+  banner: { id: string; image_url: string; link_url: string | null };
+}) {
+  const { t } = useSession();
+  const picture = <img src={banner.image_url} alt="" />;
+  if (!banner.link_url) {
+    return (
+      <div className="hero" role="img" aria-label={t("character.banner")}>
+        {picture}
+      </div>
+    );
+  }
+  const clicked = () =>
+    track("banner_clicked", "home", { banner_id: banner.id });
+  // A path inside the service stays in this tab; any other address opens a new one.
+  if (banner.link_url.startsWith("/")) {
+    return (
+      <Link
+        className="hero"
+        href={banner.link_url}
+        aria-label={t("character.banner")}
+        onClick={clicked}
+      >
+        {picture}
+      </Link>
+    );
+  }
+  return (
+    <a
+      className="hero"
+      href={banner.link_url}
+      aria-label={t("character.banner")}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={clicked}
+    >
+      {picture}
+    </a>
   );
 }

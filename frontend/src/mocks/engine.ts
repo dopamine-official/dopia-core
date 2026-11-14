@@ -287,10 +287,11 @@ export function home(state: State, locale: Locale) {
     (value) => !value.is_adult || user.adult_mode,
   );
   return {
+    // A banner is a picture with an optional link; it has nothing to do with a character.
     banner: {
-      character_id: characters[0].id,
-      name: characters[0].texts[locale].name,
+      id: "9c1e4b7a-2d3f-4a5b-8c6d-0e1f2a3b4c5d",
       image_url: "/images/mock_gray.svg",
+      link_url: null as string | null,
     },
     sections: [
       {

@@ -1,6 +1,5 @@
 {
   "original": "Original characters",
-  "tagline": "A new story in your everyday",
   "start": "Chat with {name}",
   "safe": "Safe mode",
   "adult_verification_required": "Adult verification is required to turn off SAFE mode.",
@@ -20,5 +19,6 @@
   "adult": "Adult character",
   "adult_mode_unavailable": "Adult mode is currently unavailable.",
   "not_found": "This character is currently unavailable.",
-  "adult_verification_rejected": "You don't meet the adult verification requirement, so SAFE stays on."
+  "adult_verification_rejected": "You don't meet the adult verification requirement, so SAFE stays on.",
+  "banner": "Banner"
 }

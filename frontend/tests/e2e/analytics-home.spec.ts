@@ -99,13 +99,49 @@ test("home view, card views and a card click", async ({
   expect(count(analytics, "character_card_clicked")).toBe(1);
 });
 
-test("banner click", async ({ page, analytics }) => {
+test("a banner without a link is a picture only", async ({
+  page,
+  analytics,
+}) => {
   await home(page);
   await login(page);
-  await page.locator("button.hero").click();
-  const banner = await sent(analytics, "banner_clicked", { page: "home" });
-  expect(banner.properties.character_id).toEqual(expect.any(String));
-  await expect(page).toHaveURL(/\/chats\//);
+  const banner = page.locator(".hero");
+  await expect(banner).toBeVisible();
+  await expect(page.locator("a.hero, button.hero")).toHaveCount(0);
+  await banner.click();
+  await settle(page);
+  await expect(page).toHaveURL("/");
+  expect(count(analytics, "banner_clicked")).toBe(0);
+});
+
+test("a banner with a link goes there and never opens a chat", async ({
+  page,
+  analytics,
+}) => {
+  await installStubs(page, [
+    {
+      path: "/api/v1/home",
+      method: "GET",
+      merge: {
+        banner: {
+          id: "9c1e4b7a-2d3f-4a5b-8c6d-0e1f2a3b4c5d",
+          image_url: "/images/mock_gray.svg",
+          link_url: "/me",
+        },
+      },
+    },
+  ]);
+  await home(page);
+  await login(page);
+  const banner = page.locator("a.hero");
+  await expect(banner).toHaveAttribute("href", "/me");
+  await expect(banner).not.toHaveAttribute("target", "_blank");
+  await banner.click();
+  await sent(analytics, "banner_clicked", {
+    page: "home",
+    banner_id: "9c1e4b7a-2d3f-4a5b-8c6d-0e1f2a3b4c5d",
+  });
+  await expect(page).toHaveURL(/\/me/);
 });
 
 test("a chat that fails to open", async ({ page, analytics }) => {
@@ -122,14 +158,9 @@ test("a chat that fails to open", async ({ page, analytics }) => {
     code: "e2e_down",
     page: "home",
   });
-  await page.locator("button.hero").click();
-  await sent(analytics, "chat_open_failed", {
-    source: "banner",
-    code: "e2e_down",
-  });
   await expect(page).toHaveURL("/");
   await settle(page);
-  expect(count(analytics, "chat_open_failed")).toBe(2);
+  expect(count(analytics, "chat_open_failed")).toBe(1);
 });
 
 test("a failed home read and its retry", async ({ page, analytics }) => {

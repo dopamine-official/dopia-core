@@ -37,6 +37,8 @@ class CharacterCreationTest(
     @LocalServerPort private val port: Int,
     @Autowired private val accounts: AccountService,
     @Autowired private val characters: CharacterService,
+    @Autowired private val editor: com.dopia.character.CharacterEditor,
+    @Autowired private val properties: com.dopia.config.AppProperties,
     @Autowired private val flags: FeatureFlags,
     @Autowired private val jdbc: JdbcClient,
 ) {
@@ -234,11 +236,13 @@ class CharacterCreationTest(
         assertTrue(done.get("image_url").asString().contains("/characters/$draft/thumbnail-"))
         assertTrue(done.get("image_url").asString().endsWith(".webp"))
 
-        // CH-BE-18: under review or public takes a submit only; a submit of a public one goes back to review.
+        // CH-BE-18: under review or public takes a submit only; a submit of a public one stays public.
         assertEquals(409 to "save_not_allowed", code(member.save(mapOf("name" to "새 이름"), draft)))
         approve(draft)
         assertEquals(409 to "save_not_allowed", code(member.save(mapOf("name" to "새 이름"), draft)))
-        assertEquals("pending", json(member.save(mapOf("name" to "새 이름"), draft, action = "submit")).get("status").asString())
+        val edited = json(member.save(mapOf("name" to "새 이름"), draft, action = "submit"))
+        assertEquals("approved", edited.get("status").asString())
+        assertEquals("pending", edited.get("revision_status").asString())
     }
 
     @Test
@@ -305,7 +309,9 @@ class CharacterCreationTest(
 
         approve(id)
         assertEquals(200, member.save(mapOf("status_window_enabled" to "false"), id, action = "submit").statusCode())
-        val off = characters.forChat(uuid, "ko-KR", adultAllowed = false)
+        // A public character's edit is a revision: only its creator gets it before approval.
+        val off = characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = UUID.fromString(member.memberId))
+        assertNotNull(characters.forChat(uuid, "ko-KR", adultAllowed = false).statusWindow)
         assertEquals("*다가온다.*\n또 만났네.", off.firstMessage)
         assertEquals(null, off.statusWindow)
     }
@@ -461,7 +467,25 @@ class CharacterCreationTest(
         val creator = Browser().login()
         val id = creator.submitted()
         approve(id)
+        // An edit waiting for approval goes too, with its thumbnail.
+        val edit = json(creator.save(mapOf("name" to "탈퇴 전 수정"), id, action = "submit", thumbnail = picture(8, 8)))
+        val editImage = edit.get("image_url").asString()
         assertEquals(200, creator.send("POST", "/account/withdraw").statusCode())
+        assertEquals(
+            0,
+            jdbc
+                .sql("SELECT count(*) FROM character_revisions WHERE character_id = :id")
+                .param("id", UUID.fromString(id))
+                .query(Int::class.java)
+                .single(),
+        )
+        assertEquals(
+            404,
+            HttpClient
+                .newHttpClient()
+                .send(HttpRequest.newBuilder(URI("http://127.0.0.1:$port$editImage")).build(), HttpResponse.BodyHandlers.discarding())
+                .statusCode(),
+        )
         characters.clearCache()
         val deleted =
             jdbc
@@ -472,5 +496,246 @@ class CharacterCreationTest(
                 .single()
         assertTrue(deleted)
         assertEquals(404 to "creator_not_found", code(Browser().login().send("GET", "/creators/${creator.memberId}")))
+    }
+
+    @Test
+    fun `the home banner is a picture with an optional link, the same for everyone`() {
+        // CH-BE-01, CH-BE-03, CH-BE-09
+        fun banner(browser: Browser): JsonNode {
+            characters.clearCache()
+            return json(browser.send("GET", "/home")).get("banner")
+        }
+        val guest = Browser()
+        guest.send("POST", "/account/guest")
+        val member = Browser().login()
+
+        jdbc.sql("DELETE FROM home_banners").update()
+        jdbc
+            .sql(
+                "INSERT INTO home_banners (image_url, link_url, is_public) VALUES ('/b/hidden.webp', 'https://example.com/a', false)",
+            ).update()
+        assertTrue(banner(guest).isNull)
+
+        jdbc
+            .sql(
+                "INSERT INTO home_banners (image_url, link_url, created_at) VALUES " +
+                    "('/b/old.webp', '/me', now() - interval '1 hour'), ('/b/new.webp', NULL, now())",
+            ).update()
+        listOf(guest, member).forEach {
+            val shown = banner(it)
+            assertEquals("/b/new.webp", shown.get("image_url").asString())
+            assertTrue(shown.get("link_url").isNull)
+            assertNotNull(UUID.fromString(shown.get("id").asString()))
+        }
+        // Taking the newest one down brings the one before it back, link and all.
+        jdbc.sql("UPDATE home_banners SET is_public = false WHERE image_url = '/b/new.webp'").update()
+        assertEquals("/me", banner(guest).get("link_url").asString())
+
+        listOf("javascript:alert(1)", "//evil.example", "http://example.com", "me").forEach { link ->
+            assertFailsWith<DataIntegrityViolationException>(link) {
+                jdbc.sql("INSERT INTO home_banners (image_url, link_url) VALUES ('/b/x.webp', :link)").param("link", link).update()
+            }
+        }
+    }
+
+    @Test
+    fun `an edit to a public character waits for approval while what is public stays`() {
+        val creator = Browser().login()
+        val id = creator.submitted()
+        approve(id)
+        val uuid = UUID.fromString(id)
+        val creatorId = UUID.fromString(creator.memberId)
+        val visitor = Browser().login()
+
+        fun homeName(): String? {
+            characters.clearCache()
+            return json(visitor.send("GET", "/home"))
+                .get("sections")
+                .flatMap { it.get("characters") }
+                .firstOrNull { it.get("id").asString() == id }
+                ?.get("name")
+                ?.asString()
+        }
+
+        fun detail() = json(creator.send("GET", "/characters/$id"))
+
+        fun revisions() =
+            jdbc
+                .sql("SELECT count(*) FROM character_revisions WHERE character_id = :id")
+                .param("id", uuid)
+                .query(Int::class.java)
+                .single()
+
+        fun operator(
+            call: String,
+            reason: String? = null,
+        ) {
+            val statement = jdbc.sql("SELECT $call").param("id", uuid)
+            (if (reason == null) statement else statement.param("reason", reason)).query { _, _ -> 1 }.list()
+        }
+
+        fun served(url: String) =
+            HttpClient
+                .newHttpClient()
+                .send(HttpRequest.newBuilder(URI("http://127.0.0.1:$port$url")).build(), HttpResponse.BodyHandlers.discarding())
+                .statusCode()
+
+        fun approvedAt() =
+            jdbc
+                .sql("SELECT approved_at FROM characters WHERE id = :id")
+                .param("id", uuid)
+                .query(java.sql.Timestamp::class.java)
+                .single()
+
+        val publicImage = detail().get("image_url").asString()
+        val firstApproval = approvedAt()
+
+        // CH-BE-36: a submit makes one revision and a second submit replaces it; the row is untouched.
+        val first = json(creator.save(mapOf("name" to "새 제목"), id, action = "submit", thumbnail = picture(32, 32)))
+        assertEquals("approved", first.get("status").asString())
+        assertEquals("pending", first.get("revision_status").asString())
+        assertEquals("새 제목", first.get("name").asString())
+        val revisionImage = first.get("image_url").asString()
+        assertTrue(revisionImage != publicImage)
+        val second = json(creator.save(mapOf("tagline" to "새 소개"), id, action = "submit"))
+        assertEquals("새 제목", second.get("name").asString())
+        assertEquals("새 소개", second.get("tagline").asString())
+        assertEquals(revisionImage, second.get("image_url").asString())
+        assertEquals(1, revisions())
+        assertEquals(200, served(publicImage))
+        assertEquals(409 to "save_not_allowed", code(creator.save(mapOf("name" to "x"), id)))
+
+        // CH-BE-37: everyone else keeps the public one; the creator gets the revision.
+        assertEquals("눈 내리는 도시", homeName())
+        val profile = json(visitor.send("GET", "/creators/${creator.memberId}")).get("characters").get(0)
+        assertEquals("눈 내리는 도시", profile.get("name").asString())
+        assertEquals("눈 내리는 도시", characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = UUID.randomUUID()).name)
+        assertEquals("새 제목", characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = creatorId).name)
+        val mine = json(creator.send("GET", "/characters/mine")).get("characters").first { it.get("id").asString() == id }
+        assertEquals("새 제목", mine.get("name").asString())
+        assertEquals("pending", mine.get("revision_status").asString())
+        // The recent list follows the same rule: the creator's room shows the revision, a visitor's the public one.
+        val open = """{"character_id":"$id"}""".toByteArray()
+
+        fun recent(browser: Browser) =
+            json(browser.send("GET", "/chats/recent"))
+                .get("chats")
+                .first { it.get("character").get("id").asString() == id }
+                .get("character")
+        assertEquals(200, creator.send("POST", "/chats/open", open, "application/json").statusCode())
+        assertEquals(200, visitor.send("POST", "/chats/open", open, "application/json").statusCode())
+        assertEquals("새 제목", recent(creator).get("name").asString())
+        assertEquals(revisionImage, recent(creator).get("image_url").asString())
+        assertEquals("눈 내리는 도시", recent(visitor).get("name").asString())
+        assertEquals(publicImage, recent(visitor).get("image_url").asString())
+
+        // CH-BE-41: it waits in the same queue as first submissions.
+        val kind =
+            jdbc
+                .sql("SELECT kind FROM character_review_queue WHERE character_id = :id")
+                .param("id", uuid)
+                .query(String::class.java)
+                .single()
+        assertEquals("edit", kind)
+
+        // CH-BE-39: a rejection touches the revision only, and a new submit puts it back in line.
+        assertFailsWith<DataIntegrityViolationException> { operator("reject_character(:id, '')") }
+        operator("reject_character(:id, :reason)", "제목 확인")
+        assertEquals("approved", detail().get("status").asString())
+        assertEquals("rejected", detail().get("revision_status").asString())
+        assertEquals("제목 확인", detail().get("rejection_reason").asString())
+        assertEquals("눈 내리는 도시", homeName())
+        val again = json(creator.save(emptyMap(), id, action = "submit"))
+        assertEquals("pending", again.get("revision_status").asString())
+        assertTrue(again.get("rejection_reason").isNull)
+
+        // CH-BE-38: approval puts the revision in the row and removes it; nothing else moves.
+        operator("approve_character(:id)")
+        assertEquals(0, revisions())
+        assertEquals("새 제목", homeName())
+        assertEquals("새 제목", characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = UUID.randomUUID()).name)
+        assertTrue(detail().get("revision_status").isNull)
+        assertEquals("approved", detail().get("status").asString())
+        assertEquals(revisionImage, detail().get("image_url").asString())
+        assertEquals(firstApproval, approvedAt())
+        // CH-BE-42: the thumbnail the edit replaced is deleted, the new one stays.
+        assertEquals(200, served(publicImage))
+        editor.deleteDiscardedFiles()
+        assertEquals(404, served(publicImage))
+        assertEquals(200, served(revisionImage))
+        // A file that could not be deleted stays on the list and goes on a later run.
+        val stuck = "stuck-${UUID.randomUUID()}"
+        val folder =
+            java.nio.file.Files
+                .createDirectories(
+                    java.nio.file.Path
+                        .of(properties.storage.localDir, stuck),
+                )
+        val blocker =
+            java.nio.file.Files
+                .createFile(folder.resolve("blocker"))
+
+        fun waiting() = jdbc.sql("SELECT count(*) FROM discarded_files").query(Int::class.java).single()
+        jdbc.sql("INSERT INTO discarded_files (url) VALUES (:url)").param("url", "${properties.storage.publicBaseUrl}/$stuck").update()
+        editor.deleteDiscardedFiles()
+        assertEquals(1, waiting())
+        java.nio.file.Files
+            .delete(blocker)
+        editor.deleteDiscardedFiles()
+        assertEquals(0, waiting())
+        assertTrue(
+            !java.nio.file.Files
+                .exists(folder),
+        )
+        assertFailsWith<org.springframework.dao.DataAccessException> { operator("approve_character(:id)") }
+
+        // CH-BE-40: the creator can drop a revision; its own file goes, the public one stays.
+        val dropped = json(creator.save(mapOf("name" to "또 고침"), id, action = "submit", thumbnail = picture(16, 16)))
+        val droppedImage = dropped.get("image_url").asString()
+        assertEquals(403 to "not_owner", code(visitor.send("DELETE", "/characters/$id/revision")))
+        assertEquals(204, creator.send("DELETE", "/characters/$id/revision").statusCode())
+        assertEquals(404, served(droppedImage))
+        assertEquals(200, served(revisionImage))
+        assertEquals("새 제목", detail().get("name").asString())
+        assertEquals(404 to "revision_not_found", code(creator.send("DELETE", "/characters/$id/revision")))
+
+        // Taking a public character down drops its revision; so does deleting it.
+        val takenDown = json(creator.save(mapOf("name" to "내려가기 전"), id, action = "submit", thumbnail = picture(12, 12)))
+        val takenDownImage = takenDown.get("image_url").asString()
+        assertEquals(1, revisions())
+        jdbc.sql("UPDATE characters SET status = 'rejected', rejection_reason = '내림' WHERE id = :id").param("id", uuid).update()
+        assertEquals(0, revisions())
+        editor.deleteDiscardedFiles()
+        assertEquals(404, served(takenDownImage))
+        assertEquals(200, served(revisionImage))
+        approve(id)
+        val unapproved = json(creator.save(mapOf("name" to "지우기 전"), id, action = "submit", thumbnail = picture(8, 8)))
+        val unapprovedImage = unapproved.get("image_url").asString()
+        assertEquals(200, served(unapprovedImage))
+        assertEquals(204, creator.send("DELETE", "/characters/$id").statusCode())
+        assertEquals(0, revisions())
+        // The edit's own thumbnail goes with it; the public one stays for rooms that exist.
+        assertEquals(404, served(unapprovedImage))
+        assertEquals(200, served(revisionImage))
+    }
+
+    @Test
+    fun `every table is closed to roles other than this server`() {
+        // A migration that adds a table must turn row level security on for it (V13).
+        val open =
+            jdbc
+                .sql(
+                    "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+                        "WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity " +
+                        "AND c.relname <> 'flyway_schema_history' ORDER BY 1",
+                ).query(String::class.java)
+                .list()
+        assertEquals(emptyList(), open)
+        val view =
+            jdbc
+                .sql("SELECT array_to_string(reloptions, ',') FROM pg_class WHERE relname = 'character_review_queue'")
+                .query(String::class.java)
+                .single()
+        assertTrue(view.contains("security_invoker=true"))
     }
 }

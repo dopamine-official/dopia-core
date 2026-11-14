@@ -28,9 +28,10 @@ export const characterSchema = z.object({
 export const homeSchema = z.object({
   banner: z
     .object({
-      character_id: z.string(),
-      name: z.string(),
+      id: z.string(),
       image_url: z.string(),
+      // Null: the banner is a picture only (CHARACTER web 4-1-2).
+      link_url: z.string().nullable(),
     })
     .nullable(),
   sections: z.array(

@@ -83,7 +83,7 @@ test("all cards lock during opening and recent navigation supersedes a late resp
     };
   });
   await page.locator(".card_link").first().click();
-  const cards = page.locator(".card_link, .hero");
+  const cards = page.locator(".card_link");
   for (let i = 0; i < (await cards.count()); i++)
     await expect(cards.nth(i)).toBeDisabled();
   await page

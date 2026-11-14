@@ -1,6 +1,5 @@
 {
   "original": "原創角色",
-  "tagline": "為你的日常，添一段新故事",
   "start": "和{name}開始聊天",
   "safe": "安全模式",
   "adult_verification_required": "關閉安全模式前，需要先完成成人驗證。",
@@ -20,5 +19,6 @@
   "adult": "成人角色",
   "adult_mode_unavailable": "目前無法使用成人模式。",
   "not_found": "目前無法與這個角色對話。",
-  "adult_verification_rejected": "未符合成人認證條件，無法關閉 SAFE。"
+  "adult_verification_rejected": "未符合成人認證條件，無法關閉 SAFE。",
+  "banner": "橫幅"
 }

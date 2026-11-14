@@ -164,7 +164,7 @@ class ChatService(
     ): RoomView =
         tx.execute {
             val room = ownedRoom(identity, roomId)
-            val character = characters.forChat(room.characterId, locale.locale, adultAllowed = true)
+            val character = characters.forChat(room.characterId, locale.locale, adultAllowed = true, requesterId = identity.accountId)
             val messages = repository.messagesOf(roomId)
             RoomView(
                 roomId = roomId,
@@ -183,7 +183,7 @@ class ChatService(
     ): RecentResponse =
         tx.execute {
             val rooms = repository.roomsOf(identity.accountId)
-            val names = characters.forChat(rooms.map { it.characterId }.toSet(), locale.locale)
+            val names = characters.forChat(rooms.map { it.characterId }.toSet(), locale.locale, identity.accountId)
             val last = repository.lastMessages(rooms.map { it.id })
             RecentResponse(
                 rooms.mapNotNull { room ->

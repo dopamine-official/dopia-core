@@ -337,13 +337,14 @@ class AccountService(
         val sessionToken = cookies.read(request, Cookies.SESSION)
         val createdAt = if (withdraw) accounts.createdAt(identity.accountId) else null
         val guestToken = Tokens.random()
+        var revisionFiles = emptyList<String>()
         val guestId =
             tx.execute {
                 if (withdraw) {
                     accounts.revokeAllSessions(identity.accountId)
                     accounts.markDeleted(identity.accountId)
                     // CHARACTER 4-1-6: in the same transaction, so a failure keeps the account.
-                    characters.softDeleteByCreator(identity.accountId)
+                    revisionFiles = characters.softDeleteByCreator(identity.accountId)
                 } else if (sessionToken != null) {
                     accounts.revokeSession(Tokens.sha256(sessionToken))
                 }
@@ -351,6 +352,8 @@ class AccountService(
                 // The next person on this browser agrees for themselves (4-1-9): no consent copy.
                 guestId
             }!!
+        // Thumbnails of edits that were never approved: nothing shows them any more.
+        revisionFiles.forEach(storage::delete)
         cookies.clearSession(response)
         cookies.setGuest(response, guestToken)
         if (withdraw) {

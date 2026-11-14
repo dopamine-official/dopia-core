@@ -29,6 +29,8 @@ data class CharacterImageView(
 data class CharacterDetail(
     val id: UUID,
     val status: String,
+    /** pending or rejected while a public character has a revision; otherwise null. */
+    val revisionStatus: String?,
     val rejectionReason: String?,
     val name: String?,
     val characterName: String?,
@@ -54,6 +56,7 @@ data class MyCharacter(
     val name: String?,
     val imageUrl: String?,
     val status: String,
+    val revisionStatus: String?,
     val rejectionReason: String?,
     val updatedAt: Instant,
 )
@@ -166,12 +169,16 @@ class CharacterEditor(
             "status_window_rules" to text(row, row.statusWindowRules),
         )
 
-    private fun detail(row: CharacterRow): CharacterDetail {
+    /** [live] is the `characters` row; a revision, when there is one, supplies the content (4-1-3). */
+    private fun detail(live: CharacterRow): CharacterDetail {
+        val revision = if (live.approved) repository.revision(live.id) else null
+        val row = live.with(revision)
         val texts = rowTexts(row).mapValues { it.value.ifEmpty { null } }
         return CharacterDetail(
             id = row.id,
             status = row.status,
-            rejectionReason = row.rejectionReason,
+            revisionStatus = revision?.status,
+            rejectionReason = revision?.rejectionReason ?: row.rejectionReason,
             name = texts["name"],
             characterName = texts["character_name"],
             tagline = texts["tagline"],
@@ -195,11 +202,25 @@ class CharacterEditor(
     private fun view(image: CharacterImageRow) = CharacterImageView(image.id, image.name, image.description, image.imageUrl, image.position)
 
     fun mine(identity: Identity): MyCharacters =
-        MyCharacters(
-            repository.mine(identity.accountId).map {
-                MyCharacter(it.id, text(it, it.name).ifEmpty { null }, it.imageUrl, it.status, it.rejectionReason, it.updatedAt)
-            },
-        )
+        tx.execute {
+            val rows = repository.mine(identity.accountId)
+            val revisions = repository.revisions(rows.filter { it.approved }.map { it.id })
+            MyCharacters(
+                rows.map { live ->
+                    val revision = revisions[live.id]
+                    val row = live.with(revision)
+                    MyCharacter(
+                        row.id,
+                        text(row, row.name).ifEmpty { null },
+                        row.imageUrl,
+                        row.status,
+                        revision?.status,
+                        revision?.rejectionReason ?: row.rejectionReason,
+                        row.updatedAt,
+                    )
+                },
+            )
+        }!!
 
     fun detail(
         identity: Identity,
@@ -325,14 +346,34 @@ class CharacterEditor(
             val saved =
                 tx.execute {
                     val characterId = id ?: repository.insert(identity.accountId, locale.locale)
-                    val current = owned(repository.lock(characterId), identity)
+                    val live = owned(repository.lock(characterId), identity)
+                    // A public character is edited through its revision; what is public stays (4-1-2).
+                    val revision = if (live.approved) repository.revision(characterId) else null
+                    val current = live.with(revision)
                     validate(identity, current, change, hasImage = thumbnail != null || current.imageUrl != null)
                     if (thumbnail != null) {
                         uploaded = storage.put("characters/$characterId/thumbnail-${UUID.randomUUID()}.webp", thumbnail, "image/webp")
-                        replaced = current.imageUrl
                     }
-                    repository.update(characterId, current.sourceLocale, change.copy(imageUrl = uploaded))
-                    if (id != null && change == CharacterChange()) repository.touch(characterId)
+                    if (live.approved) {
+                        // validate() let only a submit through, and a submit is complete.
+                        repository.saveRevision(
+                            characterId,
+                            live.sourceLocale,
+                            texts = rowTexts(current) + change.texts,
+                            statusWindowEnabled = change.statusWindowEnabled ?: current.statusWindowEnabled,
+                            gender = (if (change.gender != null) change.gender.value else current.gender)!!,
+                            age = (if (change.age != null) change.age.value else current.age)!!,
+                            imageUrl = uploaded ?: current.imageUrl!!,
+                            isAdult = change.isAdult ?: current.isAdult,
+                        )
+                        repository.touch(characterId)
+                        // The file of the revision this one replaces, unless it is the public thumbnail.
+                        if (uploaded != null) replaced = revision?.imageUrl?.takeIf { it != live.imageUrl }
+                    } else {
+                        if (uploaded != null) replaced = current.imageUrl
+                        repository.update(characterId, current.sourceLocale, change.copy(imageUrl = uploaded))
+                        if (id != null && change == CharacterChange()) repository.touch(characterId)
+                    }
                     detail(repository.find(characterId)!!)
                 }!!
             // The old file goes only after the new one is saved (3-1-3). Failing to delete is logged, not an error.
@@ -348,11 +389,34 @@ class CharacterEditor(
         identity: Identity,
         id: UUID,
     ) {
-        tx.executeWithoutResult {
-            owned(repository.lock(id), identity)
-            repository.softDelete(id)
-        }
+        val revisionFile =
+            tx.execute {
+                val live = owned(repository.lock(id), identity)
+                // The thumbnail of an edit that was never approved goes with it; the rest stays for rooms.
+                val file = repository.revision(id)?.imageUrl?.takeIf { it != live.imageUrl }
+                repository.softDelete(id)
+                listOfNotNull(file)
+            }!!
+        revisionFile.forEach(storage::delete)
         characters.clearCache()
+    }
+
+    /** Drops the revision of a public character; what is public is untouched (4-2-7). */
+    fun cancelRevision(
+        identity: Identity,
+        id: UUID,
+    ) {
+        val file =
+            tx.execute {
+                val live = owned(repository.lock(id), identity)
+                val revision =
+                    repository.revision(id)
+                        ?: throw ApiException("revision_not_found", HttpStatus.NOT_FOUND, message = "this character has no revision")
+                repository.deleteRevision(id)
+                repository.touch(id)
+                listOfNotNull(revision.imageUrl.takeIf { it != live.imageUrl })
+            }!!
+        file.forEach(storage::delete)
     }
 
     private fun editable(

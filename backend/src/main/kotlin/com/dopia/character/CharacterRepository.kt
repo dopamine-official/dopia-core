@@ -38,6 +38,53 @@ data class CharacterRow(
     val approved get() = status == "approved"
 }
 
+/** What the creator of a public character submitted and an operator has not approved yet (3-2-11). */
+data class RevisionRow(
+    val characterId: UUID,
+    /** pending or rejected. */
+    val status: String,
+    val rejectionReason: String?,
+    val name: JsonNode,
+    val characterName: JsonNode,
+    val tagline: JsonNode,
+    val firstMessage: JsonNode,
+    val personality: JsonNode,
+    val speechStyle: JsonNode,
+    val worldSetting: JsonNode,
+    val statusWindowEnabled: Boolean,
+    val statusWindowFormat: JsonNode,
+    val statusWindowInitial: JsonNode,
+    val statusWindowRules: JsonNode,
+    val gender: String,
+    val age: Int,
+    val imageUrl: String,
+    val isAdult: Boolean,
+)
+
+/** The character as its creator sees it: the revision's content in place of the public one. */
+fun CharacterRow.with(revision: RevisionRow?): CharacterRow =
+    if (revision == null) {
+        this
+    } else {
+        copy(
+            name = revision.name,
+            characterName = revision.characterName,
+            tagline = revision.tagline,
+            firstMessage = revision.firstMessage,
+            personality = revision.personality,
+            speechStyle = revision.speechStyle,
+            worldSetting = revision.worldSetting,
+            statusWindowEnabled = revision.statusWindowEnabled,
+            statusWindowFormat = revision.statusWindowFormat,
+            statusWindowInitial = revision.statusWindowInitial,
+            statusWindowRules = revision.statusWindowRules,
+            gender = revision.gender,
+            age = revision.age,
+            imageUrl = revision.imageUrl,
+            isAdult = revision.isAdult,
+        )
+    }
+
 data class CharacterImageRow(
     val id: UUID,
     val name: String,
@@ -137,6 +184,35 @@ class CharacterRepository(
                 isAdult = rs.getBoolean("is_adult"),
                 deleted = rs.getObject("deleted_at") != null,
                 updatedAt = rs.getObject("updated_at", OffsetDateTime::class.java).toInstant(),
+            )
+        }
+
+    private val revisionColumns =
+        "character_id, status, rejection_reason, name, character_name, tagline, first_message, personality, speech_style, " +
+            "world_setting, status_window_enabled, status_window_format, status_window_initial, status_window_rules, " +
+            "gender, age, image_url, is_adult"
+
+    private val revision =
+        RowMapper { rs: ResultSet, _: Int ->
+            RevisionRow(
+                characterId = rs.getObject("character_id", UUID::class.java),
+                status = rs.getString("status"),
+                rejectionReason = rs.getString("rejection_reason"),
+                name = json(rs, "name"),
+                characterName = json(rs, "character_name"),
+                tagline = json(rs, "tagline"),
+                firstMessage = json(rs, "first_message"),
+                personality = json(rs, "personality"),
+                speechStyle = json(rs, "speech_style"),
+                worldSetting = json(rs, "world_setting"),
+                statusWindowEnabled = rs.getBoolean("status_window_enabled"),
+                statusWindowFormat = json(rs, "status_window_format"),
+                statusWindowInitial = json(rs, "status_window_initial"),
+                statusWindowRules = json(rs, "status_window_rules"),
+                gender = rs.getString("gender"),
+                age = rs.getInt("age"),
+                imageUrl = rs.getString("image_url"),
+                isAdult = rs.getBoolean("is_adult"),
             )
         }
 
@@ -252,21 +328,104 @@ class CharacterRepository(
         statement.update()
     }
 
+    fun revision(characterId: UUID): RevisionRow? =
+        jdbc
+            .sql("SELECT $revisionColumns FROM character_revisions WHERE character_id = :id")
+            .param("id", characterId)
+            .query(revision)
+            .optional()
+            .orElse(null)
+
+    fun revisions(characterIds: Collection<UUID>): Map<UUID, RevisionRow> =
+        if (characterIds.isEmpty()) {
+            emptyMap()
+        } else {
+            jdbc
+                .sql("SELECT $revisionColumns FROM character_revisions WHERE character_id = ANY(:ids)")
+                .param("ids", characterIds.toTypedArray())
+                .query(revision)
+                .list()
+                .associateBy { it.characterId }
+        }
+
+    /**
+     * Stores the whole submitted content as the character's revision, replacing one that is
+     * already there, and puts it back in line for a review (4-1-2).
+     */
+    fun saveRevision(
+        characterId: UUID,
+        sourceLocale: String,
+        texts: Map<String, String>,
+        statusWindowEnabled: Boolean,
+        gender: String,
+        age: Int,
+        imageUrl: String,
+        isAdult: Boolean,
+    ) {
+        require(texts.keys == TEXT_COLUMNS.toSet())
+        val names = TEXT_COLUMNS.joinToString()
+        val values = TEXT_COLUMNS.joinToString { ":$it::jsonb" }
+        val content = TEXT_COLUMNS + listOf("status_window_enabled", "gender", "age", "image_url", "is_adult")
+        val updates = content.joinToString { "$it = EXCLUDED.$it" }
+        var statement =
+            jdbc.sql(
+                "INSERT INTO character_revisions " +
+                    "(character_id, source_locale, $names, status_window_enabled, gender, age, image_url, is_adult) " +
+                    "VALUES (:id, :locale, $values, :status_window_enabled, :gender, :age, :image_url, :is_adult) " +
+                    "ON CONFLICT (character_id) DO UPDATE SET $updates, " +
+                    "status = 'pending', rejection_reason = NULL, submitted_at = now()",
+            )
+        texts.forEach { (column, text) ->
+            // Only the language the creator writes in is stored (2-2).
+            val json = if (text.isEmpty()) "{}" else mapper.writeValueAsString(mapOf(sourceLocale to text))
+            statement = statement.param(column, json)
+        }
+        statement
+            .param("id", characterId)
+            .param("locale", sourceLocale)
+            .param("status_window_enabled", statusWindowEnabled)
+            .param("gender", gender)
+            .param("age", age)
+            .param("image_url", imageUrl)
+            .param("is_adult", isAdult)
+            .update()
+    }
+
+    /** True when there was a revision to delete. */
+    fun deleteRevision(characterId: UUID): Boolean =
+        jdbc.sql("DELETE FROM character_revisions WHERE character_id = :id").param("id", characterId).update() > 0
+
     /** Marks the row changed: image edits belong to the character's last change time. */
     fun touch(id: UUID) {
         jdbc.sql("UPDATE characters SET updated_at = now() WHERE id = :id").param("id", id).update()
     }
 
     fun softDelete(id: UUID) {
+        deleteRevision(id)
         jdbc.sql("UPDATE characters SET deleted_at = now() WHERE id = :id").param("id", id).update()
     }
 
-    /** A creator who withdraws takes their characters off every list; rooms that exist keep working (4-1-6). */
-    fun softDeleteByCreator(creatorId: UUID) {
+    /**
+     * A creator who withdraws takes their characters off every list; rooms that exist keep working
+     * (4-1-6). Returns the thumbnails only their revisions used, for the caller to delete after the
+     * commit.
+     */
+    fun softDeleteByCreator(creatorId: UUID): List<String> {
+        val files =
+            jdbc
+                .sql(
+                    "DELETE FROM character_revisions r USING characters c " +
+                        "WHERE c.id = r.character_id AND c.creator_id = :creator " +
+                        "RETURNING CASE WHEN r.image_url IS DISTINCT FROM c.image_url THEN r.image_url END",
+                ).param("creator", creatorId)
+                .query { rs, _ -> rs.getString(1).orEmpty() }
+                .list()
+                .filter { it.isNotEmpty() }
         jdbc
             .sql("UPDATE characters SET deleted_at = now() WHERE creator_id = :creator AND deleted_at IS NULL")
             .param("creator", creatorId)
             .update()
+        return files
     }
 
     fun images(characterId: UUID): List<CharacterImageRow> =

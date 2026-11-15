@@ -322,7 +322,24 @@ test("SAFE requires login and adult verification without sending a PATCH", async
   expect(changes).toEqual([]);
 });
 
-test("dialog Escape restores focus", async ({ page, isMobile }) => {
+test("a modal closed with Escape returns focus to its opener", async ({
+  page,
+}) => {
+  await home(page);
+  const opener = page
+    .locator("header")
+    .getByRole("button", { name: "로그인", exact: true });
+  await opener.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("the drawer restores focus and stays open on a click outside", async ({
+  page,
+  isMobile,
+}) => {
   test.skip(!isMobile, "the recent chats drawer exists on narrow screens only");
   await openChat(page);
   const menu = page.getByRole("button", {

@@ -103,6 +103,7 @@ export function Sidebar({
           currentId={currentId}
           onNavigate={onNavigate}
           onDelete={setDeleteTarget}
+          watching={state.open && !state.drawerOpen}
         />
       </aside>
       {state.drawerOpen && (

@@ -963,10 +963,8 @@ p {
 .conversation {
   max-width: 822px;
   margin: auto;
-  min-height: calc(100% - 44px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 20px;
 }
 .ai_notice {
@@ -982,22 +980,6 @@ p {
 }
 .setting_label span {
   margin-left: 8px;
-}
-.conversation_art {
-  width: min(100%, calc(100dvh - 340px));
-  max-width: 480px;
-  aspect-ratio: 1;
-  margin: 0 auto;
-  border-radius: 14px;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: #fafafa;
-}
-.conversation_art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 77% center;
 }
 .message_list {
   display: flex;
@@ -1044,16 +1026,16 @@ p {
   font-style: italic;
 }
 .status_window {
-  align-self: flex-start;
+  align-self: stretch;
   max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.65;
   color: #5f6661;
-  padding: 10px 14px;
+  padding: 13px 18px;
   border: 1px solid #ddd6c8;
-  border-radius: 12px;
+  border-radius: 18px;
 }
 .typing {
   align-self: flex-start;
@@ -1430,11 +1412,6 @@ p {
     font-size: 11px;
     max-width: 300px;
   }
-  .conversation_art {
-    width: 100%;
-    max-width: calc(100dvh - 350px);
-    border-radius: 12px;
-  }
   .composer {
     width: calc(100% - 20px);
     padding: 10px;
@@ -1461,7 +1438,8 @@ p {
   .message.streaming {
     max-width: 90%;
   }
-  .message {
+  .message,
+  .status_window {
     font-size: 15px;
     padding: 12px 16px;
   }
@@ -1772,8 +1750,7 @@ p {
 [data-theme="dark"] .empty_recent svg {
   color: #57534e;
 }
-[data-theme="dark"] .hero,
-[data-theme="dark"] .conversation_art {
+[data-theme="dark"] .hero {
   background: #1f1e1c;
 }
 [data-theme="dark"] .card_open {
@@ -1905,12 +1882,15 @@ p {
 }
 .ce_app {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 380px;
-  grid-template-rows: 64px minmax(0, 1fr) 44px;
+  grid-template-columns: 300px minmax(0, 1fr) 380px;
+  grid-template-rows: 72px minmax(0, 1fr) 44px;
   gap: 0 12px;
   height: 100dvh;
-  padding: 0 12px;
+  padding: 0 12px 0 0;
   font-size: 15px;
+}
+.ce_app.recent_closed {
+  grid-template-columns: 0 minmax(0, 1fr) 380px;
 }
 .ce_app .button {
   min-height: 40px;
@@ -1929,6 +1909,7 @@ p {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  padding-left: 28px;
 }
 .ce_steps {
   display: flex;
@@ -1973,28 +1954,40 @@ p {
   color: var(--green);
   font-size: 13px;
 }
+/* The same column as the home sidebar: its colour, width and padding, down to the bottom. */
 .ce_recent {
+  grid-column: 1;
+  grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: 14px 0 20px;
+  padding: 28px 12px 20px;
+  background: #f3eee3;
+}
+[data-theme="dark"] .ce_recent {
+  background: #1a1918;
 }
 .ce_recent > h2 {
-  margin-bottom: 14px;
+  margin-bottom: 18px;
   padding: 0 12px;
-  color: var(--ce-sub);
+  color: #868b87;
   font-size: 12px;
   font-weight: 500;
 }
 .ce_main,
 .ce_side {
+  grid-row: 2;
   min-height: 0;
   overflow: auto;
-  background: var(--ce-panel);
+}
+/* The form sits on the page background, as the home screen's content does. */
+.ce_main {
+  grid-column: 2;
+  padding: 0 24px 40px;
+}
+.ce_side {
+  grid-column: 3;
   border: 1px solid var(--ce-line);
   border-radius: 14px 14px 0 0;
-}
-.ce_main {
-  padding: 0 24px 40px;
 }
 .ce_side h2 {
   padding: 16px 18px;
@@ -2046,7 +2039,7 @@ p {
   gap: 4px;
   margin: 0 -24px 22px;
   padding: 0 24px;
-  background: var(--ce-panel);
+  background: var(--bg);
   border-bottom: 1px solid var(--ce-line);
 }
 .ce_tab {
@@ -2554,7 +2547,8 @@ p {
   margin-top: 12px;
 }
 .ce_foot {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
+  grid-row: 3;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -2686,6 +2680,9 @@ p {
   .ce_app {
     grid-template-columns: 220px minmax(0, 1fr);
   }
+  .ce_app.recent_closed {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
   .ce_side {
     display: none;
   }
@@ -2698,7 +2695,7 @@ p {
     flex-wrap: wrap;
     padding-top: 10px;
   }
-  .ce_top .brand {
+  .ce_top .header_start {
     margin-right: auto;
   }
   .ce_steps {
@@ -2709,13 +2706,22 @@ p {
   }
 }
 @media (max-width: 650px) {
-  .ce_app {
+  .ce_app,
+  .ce_app.recent_closed {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) 40px;
     padding: 0 8px;
   }
-  .ce_recent {
+  .ce_top {
+    padding-left: 0;
+  }
+  .ce_recent,
+  .ce_menu {
     display: none;
+  }
+  .ce_main,
+  .ce_foot {
+    grid-column: 1;
   }
   .ce_main {
     padding: 0 16px 32px;

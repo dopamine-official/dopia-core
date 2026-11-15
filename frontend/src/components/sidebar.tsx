@@ -3,7 +3,6 @@ import {
   useEffect,
   useState,
   useSyncExternalStore,
-  type MouseEvent,
   type ReactNode,
 } from "react";
 import { useSession } from "./providers";
@@ -84,7 +83,6 @@ export function Sidebar({
   onNavigate,
   onDeleted,
   drawerTitle,
-  onLinkClick,
 }: {
   state: SidebarState;
   /** The room on screen: shown in the list but not a link. */
@@ -94,23 +92,12 @@ export function Sidebar({
   onDeleted?: (chat: RecentChat) => void | Promise<void>;
   /** Shown in place of the drawer's title, for a screen whose header has no logo. */
   drawerTitle?: ReactNode;
-  /** Sees a click on a link in the list before it navigates, to guard unsaved work. */
-  onLinkClick?: (event: MouseEvent<HTMLElement>) => void;
 }) {
   const { t } = useSession();
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
-  const guard = onLinkClick
-    ? (event: MouseEvent<HTMLElement>) => {
-        if ((event.target as HTMLElement).closest("a")) onLinkClick(event);
-      }
-    : undefined;
   return (
     <>
-      <aside
-        className="home_sidebar"
-        aria-label={t("common.recent")}
-        onClickCapture={guard}
-      >
+      <aside className="home_sidebar" aria-label={t("common.recent")}>
         <h2>{t("common.recent")}</h2>
         <RecentChats
           currentId={currentId}
@@ -125,19 +112,17 @@ export function Sidebar({
           titleContent={drawerTitle}
           onClose={() => state.toggle(false)}
         >
-          <div onClickCapture={guard}>
-            <RecentChats
-              currentId={currentId}
-              onNavigate={() => {
-                onNavigate?.();
-                state.closeDrawer();
-              }}
-              onDelete={(chat) => {
-                state.closeDrawer();
-                setDeleteTarget(chat);
-              }}
-            />
-          </div>
+          <RecentChats
+            currentId={currentId}
+            onNavigate={() => {
+              onNavigate?.();
+              state.closeDrawer();
+            }}
+            onDelete={(chat) => {
+              state.closeDrawer();
+              setDeleteTarget(chat);
+            }}
+          />
         </Modal>
       )}
       {deleteTarget && (

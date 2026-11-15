@@ -1901,12 +1901,11 @@ p {
 }
 .ce_app {
   display: grid;
-  /* The first column is the room the shared sidebar takes. */
-  grid-template-columns: var(--sidebar) minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   grid-template-rows: 72px minmax(0, 1fr) 44px;
   gap: 0 12px;
   height: 100dvh;
-  padding: 0 12px 0 0;
+  padding: 0 12px;
   font-size: 15px;
 }
 .ce_app .button {
@@ -1926,7 +1925,7 @@ p {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding-left: 28px;
+  padding-left: 16px;
 }
 .ce_steps {
   display: flex;
@@ -1979,11 +1978,11 @@ p {
 }
 /* The form sits on the page background, as the home screen's content does. */
 .ce_main {
-  grid-column: 2;
+  grid-column: 1;
   padding: 0 24px 40px;
 }
 .ce_side {
-  grid-column: 3;
+  grid-column: 2;
   border: 1px solid var(--ce-line);
   border-radius: 14px 14px 0 0;
 }
@@ -2545,7 +2544,7 @@ p {
   margin-top: 12px;
 }
 .ce_foot {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   grid-row: 3;
   display: flex;
   align-items: center;
@@ -2676,7 +2675,7 @@ p {
 }
 @media (max-width: 1280px) {
   .ce_app {
-    grid-template-columns: var(--sidebar) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .ce_side {
     display: none;
@@ -2708,10 +2707,6 @@ p {
   }
   .ce_top {
     padding-left: 0;
-  }
-  .ce_main,
-  .ce_foot {
-    grid-column: 1;
   }
   .ce_main {
     padding: 0 16px 32px;

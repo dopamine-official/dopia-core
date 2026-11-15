@@ -23,7 +23,6 @@ import { regionConfig } from "@/i18n";
 import { useCreatorOnly, useSession } from "./providers";
 import { Screen, useTrack } from "./page";
 import { ErrorState, Icon, Loading, Modal } from "./ui";
-import { Sidebar, useSidebar } from "./sidebar";
 
 // The text fields a creator writes: name, length limit and the step it is on (CHARACTER web 2-2-5).
 const TEXTS = [
@@ -200,7 +199,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   const queue = useRef<File[]>([]);
   const [cancelling, setCancelling] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
-  const sidebar = useSidebar();
   const alive = useRef(true);
   const mainRef = useRef<HTMLElement>(null);
   const thumbnailInput = useRef<HTMLInputElement>(null);
@@ -931,15 +929,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     <div className="ce_app">
       <header className="ce_top">
         <div className="header_start">
-          <button
-            type="button"
-            className="icon_button ce_menu"
-            aria-label={t("common.menu")}
-            aria-expanded={sidebar.open}
-            onClick={() => sidebar.toggle(!sidebar.open)}
-          >
-            <Icon name="menu" />
-          </button>
           <Link className="brand" href="/" onClick={guardLeave}>
             {t("common.brand")}
           </Link>
@@ -988,8 +977,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
           </button>
         )}
       </header>
-
-      <Sidebar state={sidebar} onLinkClick={guardLeave} />
 
       <main
         id="main"

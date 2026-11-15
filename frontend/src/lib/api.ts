@@ -249,8 +249,15 @@ export function safeReturnTo(value: string | null): string {
     if (
       url.origin !== "https://preview.invalid" ||
       url.pathname === "/login" ||
-      (!["/", "/me", "/preview"].includes(url.pathname) &&
-        !/^\/chats\/[\da-f-]{36}$/.test(url.pathname))
+      (![
+        "/",
+        "/me",
+        "/preview",
+        "/characters/new",
+        "/characters/mine",
+      ].includes(url.pathname) &&
+        !/^\/chats\/[\da-f-]{36}$/.test(url.pathname) &&
+        !/^\/characters\/[\da-f-]{36}\/edit$/.test(url.pathname))
     )
       return "/";
     return url.pathname + url.search;

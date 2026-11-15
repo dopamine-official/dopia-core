@@ -18,7 +18,6 @@ data class AppProperties(
     val oauth: OAuth = OAuth(),
     val posthog: PostHog = PostHog(),
     val character: Character = Character(),
-    val flags: Map<String, Boolean> = emptyMap(),
 ) {
     data class Cookie(
         val secure: Boolean = true,
@@ -76,6 +75,8 @@ data class AppProperties(
         val imageMaxCount: Int = 100,
         /** Same value as the characters_adult_age CHECK. */
         val adultMinAge: Int = 20,
+        /** Accounts that may make characters; see CharacterCreators. */
+        val creators: String = "",
     )
 
     data class Home(

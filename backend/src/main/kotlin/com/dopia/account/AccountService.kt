@@ -36,6 +36,8 @@ data class AccountView(
     val consentRequired: Boolean,
     // The request region's consent items; the web shows these, not a copy of its own.
     val consentItems: List<ConsentItem>,
+    /** Whether this account may make characters (CHARACTER web 2-2-2); the web shows the screens by it. */
+    val characterCreationEnabled: Boolean,
 )
 
 data class IssuedAccount(
@@ -45,6 +47,7 @@ data class IssuedAccount(
 fun AccountRow.view(
     consentRequired: Boolean,
     consentItems: List<ConsentItem>,
+    characterCreationEnabled: Boolean,
 ) = AccountView(
     accountId = id,
     isGuest = isGuest,
@@ -55,6 +58,7 @@ fun AccountRow.view(
     adultVerificationRejected = !isGuest && birthDate != null && adultVerifiedAt == null,
     consentRequired = consentRequired,
     consentItems = consentItems,
+    characterCreationEnabled = characterCreationEnabled,
 )
 
 @Service
@@ -67,6 +71,7 @@ class AccountService(
     private val events: AppEvents,
     private val i18n: I18n,
     private val characters: com.dopia.character.CharacterRepository,
+    private val creators: com.dopia.character.CharacterCreators,
 ) {
     private val log = LoggerFactory.getLogger(AccountService::class.java)
     private val headerAccount = "X-Preview-Account"
@@ -128,7 +133,11 @@ class AccountService(
         region: RegionConfig,
     ): AccountView {
         val row = accounts.find(identity.accountId) ?: throw ApiException.unauthorized()
-        return row.view(consentRequired(identity.accountId, region), region.consentItems)
+        return row.view(
+            consentRequired(identity.accountId, region),
+            region.consentItems,
+            characterCreationEnabled = !row.isGuest && creators.allows(row.id),
+        )
     }
 
     // 4-1-8 consents

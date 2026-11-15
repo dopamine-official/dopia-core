@@ -150,6 +150,35 @@ function turnStream(turn: engine.Turn, roomId: string) {
     },
   });
 }
+/** A picture of a character as the server takes it: jpeg, png or webp up to 5MB. */
+async function pictureUrl(
+  file: FormDataEntryValue | null,
+  field: string,
+  required: boolean,
+): Promise<string> {
+  if (!(file instanceof File) || !file.size) {
+    if (!required) return "";
+    throw new ApiError("invalid_input", 422, [{ field, reason: "required" }]);
+  }
+  if (file.size > 5 * 1024 * 1024) throw new ApiError("file_too_large", 413);
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
+    throw new ApiError("invalid_input", 422, [
+      { field, reason: "invalid_image" },
+    ]);
+  return toDataUrl(file);
+}
+async function saveCharacter(request: Request, characterId: string | null) {
+  const form = await request.formData();
+  const fields: Record<string, string> = {};
+  for (const [key, value] of form)
+    if (typeof value === "string") fields[key] = value;
+  const thumbnail = await pictureUrl(form.get("thumbnail"), "thumbnail", false);
+  return json(
+    await run(request, (state) =>
+      engine.saveCharacter(state, characterId, fields, thumbnail || undefined),
+    ),
+  );
+}
 export const handlers = [
   http.post(
     "/api/v1/account/guest",
@@ -371,6 +400,103 @@ export const handlers = [
         ),
       ),
     ),
+  ),
+  http.get(
+    "/api/v1/characters/mine",
+    guarded(async (req) => json(await run(req, engine.myCharacters))),
+  ),
+  http.post(
+    "/api/v1/characters",
+    guarded(async (req) => saveCharacter(req, null)),
+  ),
+  http.get(
+    "/api/v1/characters/:character_id",
+    guarded(async (req, params) =>
+      json(
+        await run(req, (state) =>
+          engine.characterDetail(state, String(params.character_id)),
+        ),
+      ),
+    ),
+  ),
+  http.patch(
+    "/api/v1/characters/:character_id",
+    guarded(async (req, params) =>
+      saveCharacter(req, String(params.character_id)),
+    ),
+  ),
+  http.delete(
+    "/api/v1/characters/:character_id",
+    guarded(async (req, params) => {
+      await run(req, (state) =>
+        engine.deleteCharacter(state, String(params.character_id)),
+      );
+      return new HttpResponse(null, { status: 204 });
+    }),
+  ),
+  http.delete(
+    "/api/v1/characters/:character_id/revision",
+    guarded(async (req, params) => {
+      await run(req, (state) =>
+        engine.cancelRevision(state, String(params.character_id)),
+      );
+      return new HttpResponse(null, { status: 204 });
+    }),
+  ),
+  http.post(
+    "/api/v1/characters/:character_id/images",
+    guarded(async (req, params) => {
+      const form = await req.formData();
+      const text = (key: string) => {
+        const value = form.get(key);
+        return typeof value === "string" ? value : undefined;
+      };
+      const input = { name: text("name"), description: text("description") };
+      const characterId = String(params.character_id);
+      await run(req, (state) => {
+        engine.checkImage(state, characterId, input);
+      });
+      const image_url = await pictureUrl(form.get("file"), "file", true);
+      return json(
+        await run(req, (state) =>
+          engine.addImage(state, characterId, { ...input, image_url }),
+        ),
+      );
+    }),
+  ),
+  http.patch(
+    "/api/v1/characters/:character_id/images/:image_id",
+    guarded(async (req, params) => {
+      const input = z
+        .object({
+          name: z.string().optional(),
+          description: z.string().optional(),
+        })
+        .parse(await req.json());
+      return json(
+        await run(req, (state) =>
+          engine.updateImage(
+            state,
+            String(params.character_id),
+            String(params.image_id),
+            input,
+          ),
+        ),
+      );
+    }),
+  ),
+  http.delete(
+    "/api/v1/characters/:character_id/images/:image_id",
+    guarded(async (req, params) => {
+      await run(req, (state) =>
+        engine.deleteImage(
+          state,
+          String(params.character_id),
+          String(params.image_id),
+        ),
+      );
+      return new HttpResponse(null, { status: 204 });
+    }),
   ),
   http.post(
     "/api/v1/mock/reset",

@@ -3,7 +3,6 @@ package com.dopia.character
 import com.dopia.account.AccountRepository
 import com.dopia.account.PhotoStorage
 import com.dopia.common.ApiException
-import com.dopia.common.FeatureFlags
 import com.dopia.common.FieldError
 import com.dopia.common.I18n
 import com.dopia.common.Identity
@@ -105,7 +104,7 @@ class CharacterEditor(
     private val repository: CharacterRepository,
     private val characters: CharacterService,
     private val accounts: AccountRepository,
-    private val flags: FeatureFlags,
+    private val creators: CharacterCreators,
     private val processor: ImageProcessor,
     private val storage: PhotoStorage,
     private val properties: AppProperties,
@@ -132,7 +131,7 @@ class CharacterEditor(
     private val required = listOf("name", "character_name", "tagline", "personality", "speech_style", "world_setting", "first_message")
 
     private fun assertEnabled(identity: Identity) {
-        if (!flags.enabled("character_creation_enabled", identity.accountId)) {
+        if (!creators.allows(identity.accountId)) {
             throw ApiException("creation_disabled", HttpStatus.FORBIDDEN, message = "character creation is turned off")
         }
     }

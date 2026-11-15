@@ -52,6 +52,7 @@ curl http://127.0.0.1:8080/actuator/health
 | `WEB_BASE_URL` | `http://127.0.0.1:3000` | 로그인 뒤 돌아갈 웹 origin |
 | `LOGIN_STATE_KEY` | dev용 고정값 | `login_state` 쿠키 서명 키. 운영에서는 반드시 교체 |
 | `DEV_POSTHOG_API_KEY`, `PROD_POSTHOG_API_KEY`, `POSTHOG_HOST` | 없음, 없음, `https://us.i.posthog.com` | 서버 이벤트(TRACKING-PLAN 8)를 PostHog로 보냄. 배포 환경에는 그 환경의 키만 넣고, 둘 다 있으면 `DEV_` 키를 씀. 키가 없으면 보내지 않음. chat-ai와 같은 변수 |
+| `CHARACTER_CREATORS` | 없음 | 캐릭터를 제작할 수 있는 계정 ID 목록(쉼표로 구분). `*`이면 모든 회원. 비어 있으면 아무도 제작할 수 없음. `dev` 프로필은 `*` |
 | `APP_RELEASE` | `RAILWAY_GIT_COMMIT_SHA` 또는 `local` | 서버 이벤트의 `app_release` |
 
 ## Google 로그인 설정

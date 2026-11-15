@@ -18,6 +18,9 @@ export const accountSchema = z.object({
       document_url: z.string(),
     }),
   ),
+  // Whether the server lets this account make characters (CHARACTER web 2-2-2): off
+  // unless it says on.
+  character_creation_enabled: z.boolean().default(false),
 });
 export type Account = z.infer<typeof accountSchema>;
 export const characterSchema = z.object({
@@ -75,6 +78,57 @@ export const recentSchema = z.object({
   ),
 });
 export type RecentResponse = z.infer<typeof recentSchema>;
+const characterStatus = z.enum(["draft", "pending", "approved", "rejected"]);
+const revisionStatus = z.enum(["pending", "rejected"]).nullable();
+export const myCharactersSchema = z.object({
+  characters: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string().nullable(),
+      image_url: z.string().nullable(),
+      status: characterStatus,
+      revision_status: revisionStatus,
+      rejection_reason: z.string().nullable(),
+      updated_at: z.string(),
+    }),
+  ),
+});
+export type MyCharacter = z.infer<
+  typeof myCharactersSchema
+>["characters"][number];
+export const characterImageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  image_url: z.string(),
+  position: z.number(),
+});
+export type CharacterImage = z.infer<typeof characterImageSchema>;
+/** A creator's own character, as the creation screen loads and saves it (CHARACTER web 4-1-7). */
+export const characterDetailSchema = z.object({
+  id: z.string(),
+  status: characterStatus,
+  revision_status: revisionStatus,
+  rejection_reason: z.string().nullable(),
+  name: z.string().nullable(),
+  character_name: z.string().nullable(),
+  tagline: z.string().nullable(),
+  personality: z.string().nullable(),
+  speech_style: z.string().nullable(),
+  world_setting: z.string().nullable(),
+  first_message: z.string().nullable(),
+  status_window_enabled: z.boolean(),
+  status_window_format: z.string().nullable(),
+  status_window_initial: z.string().nullable(),
+  status_window_rules: z.string().nullable(),
+  gender: z.enum(["female", "male"]).nullable(),
+  age: z.number().nullable(),
+  is_adult: z.boolean(),
+  image_url: z.string().nullable(),
+  images: z.array(characterImageSchema),
+  updated_at: z.string(),
+});
+export type CharacterDetail = z.infer<typeof characterDetailSchema>;
 export const openSchema = z.object({
   room_id: z.string(),
   created: z.boolean(),

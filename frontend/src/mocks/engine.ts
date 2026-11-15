@@ -7,9 +7,42 @@ import {
 } from "@/lib/contracts";
 import { ageConfig, regionToday, type Locale } from "@/i18n";
 import { consentItems } from "./consents";
-import { characters, characterInfo, getCharacter } from "./characters";
+import {
+  characters,
+  characterInfo,
+  getCharacter,
+  type Character,
+} from "./characters";
 
-type StoredAccount = Account & { provider?: "google" };
+// `character_creation_enabled` is worked out on every read, so saved accounts need not carry it.
+type StoredAccount = Omit<Account, "character_creation_enabled"> & {
+  character_creation_enabled?: boolean;
+  provider?: "google";
+};
+type CharacterStatus = "draft" | "pending" | "approved" | "rejected";
+export type StoredImage = {
+  id: string;
+  name: string;
+  description: string;
+  image_url: string;
+  position: number;
+};
+/** A character a member made in the preview. Nobody approves here: a submit stays in review. */
+export type StoredCharacter = {
+  id: string;
+  owner_id: string;
+  status: CharacterStatus;
+  rejection_reason: string | null;
+  texts: Record<string, string>;
+  gender: "female" | "male" | null;
+  age: number | null;
+  status_window_enabled: boolean;
+  is_adult: boolean;
+  image_url: string | null;
+  images: StoredImage[];
+  updated_at: string;
+  deleted: boolean;
+};
 export type Turn = {
   client_message_id: string;
   user_message_id: string;
@@ -40,6 +73,7 @@ export type State = {
   events: LocalEvent[];
   // Kept apart from the account so it never goes out in a response (ACCOUNT 5-1-3).
   compliance?: Record<string, Compliance>;
+  characters?: StoredCharacter[];
 };
 type Compliance = {
   consents: string[];
@@ -84,6 +118,8 @@ export function account(state: State): StoredAccount {
   const record = compliance(state, result.account_id);
   result.adult_verification_rejected =
     !result.is_guest && !!record.birth_date && !result.adult_verified;
+  // The preview has no list of creators: every member may make characters.
+  result.character_creation_enabled = !result.is_guest;
   result.consent_items = consentItems;
   result.consent_required = consentItems.some(
     (item) =>
@@ -244,6 +280,9 @@ export function logout(state: State, withdraw = false) {
     state.rooms = state.rooms.filter(
       (value) => value.owner_id !== previous.account_id,
     );
+    state.characters = state.characters?.filter(
+      (value) => value.owner_id !== previous.account_id,
+    );
     state.events = state.events.filter(
       (value) => value.account_id !== previous.account_id,
     );
@@ -279,6 +318,34 @@ export function updateProfile(
   if (values.photo_url !== undefined) user.photo_url = values.photo_url;
   event(state, "profile_updated");
   return user;
+}
+/** A preview character, or one a member made here, in the shape chat uses. */
+function lookup(state: State, characterId: string): Character | undefined {
+  const fixed = getCharacter(characterId);
+  if (fixed) return fixed;
+  const made = state.characters?.find((value) => value.id === characterId);
+  if (!made) return undefined;
+  const text = (key: string) => made.texts[key] ?? "";
+  const initial = made.status_window_enabled
+    ? text("status_window_initial")
+    : "";
+  const content = {
+    name: text("name"),
+    tagline: text("tagline"),
+    first_message: initial
+      ? `${text("first_message")}\n<status>\n${initial}\n</status>`
+      : text("first_message"),
+    replies: ["*고개를 끄덕인다.* 계속 말해 봐."],
+  };
+  return {
+    id: made.id,
+    image_url: made.image_url ?? "/images/mock_gray.svg",
+    creator_name:
+      state.accounts.find((value) => value.account_id === made.owner_id)
+        ?.nickname ?? "",
+    is_adult: made.is_adult,
+    texts: { "ko-KR": content, "zh-TW": content, "en-US": content },
+  };
 }
 export function home(state: State, locale: Locale) {
   const user = account(state);
@@ -318,7 +385,7 @@ export function ownedRoom(state: State, roomId: string) {
       !value.deleted &&
       value.owner_id === user.account_id &&
       // A saved room can outlive its preview character (./characters.ts changes freely).
-      getCharacter(value.character_id),
+      lookup(state, value.character_id),
   );
   if (!room) throw new ApiError("room_not_found", 404);
   return room;
@@ -332,8 +399,17 @@ export function chatter(state: State) {
 }
 export function openRoom(state: State, characterId: string, locale: Locale) {
   const user = chatter(state);
-  const character = getCharacter(characterId);
+  const character = lookup(state, characterId);
   if (!character) throw new ApiError("character_not_found", 404);
+  // A character made here is open to its creator only, once submitted (CHARACTER 4-1-4).
+  const made = state.characters?.find((value) => value.id === characterId);
+  if (
+    made &&
+    (made.deleted ||
+      made.status === "draft" ||
+      made.owner_id !== user.account_id)
+  )
+    throw new ApiError("character_not_found", 404);
   const existing = state.rooms
     .filter(
       (room) =>
@@ -375,7 +451,7 @@ export function openRoom(state: State, characterId: string, locale: Locale) {
 export function settle(state: State, now = Date.now()) {
   // A room whose preview character was removed is hidden everywhere, so nobody could
   // delete it: drop it from storage here.
-  state.rooms = state.rooms.filter((room) => getCharacter(room.character_id));
+  state.rooms = state.rooms.filter((room) => lookup(state, room.character_id));
   for (const room of state.rooms)
     for (const turn of room.turns) {
       if (turn.status !== "generating" || turn.finishes_at > now) continue;
@@ -412,7 +488,7 @@ export function roomView(state: State, roomId: string, locale: Locale) {
   const room = ownedRoom(state, roomId);
   return {
     room_id: roomId,
-    character: characterInfo(getCharacter(room.character_id)!, locale),
+    character: characterInfo(lookup(state, room.character_id)!, locale),
     messages: room.messages,
     generating: room.turns.some((turn) => turn.status === "generating"),
   };
@@ -426,12 +502,12 @@ export function recent(state: State, locale: Locale) {
           !room.deleted &&
           room.owner_id === user.account_id &&
           // Like the backend, skip a room whose character cannot be found.
-          getCharacter(room.character_id),
+          lookup(state, room.character_id),
       )
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .map((room) => ({
         room_id: room.room_id,
-        character: characterInfo(getCharacter(room.character_id)!, locale),
+        character: characterInfo(lookup(state, room.character_id)!, locale),
         last_message:
           room.messages.filter((value) => value.turn_status !== "failed").at(-1)
             ?.content ?? null,
@@ -462,7 +538,7 @@ export function startTurn(
   }
   if (room.turns.some((turn) => turn.status === "generating"))
     throw new ApiError("generation_in_progress", 409);
-  const replies = getCharacter(room.character_id)!.texts[locale].replies;
+  const replies = lookup(state, room.character_id)!.texts[locale].replies;
   const behavior = state.scenario.response;
   if (behavior === "fail" || behavior === "disconnect")
     state.scenario.response = "normal";
@@ -496,4 +572,288 @@ export function startTurn(
     client_message_id: input.client_message_id,
   });
   return turn;
+}
+
+// ---------- character creation (CHARACTER web 4-1-6 to 4-1-11) ----------
+const TEXT_LIMITS: Record<string, number> = {
+  name: 30,
+  character_name: 30,
+  tagline: 35,
+  personality: 2000,
+  speech_style: 2000,
+  world_setting: 6000,
+  first_message: 3000,
+  status_window_format: 500,
+  status_window_initial: 500,
+  status_window_rules: 1000,
+};
+const REQUIRED = [
+  "name",
+  "character_name",
+  "tagline",
+  "personality",
+  "speech_style",
+  "world_setting",
+  "first_message",
+];
+const ADULT_MIN_AGE = 20;
+const MAX_IMAGES = 100;
+const size = (value: string) => Array.from(value).length;
+const invalid = (...fields: [string, string][]) =>
+  new ApiError(
+    "invalid_input",
+    422,
+    fields.map(([field, reason]) => ({ field, reason })),
+  );
+function creator(state: State) {
+  const user = account(state);
+  if (user.is_guest) throw new ApiError("member_required", 403);
+  return user;
+}
+function owned(state: State, characterId: string) {
+  const user = creator(state);
+  const found = state.characters?.find(
+    (value) => value.id === characterId && !value.deleted,
+  );
+  if (!found) throw new ApiError("character_not_found", 404);
+  if (found.owner_id !== user.account_id) throw new ApiError("not_owner", 403);
+  return found;
+}
+function detail(character: StoredCharacter) {
+  const text = (key: string) => character.texts[key] || null;
+  return {
+    id: character.id,
+    status: character.status,
+    revision_status: null,
+    rejection_reason: character.rejection_reason,
+    name: text("name"),
+    character_name: text("character_name"),
+    tagline: text("tagline"),
+    personality: text("personality"),
+    speech_style: text("speech_style"),
+    world_setting: text("world_setting"),
+    first_message: text("first_message"),
+    status_window_enabled: character.status_window_enabled,
+    status_window_format: text("status_window_format"),
+    status_window_initial: text("status_window_initial"),
+    status_window_rules: text("status_window_rules"),
+    gender: character.gender,
+    age: character.age,
+    is_adult: character.is_adult,
+    image_url: character.image_url,
+    images: character.images,
+    updated_at: character.updated_at,
+  };
+}
+export function myCharacters(state: State) {
+  const user = creator(state);
+  return {
+    characters: (state.characters ?? [])
+      .filter((value) => value.owner_id === user.account_id && !value.deleted)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .map((value) => ({
+        id: value.id,
+        name: value.texts.name || null,
+        image_url: value.image_url,
+        status: value.status,
+        revision_status: null,
+        rejection_reason: value.rejection_reason,
+        updated_at: value.updated_at,
+      })),
+  };
+}
+export function characterDetail(state: State, characterId: string) {
+  return detail(owned(state, characterId));
+}
+/** Create ([characterId] null) or update, as the server checks it (CHARACTER 4-1-2). */
+export function saveCharacter(
+  state: State,
+  characterId: string | null,
+  fields: Record<string, string>,
+  thumbnail?: string,
+) {
+  const user = creator(state);
+  const action = fields.action;
+  const errors: [string, string][] = [];
+  if (action !== "save" && action !== "submit")
+    errors.push(["action", "invalid_value"]);
+  const current: StoredCharacter = characterId
+    ? owned(state, characterId)
+    : {
+        id: id(),
+        owner_id: user.account_id,
+        status: "draft",
+        rejection_reason: null,
+        texts: {},
+        gender: null,
+        age: null,
+        status_window_enabled: false,
+        is_adult: false,
+        image_url: null,
+        images: [],
+        updated_at: "",
+        deleted: false,
+      };
+  const texts = { ...current.texts };
+  for (const [key, limit] of Object.entries(TEXT_LIMITS)) {
+    if (!(key in fields)) continue;
+    texts[key] = fields[key].trim();
+    if (size(texts[key]) > limit) errors.push([key, "too_long"]);
+  }
+  let { gender, age } = current;
+  if ("gender" in fields) {
+    const value = fields.gender.trim();
+    if (value === "" || value === "female" || value === "male")
+      gender = value === "" ? null : value;
+    else errors.push(["gender", "invalid_value"]);
+  }
+  if ("age" in fields) {
+    const value = fields.age.trim();
+    if (value === "" || /^[0-9]{1,5}$/.test(value))
+      age = value === "" ? null : Number(value);
+    else errors.push(["age", "invalid_value"]);
+  }
+  const flag = (key: string, fallback: boolean) => {
+    if (!(key in fields)) return fallback;
+    if (fields[key] === "true" || fields[key] === "false")
+      return fields[key] === "true";
+    errors.push([key, "invalid_value"]);
+    return fallback;
+  };
+  const statusWindow = flag(
+    "status_window_enabled",
+    current.status_window_enabled,
+  );
+  const isAdult = flag("is_adult", current.is_adult);
+  if (errors.length) throw invalid(...errors);
+  const submit = action === "submit";
+  if (
+    !submit &&
+    (current.status === "pending" || current.status === "approved")
+  )
+    throw new ApiError("save_not_allowed", 409);
+  if (isAdult && !user.adult_verified)
+    throw new ApiError("adult_verification_required", 403);
+  if (statusWindow && !texts.status_window_format)
+    errors.push(["status_window_format", "required"]);
+  if (isAdult && (age === null || age < ADULT_MIN_AGE))
+    errors.push(["is_adult", "age_too_low"]);
+  const image = thumbnail ?? current.image_url;
+  if (submit) {
+    for (const key of REQUIRED) if (!texts[key]) errors.push([key, "required"]);
+    if (!gender) errors.push(["gender", "required"]);
+    if (age === null) errors.push(["age", "required"]);
+    if (!image) errors.push(["thumbnail", "required"]);
+    if (statusWindow && !texts.status_window_initial)
+      errors.push(["status_window_initial", "required"]);
+  }
+  if (errors.length) throw invalid(...errors);
+  Object.assign(current, {
+    texts,
+    gender,
+    age,
+    status_window_enabled: statusWindow,
+    is_adult: isAdult,
+    image_url: image,
+    updated_at: new Date().toISOString(),
+  });
+  if (submit) {
+    current.status = "pending";
+    current.rejection_reason = null;
+  }
+  if (!characterId) (state.characters ??= []).push(current);
+  return detail(current);
+}
+export function deleteCharacter(state: State, characterId: string) {
+  owned(state, characterId).deleted = true;
+}
+/** The preview never approves, so a public character with a revision does not exist here. */
+export function cancelRevision(state: State, characterId: string) {
+  owned(state, characterId);
+  throw new ApiError("revision_not_found", 404);
+}
+function editable(state: State, characterId: string) {
+  const character = owned(state, characterId);
+  if (character.status === "pending" || character.status === "approved")
+    throw new ApiError("save_not_allowed", 409);
+  return character;
+}
+function imageName(value: string | undefined) {
+  const name = (value ?? "").trim().replaceAll("\n", " ");
+  if (!name) throw invalid(["name", "required"]);
+  if (size(name) > 40) throw invalid(["name", "too_long"]);
+  return name;
+}
+function imageDescription(value: string | undefined) {
+  const description = (value ?? "").trim();
+  if (size(description) > 200) throw invalid(["description", "too_long"]);
+  return description;
+}
+/** Everything but the upload itself, so a refused picture is never read into memory. */
+export function checkImage(
+  state: State,
+  characterId: string,
+  input: { name?: string; description?: string },
+) {
+  const character = editable(state, characterId);
+  const name = imageName(input.name);
+  const description = imageDescription(input.description);
+  if (character.images.length >= MAX_IMAGES)
+    throw new ApiError("image_limit_reached", 409);
+  if (character.images.some((value) => value.name === name))
+    throw invalid(["name", "duplicate"]);
+  return { character, name, description };
+}
+export function addImage(
+  state: State,
+  characterId: string,
+  input: { name?: string; description?: string; image_url: string },
+) {
+  const { character, name, description } = checkImage(
+    state,
+    characterId,
+    input,
+  );
+  const image: StoredImage = {
+    id: id(),
+    name,
+    description,
+    image_url: input.image_url,
+    position:
+      Math.max(-1, ...character.images.map((value) => value.position)) + 1,
+  };
+  character.images.push(image);
+  character.updated_at = new Date().toISOString();
+  return image;
+}
+export function updateImage(
+  state: State,
+  characterId: string,
+  imageId: string,
+  input: { name?: string; description?: string },
+) {
+  const character = editable(state, characterId);
+  const image = character.images.find((value) => value.id === imageId);
+  if (!image) throw new ApiError("image_not_found", 404);
+  const name = input.name === undefined ? image.name : imageName(input.name);
+  const description =
+    input.description === undefined
+      ? image.description
+      : imageDescription(input.description);
+  if (character.images.some((value) => value !== image && value.name === name))
+    throw invalid(["name", "duplicate"]);
+  Object.assign(image, { name, description });
+  character.updated_at = new Date().toISOString();
+  return image;
+}
+export function deleteImage(
+  state: State,
+  characterId: string,
+  imageId: string,
+) {
+  const character = editable(state, characterId);
+  if (!character.images.some((value) => value.id === imageId))
+    throw new ApiError("image_not_found", 404);
+  character.images = character.images.filter((value) => value.id !== imageId);
+  character.updated_at = new Date().toISOString();
 }

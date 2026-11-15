@@ -121,6 +121,9 @@ export function pageForPath(path: string): LoginPage | null {
   if (path === "/") return "home";
   if (path === "/me") return "me";
   if (/^\/chats\/[^/]+$/.test(path)) return "chat_room";
+  if (path === "/characters/mine") return "my_characters";
+  if (path === "/characters/new" || /^\/characters\/[^/]+\/edit$/.test(path))
+    return "character_create";
   // Design preview and e2e-only screens are not part of the product.
   if (path === "/preview" || path.startsWith("/e2e/")) return null;
   return "not_found";

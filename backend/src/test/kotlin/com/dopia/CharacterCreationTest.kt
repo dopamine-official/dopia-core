@@ -2,7 +2,6 @@ package com.dopia
 
 import com.dopia.account.AccountService
 import com.dopia.character.CharacterService
-import com.dopia.common.FeatureFlags
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -39,7 +38,7 @@ class CharacterCreationTest(
     @Autowired private val characters: CharacterService,
     @Autowired private val editor: com.dopia.character.CharacterEditor,
     @Autowired private val properties: com.dopia.config.AppProperties,
-    @Autowired private val flags: FeatureFlags,
+    @Autowired private val creators: com.dopia.character.CharacterCreators,
     @Autowired private val jdbc: JdbcClient,
 ) {
     private val mapper = ObjectMapper()
@@ -169,18 +168,22 @@ class CharacterCreationTest(
     }
 
     @Test
-    fun `only a member with the flag on makes a character, and a draft keeps what was sent`() {
+    fun `only a member allowed to create makes a character, and a draft keeps what was sent`() {
         val guest = Browser()
         guest.send("POST", "/account/guest")
         assertEquals(403, guest.save(mapOf("name" to "x")).statusCode())
 
         val member = Browser().login()
-        flags.overrides["character_creation_enabled"] = false
+        creators.everyone = false
         try {
             assertEquals(403 to "creation_disabled", code(member.save(mapOf("name" to "x"))))
+            assertEquals(false, json(member.send("GET", "/account/me")).get("character_creation_enabled").asBoolean())
         } finally {
-            flags.overrides["character_creation_enabled"] = true
+            creators.everyone = true
         }
+        // The web shows the creation screens by this field: a member allowed to create, never a guest.
+        assertEquals(true, json(member.send("GET", "/account/me")).get("character_creation_enabled").asBoolean())
+        assertEquals(false, json(guest.send("GET", "/account/me")).get("character_creation_enabled").asBoolean())
 
         // CH-BE-13: only the fields that were sent change, and an empty text clears one.
         val created = json(member.save(mapOf("name" to "  겨울  ")))

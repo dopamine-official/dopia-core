@@ -77,9 +77,13 @@ export function useSession() {
   if (!value) throw new Error("Session unavailable");
   return value;
 }
-/** Pages only members see: My Page and chat rooms (ACCOUNT web 3-2). */
+/** Pages only members see: My Page, chat rooms and the creation screens (ACCOUNT web 3-2). */
 export function isMembersOnly(path: string) {
-  return path === "/me" || path.startsWith("/chats/");
+  return (
+    path === "/me" ||
+    path.startsWith("/chats/") ||
+    path.startsWith("/characters/")
+  );
 }
 /**
  * Sends a guest on to the login modal over home, keeping a failed login's notice, and back to
@@ -99,6 +103,21 @@ export function useMembersOnly(returnTo: string) {
     );
   }, [account.is_guest, accountRedirect, returnTo, router]);
   return !account.is_guest;
+}
+/**
+ * The creation screens: members whose account has character creation on (CHARACTER web
+ * 2-2-2). A guest goes to the login modal, a member without it goes home. True when the page
+ * may render.
+ */
+export function useCreatorOnly(returnTo: string) {
+  const { account } = useSession();
+  const router = useRouter();
+  const member = useMembersOnly(returnTo);
+  const allowed = member && account.character_creation_enabled;
+  useEffect(() => {
+    if (member && !allowed) router.replace("/");
+  }, [member, allowed, router]);
+  return allowed;
 }
 export function Providers({ children }: { children: ReactNode }) {
   const router = useRouter();

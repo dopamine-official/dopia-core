@@ -367,8 +367,6 @@ export function useLeave() {
   }
   return { busy, leave };
 }
-// PostHog flag `character_creation_enabled` is not wired yet; the spec's default (and unreadable) value is false.
-const characterCreationEnabled = false;
 export function ProfileMenu() {
   const { t, account } = useSession();
   const send = useTrack();
@@ -452,7 +450,7 @@ export function ProfileMenu() {
               {t("account.menu.charge")}
             </button>
           </div>
-          {characterCreationEnabled && (
+          {account.character_creation_enabled && (
             <>
               <hr />
               <div className="menu_line">

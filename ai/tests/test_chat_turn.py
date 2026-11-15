@@ -412,6 +412,7 @@ async def test_chat_11_image_list_assembly(harness) -> None:
     listed = "- hallway: She meets the user in the school hallway.\n- crying: She is in tears.\n- plain\n"
     assert "## keyword output" in with_images and f"**Images:**\n{listed}" in with_images
     assert "Form: {{img::keyword}}" in with_images and "example: {{img::hallway}}\n" in with_images
+    assert "on a line of its own" in with_images and "inside the status window" in with_images
     assert "repeated name" not in with_images and "nameless" not in with_images
     # Images come before the status window, which must stay the last thing in a reply.
     assert (
@@ -428,6 +429,7 @@ async def test_chat_12_image_tags_are_recorded_not_repaired(harness_factory) -> 
     cases = [
         ("{{img::hallway}}\n*She waves.*\n{{img:: crying }}\nYou came.", True, (2, 0)),
         ("*She waves.*\n{{img::rooftop}}\n{{img::hallway}}\n{{img::hallway}}", True, (3, 1)),
+        ("{{ IMG:Hallway }}\n*She waves.*", True, (1, 0)),  # written loosely, still the same tag
         ("*She waves.*", True, (0, 0)),
         ("*She waves.*\n{{img::hallway", True, (0, 0)),  # never closed
         ("{{img::hallway\n*She waves.*\n{{img::crying}}", True, (1, 0)),  # the open tag does not swallow the next

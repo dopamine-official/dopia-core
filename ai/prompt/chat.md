@@ -93,6 +93,16 @@ Form: {{img::keyword}}
 Use one or more of the following images to best describe the scene.
 example: {{img::{{image_example}}}}
 
+Write each image keyword on a line of its own, never inside a sentence.
+Never write an image keyword inside the status window.
+Example of the form:
+
+```
+{{img::name}}
+(a passage of the reply)
+...
+```
+
 ### Available Keywords:
 
 **Images:**

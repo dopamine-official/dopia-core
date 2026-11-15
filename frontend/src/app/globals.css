@@ -1883,12 +1883,15 @@ p {
 }
 .ce_app {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 380px;
-  grid-template-rows: 64px minmax(0, 1fr) 44px;
+  grid-template-columns: 300px minmax(0, 1fr) 380px;
+  grid-template-rows: 72px minmax(0, 1fr) 44px;
   gap: 0 12px;
   height: 100dvh;
-  padding: 0 12px;
+  padding: 0 12px 0 0;
   font-size: 15px;
+}
+.ce_app.recent_closed {
+  grid-template-columns: 0 minmax(0, 1fr) 380px;
 }
 .ce_app .button {
   min-height: 40px;
@@ -1907,6 +1910,7 @@ p {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  padding-left: 28px;
 }
 .ce_steps {
   display: flex;
@@ -1951,28 +1955,40 @@ p {
   color: var(--green);
   font-size: 13px;
 }
+/* The same column as the home sidebar: its colour, width and padding, down to the bottom. */
 .ce_recent {
+  grid-column: 1;
+  grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: 14px 0 20px;
+  padding: 28px 12px 20px;
+  background: #f3eee3;
+}
+[data-theme="dark"] .ce_recent {
+  background: #1a1918;
 }
 .ce_recent > h2 {
-  margin-bottom: 14px;
+  margin-bottom: 18px;
   padding: 0 12px;
-  color: var(--ce-sub);
+  color: #868b87;
   font-size: 12px;
   font-weight: 500;
 }
 .ce_main,
 .ce_side {
+  grid-row: 2;
   min-height: 0;
   overflow: auto;
-  background: var(--ce-panel);
+}
+/* The form sits on the page background, as the home screen's content does. */
+.ce_main {
+  grid-column: 2;
+  padding: 0 24px 40px;
+}
+.ce_side {
+  grid-column: 3;
   border: 1px solid var(--ce-line);
   border-radius: 14px 14px 0 0;
-}
-.ce_main {
-  padding: 0 24px 40px;
 }
 .ce_side h2 {
   padding: 16px 18px;
@@ -2024,7 +2040,7 @@ p {
   gap: 4px;
   margin: 0 -24px 22px;
   padding: 0 24px;
-  background: var(--ce-panel);
+  background: var(--bg);
   border-bottom: 1px solid var(--ce-line);
 }
 .ce_tab {
@@ -2532,7 +2548,8 @@ p {
   margin-top: 12px;
 }
 .ce_foot {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
+  grid-row: 3;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -2662,7 +2679,10 @@ p {
 }
 @media (max-width: 1280px) {
   .ce_app {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+  .ce_app.recent_closed {
+    grid-template-columns: 0 minmax(0, 1fr);
   }
   .ce_side {
     display: none;
@@ -2687,13 +2707,22 @@ p {
   }
 }
 @media (max-width: 650px) {
-  .ce_app {
+  .ce_app,
+  .ce_app.recent_closed {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) 40px;
     padding: 0 8px;
   }
-  .ce_recent {
+  .ce_top {
+    padding-left: 0;
+  }
+  .ce_recent,
+  .ce_menu {
     display: none;
+  }
+  .ce_main,
+  .ce_foot {
+    grid-column: 1;
   }
   .ce_main {
     padding: 0 16px 32px;

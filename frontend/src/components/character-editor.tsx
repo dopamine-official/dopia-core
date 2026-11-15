@@ -22,7 +22,7 @@ import { errorCode } from "@/lib/analytics";
 import { regionConfig } from "@/i18n";
 import { useCreatorOnly, useSession } from "./providers";
 import { Screen, useTrack } from "./page";
-import { ErrorState, Loading, Modal } from "./ui";
+import { ErrorState, Icon, Loading, Modal, useSidebarShortcut } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 // The text fields a creator writes: name, length limit and the step it is on (CHARACTER web 2-2-5).
@@ -201,6 +201,9 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   const [cancelling, setCancelling] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
+  // The recent chats column folds away like the home sidebar: the menu button or Cmd/Ctrl+B.
+  const [recent, setRecent] = useState(true);
+  useSidebarShortcut(() => setRecent((open) => !open));
   const alive = useRef(true);
   const mainRef = useRef<HTMLElement>(null);
   const thumbnailInput = useRef<HTMLInputElement>(null);
@@ -928,11 +931,22 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   ];
 
   return (
-    <div className="ce_app">
+    <div className={`ce_app ${recent ? "" : "recent_closed"}`}>
       <header className="ce_top">
-        <Link className="brand" href="/" onClick={guardLeave}>
-          {t("common.brand")}
-        </Link>
+        <div className="header_start">
+          <button
+            type="button"
+            className="icon_button ce_menu"
+            aria-label={t("common.menu")}
+            aria-expanded={recent}
+            onClick={() => setRecent(!recent)}
+          >
+            <Icon name="menu" />
+          </button>
+          <Link className="brand" href="/" onClick={guardLeave}>
+            {t("common.brand")}
+          </Link>
+        </div>
         <nav
           className="ce_steps"
           aria-label={t("character.create.steps_label")}
@@ -980,6 +994,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
 
       <aside
         className="ce_recent"
+        hidden={!recent}
         aria-label={t("common.recent")}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest("a")) guardLeave(event);

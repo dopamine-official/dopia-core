@@ -95,6 +95,15 @@ function rich(text: string): ReactNode {
       ),
     );
 }
+// A picture's name goes inside {{img::name}} in a reply and the model has to write it back
+// exactly, so it is plain: English letters, digits, _ and -. A space becomes _.
+const IMAGE_NAME = /^[A-Za-z0-9_-]+$/;
+function imageName(value: string) {
+  return value
+    .replace(/\s/g, "_")
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 40);
+}
 function fieldErrors(error: unknown): { field: string; reason: string }[] {
   if (!(error instanceof ApiError) || !Array.isArray(error.detail)) return [];
   return error.detail.filter(
@@ -428,28 +437,35 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         return null;
       }
     }
-    // A picture name that is empty or taken would be refused: fix it first.
-    if (badImages.length) {
+    // A picture name that is empty or taken would be refused: fix it first. Pictures that can
+    // no longer be changed are not checked: there would be no way to fix them.
+    if (!mediaLocked && badImages.length) {
       // An empty name says so only now, not while it is being typed again.
       setImageErrors((now) => ({
         ...now,
         ...Object.fromEntries(
           badImages
-            .filter((image) => !draftOf(image).name.trim())
+            .filter((image) => nameProblem(image) === "name_required")
             .map((image) => [image.id, "name_required"]),
         ),
       }));
       jump("media");
-      say(
-        t(
-          `character.create.media.${
-            draftOf(badImages[0]).name.trim()
-              ? "name_duplicate"
-              : "name_required"
-          }`,
+      say(t(`character.create.media.${nameProblem(badImages[0])}`), true);
+      return null;
+    }
+    // The AI picks a picture by its description: a picture is not kept without one.
+    const undescribed = images.filter(
+      (image) => !draftOf(image).description.trim(),
+    );
+    if (!mediaLocked && undescribed.length) {
+      setImageErrors((now) => ({
+        ...now,
+        ...Object.fromEntries(
+          undescribed.map((image) => [image.id, "description_required"]),
         ),
-        true,
-      );
+      }));
+      jump("media");
+      say(t("character.create.media.description_required"), true);
       return null;
     }
     busyRef.current = true;
@@ -539,9 +555,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         (drafts[image.id]?.name ?? image.name).trim(),
       ]),
     );
-    const stem =
-      clip(file.name.replace(/\.[^.]+$/, ""), 40).trim() ||
-      t("character.create.field.images");
+    // A file name in another script leaves nothing: the creator names the picture then.
+    const stem = imageName(file.name.replace(/\.[^.]+$/, "").trim()) || "image";
     if (!names.has(stem)) return stem;
     for (let n = 2; ; n++) {
       const suffix = `-${n}`;
@@ -658,10 +673,13 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       ...now,
       [image.id]: {
         ...draftOf(image),
-        [key]: clip(value, key === "name" ? 40 : 200),
+        [key]: key === "name" ? imageName(value) : clip(value, 200),
       },
     }));
-    if (key === "name" && imageErrors[image.id])
+    if (
+      imageErrors[image.id] &&
+      (key === "name" || imageErrors[image.id] === "description_required")
+    )
       setImageErrors((now) => ({ ...now, [image.id]: "" }));
   }
   function dropImage(id: string) {
@@ -788,14 +806,20 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   }
 
   // ---------- view helpers ----------
-  const badImages = images.filter((image) => {
+  /** What is wrong with a picture's name, as a message key; "" when nothing is. */
+  const nameProblem = (image: CharacterImage) => {
     const name = draftOf(image).name.trim();
-    return (
-      !name ||
-      images.some(
-        (other) => other.id !== image.id && draftOf(other).name.trim() === name,
-      )
-    );
+    if (!name) return "name_required";
+    // Only a name saved before the rule can be this: typing never lets one in.
+    if (!IMAGE_NAME.test(name)) return "name_invalid";
+    return images.some(
+      (other) => other.id !== image.id && draftOf(other).name.trim() === name,
+    )
+      ? "name_duplicate"
+      : "";
+  };
+  const badImages = images.filter((image) => {
+    return !!nameProblem(image);
   });
   const need = missing();
   const done: Record<Step, boolean> = {
@@ -1306,11 +1330,10 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
                 // a refusal of the server stays until the name changes.
                 const bad =
                   !!imageErrors[image.id] || badImages.includes(image);
+                const typed = nameProblem(image);
                 const problem =
                   imageErrors[image.id] ||
-                  (badImages.includes(image) && draft.name.trim()
-                    ? "name_duplicate"
-                    : "");
+                  (typed === "name_required" ? "" : typed);
                 return (
                   <div key={image.id} className={`ce_item ${bad ? "bad" : ""}`}>
                     {!mediaLocked && (

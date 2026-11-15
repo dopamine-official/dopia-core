@@ -12,6 +12,8 @@ export type Character = {
   creator_name: string;
   is_adult: boolean;
   texts: Record<Locale, Content>;
+  /** Situation images; a reply names one with {{img::name}}. */
+  images?: { name: string; image_url: string }[];
 };
 // Characters shown in the local preview. Tests use ./characters.fixture.ts instead.
 const previewCharacters: Character[] = [

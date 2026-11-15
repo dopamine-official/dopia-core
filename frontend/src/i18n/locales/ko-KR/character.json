@@ -111,6 +111,8 @@
       "skipped_failed": "{name} (실패)",
       "name_required": "이미지 이름을 적어 주세요.",
       "name_duplicate": "같은 이름의 이미지가 있어요.",
+      "name_invalid": "이미지 이름은 영문, 숫자, _, -만 쓸 수 있어요.",
+      "description_required": "상황 설명을 적어 주세요. AI가 이 설명을 보고 이미지를 골라요.",
       "limit_reached": "이미지는 100장까지 넣을 수 있어요.",
       "locked": "심사 중이거나 공개된 캐릭터의 상황 이미지는 바꿀 수 없어요.",
       "image_name": "이미지 이름",

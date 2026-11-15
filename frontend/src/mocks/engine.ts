@@ -335,7 +335,12 @@ function lookup(state: State, characterId: string): Character | undefined {
     first_message: initial
       ? `${text("first_message")}\n<status>\n${initial}\n</status>`
       : text("first_message"),
-    replies: ["*고개를 끄덕인다.* 계속 말해 봐."],
+    // A made character with pictures shows its first one, so the preview has something to see.
+    replies: [
+      made.images.length
+        ? `{{img::${made.images[0].name}}}\n*고개를 끄덕인다.* 계속 말해 봐.`
+        : "*고개를 끄덕인다.* 계속 말해 봐.",
+    ],
   };
   return {
     id: made.id,
@@ -345,6 +350,7 @@ function lookup(state: State, characterId: string): Character | undefined {
         ?.nickname ?? "",
     is_adult: made.is_adult,
     texts: { "ko-KR": content, "zh-TW": content, "en-US": content },
+    images: made.images.map(({ name, image_url }) => ({ name, image_url })),
   };
 }
 export function home(state: State, locale: Locale) {
@@ -486,9 +492,13 @@ export function settle(state: State, now = Date.now()) {
 }
 export function roomView(state: State, roomId: string, locale: Locale) {
   const room = ownedRoom(state, roomId);
+  const character = lookup(state, room.character_id)!;
   return {
     room_id: roomId,
-    character: characterInfo(lookup(state, room.character_id)!, locale),
+    character: {
+      ...characterInfo(character, locale),
+      images: character.images ?? [],
+    },
     messages: room.messages,
     generating: room.turns.some((turn) => turn.status === "generating"),
   };
@@ -747,6 +757,9 @@ export function saveCharacter(
     if (statusWindow && !texts.status_window_initial)
       errors.push(["status_window_initial", "required"]);
   }
+  // A picture is not kept without its description, on a draft save as well as a submit.
+  if (current.images.some((image) => !image.description))
+    errors.push(["images", "description_required"]);
   if (errors.length) throw invalid(...errors);
   Object.assign(current, {
     texts,
@@ -779,9 +792,11 @@ function editable(state: State, characterId: string) {
   return character;
 }
 function imageName(value: string | undefined) {
-  const name = (value ?? "").trim().replaceAll("\n", " ");
+  // English letters, digits, _ and - only; a space becomes _ (CharacterEditor.imageName).
+  const name = (value ?? "").trim().replace(/\s+/g, "_");
   if (!name) throw invalid(["name", "required"]);
   if (size(name) > 40) throw invalid(["name", "too_long"]);
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) throw invalid(["name", "invalid_value"]);
   return name;
 }
 function imageDescription(value: string | undefined) {

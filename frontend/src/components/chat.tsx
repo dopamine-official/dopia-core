@@ -8,6 +8,12 @@ import { ApiError, roomSchema, type Message, type Room } from "@/lib/contracts";
 import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
 import { splitStatusWindow, visibleWhileStreaming } from "@/lib/status-window";
+import {
+  holdBackSceneImage,
+  splitSceneImages,
+  type SceneImage,
+  type ScenePart,
+} from "@/lib/scene-images";
 import { Screen } from "./page";
 import { useMembersOnly, useSession } from "./providers";
 import { ErrorState, Icon, Loading, ProfileMenu, ThemeToggle } from "./ui";
@@ -63,7 +69,6 @@ function ChatRoom({ roomId }: { roomId: string }) {
   const [draft, setDraft] = useState(saved.draft);
   const [pending, setPending] = useState<Pending | null>(saved.pending);
   const [partial, setPartial] = useState("");
-  const streamingText = visibleWhileStreaming(partial);
   const [error, setError] = useState("");
   const [atBottom, setAtBottom] = useState(true);
   const pendingRef = useRef<Pending | null>(saved.pending);
@@ -351,6 +356,16 @@ function ChatRoom({ roomId }: { roomId: string }) {
       message.role === "assistant",
   );
   const generating = !!pending || !!result.data?.generating;
+  const sceneImages = result.data?.character.images ?? [];
+  const streamingParts = splitSceneImages(
+    holdBackSceneImage(visibleWhileStreaming(partial)),
+    sceneImages,
+  );
+  // A picture gets its height only once it loads, after the scroll effect has run.
+  const keepBottom = () => {
+    if (follow.current && scene.current)
+      scene.current.scrollTop = scene.current.scrollHeight;
+  };
   return (
     <div className="chat_page">
       <header className="chat_header">
@@ -436,8 +451,17 @@ function ChatRoom({ roomId }: { roomId: string }) {
                 aria-live="polite"
                 aria-relevant="additions text"
               >
-                {savedMessages.map((message) => (
-                  <Bubble key={message.id} message={message} locale={locale} />
+                {savedMessages.map((message, index) => (
+                  <Bubble
+                    key={message.id}
+                    message={message}
+                    locale={locale}
+                    // The room's first message is the creator's text, not a reply: no pictures.
+                    {...(index === 0 && message.client_message_id === null
+                      ? { images: [] }
+                      : { images: sceneImages, saved: true })}
+                    onImageLoad={keepBottom}
+                  />
                 ))}
                 {pending && !hasPendingUser && (
                   <Bubble
@@ -451,12 +475,16 @@ function ChatRoom({ roomId }: { roomId: string }) {
                       error_code: null,
                     }}
                     locale={locale}
+                    images={[]}
                   />
                 )}
-                {streamingText && !hasPendingReply ? (
-                  <p className="message assistant streaming" aria-live="off">
-                    <MessageText content={streamingText} />
-                  </p>
+                {streamingParts.length && !hasPendingReply ? (
+                  <div className="message_wrap assistant" aria-live="off">
+                    <SceneParts
+                      parts={streamingParts}
+                      onImageLoad={keepBottom}
+                    />
+                  </div>
                 ) : generating && !hasPendingReply ? (
                   <div
                     className="typing"
@@ -575,7 +603,50 @@ function MessageText({ content }: { content: string }) {
     ),
   );
 }
-function Bubble({ message, locale }: { message: Message; locale: string }) {
+/** A reply's text and pictures, one under another: each text its own bubble. */
+function SceneParts({
+  parts,
+  onImageLoad,
+}: {
+  parts: ScenePart[];
+  onImageLoad?: () => void;
+}) {
+  return parts.map((part, index) =>
+    part.type === "text" ? (
+      <p className="message assistant" key={index}>
+        <MessageText content={part.text} />
+      </p>
+    ) : (
+      <img
+        className="scene_image"
+        key={index}
+        src={part.image_url}
+        alt={part.name}
+        // Fetched only near the screen: a long room does not download every picture at once.
+        loading="lazy"
+        onLoad={onImageLoad}
+        // A picture whose file is gone leaves no broken frame behind.
+        onError={(event) => {
+          event.currentTarget.hidden = true;
+        }}
+      />
+    ),
+  );
+}
+function Bubble({
+  message,
+  locale,
+  images,
+  saved,
+  onImageLoad,
+}: {
+  message: Message;
+  locale: string;
+  images: SceneImage[];
+  /** Read from the room, so its picture addresses are the server's (lib/scene-images.ts). */
+  saved?: boolean;
+  onImageLoad?: () => void;
+}) {
   const { t } = useSession();
   // Only the character writes a status window; a user's text is shown as typed.
   const { body, status } =
@@ -584,10 +655,17 @@ function Bubble({ message, locale }: { message: Message; locale: string }) {
       : { body: message.content, status: null };
   return (
     <div className={`message_wrap ${message.role}`}>
-      {body && (
-        <p className={`message ${message.role}`}>
-          <MessageText content={body} />
-        </p>
+      {message.role === "assistant" ? (
+        <SceneParts
+          parts={splitSceneImages(body, images, saved)}
+          onImageLoad={onImageLoad}
+        />
+      ) : (
+        body && (
+          <p className="message user">
+            <MessageText content={body} />
+          </p>
+        )
       )}
       {status && (
         <p

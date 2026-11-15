@@ -82,34 +82,52 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await page.locator("#ce_status_window_format").fill("호감도: <0~100>");
   await page.locator("#ce_status_window_initial").fill("호감도: 5");
 
-  // Situation images: two files with one name get different names; a text is saved
-  // with the draft, not on its own.
+  // Situation images: a name is English letters, digits, _ and -; two files with one name
+  // get different names, and a file named in another script gets a plain one.
   await step(page, "미디어 관리").click();
   await page
     .locator(".ce_pane > input[type=file]")
     .setInputFiles([
-      picture("눈길.png"),
+      picture("snow.png"),
+      picture("snow.png"),
       picture("눈길.png"),
       { ...picture("메모.txt"), mimeType: "text/plain" },
     ]);
-  await expect(page.locator(".ce_item")).toHaveCount(2);
-  await expect(line(page)).toContainText("2장 추가");
+  await expect(page.locator(".ce_item")).toHaveCount(3);
+  await expect(line(page)).toContainText("3장 추가");
   await expect(line(page)).toContainText("메모.txt (형식)");
   const names = page.getByRole("textbox", { name: "이미지 이름" });
-  await expect(names.nth(0)).toHaveValue("눈길");
-  await expect(names.nth(1)).toHaveValue("눈길-2");
-  await names.nth(1).fill("눈길");
+  const descriptions = page.getByRole("textbox", { name: "상황 설명" });
+  await expect(names.nth(0)).toHaveValue("snow");
+  await expect(names.nth(1)).toHaveValue("snow-2");
+  await expect(names.nth(2)).toHaveValue("image");
+  await page.getByRole("button", { name: "삭제", exact: true }).last().click();
+  await expect(page.locator(".ce_item")).toHaveCount(2);
+  await names.nth(1).fill("snow");
   await expect(page.getByText("같은 이름의 이미지가 있어요.")).toHaveCount(2);
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
   await expect(line(page)).toContainText("같은 이름의 이미지가 있어요.");
-  await names.nth(1).fill("창가");
+  // A space becomes _, and anything else that is not allowed is not typed at all.
+  await names.nth(1).fill("창가 by window!");
+  await expect(names.nth(1)).toHaveValue("_by_window");
+  await names.nth(1).fill("window");
   await names.nth(1).blur();
   await expect(line(page)).not.toContainText("저장됨");
+  // A picture is not kept without a description: the save stops and says so on the picture.
+  await page.getByRole("button", { name: "임시 저장", exact: true }).click();
+  await expect(page.locator(".ce_item .ce_error")).toHaveText([
+    "상황 설명을 적어 주세요. AI가 이 설명을 보고 이미지를 골라요.",
+    "상황 설명을 적어 주세요. AI가 이 설명을 보고 이미지를 골라요.",
+  ]);
+  await expect(line(page)).not.toContainText("저장됨");
+  await descriptions.nth(0).fill("눈 오는 거리를 걸을 때");
+  await descriptions.nth(1).fill("창가에 앉아 있을 때");
+  await expect(page.locator(".ce_item .ce_error")).toHaveCount(0);
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
   await expect(line(page)).toContainText("저장됨");
   await page.reload();
   await step(page, "미디어 관리").click();
-  await expect(names.nth(1)).toHaveValue("창가");
+  await expect(names.nth(1)).toHaveValue("window");
   await page.getByRole("button", { name: "삭제", exact: true }).first().click();
   await expect(page.locator(".ce_item")).toHaveCount(1);
 
@@ -147,6 +165,13 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await expect(page.locator(".message.assistant").first()).toContainText(
     "늦었네.",
   );
+  // A reply that names a picture shows it above its text, outside the bubble.
+  await page.getByRole("textbox", { name: "메시지", exact: true }).fill("안녕");
+  await page.keyboard.press("Enter");
+  const reply = page.locator(".message_wrap.assistant").last().locator("> *");
+  await expect(reply.nth(0)).toHaveAttribute("alt", "window");
+  await expect(reply.nth(1)).toHaveText("고개를 끄덕인다. 계속 말해 봐.");
+  await expect(page.locator(".message_list")).not.toContainText("{{");
 
   await page.goto("/characters/mine");
   await page

@@ -227,11 +227,12 @@ test("a failed recent list is recorded when shown, on each screen", async ({
   await login(page);
   await card(page, "겨울").click();
   await expect(page).toHaveURL(/\/chats\//);
-  await menuButton(page).click();
+  if (isMobile) await menuButton(page).click();
   await sent(analytics, "recent_chats_load_failed", { page: "chat_room" });
 
   await setStubs(page, []);
-  await dialog(page)
+  await page
+    .getByRole(isMobile ? "dialog" : "complementary")
     .getByRole("button", { name: "다시 불러오기", exact: true })
     .click();
   await sent(analytics, "retry_clicked", {
@@ -397,20 +398,52 @@ test("sidebar toggles", async ({ page, analytics, isMobile }) => {
   expect(count(analytics, "sidebar_toggled")).toBe(2);
 });
 
+test("a folded sidebar stays folded on other screens and after a reload", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "a narrow screen has a drawer, closed on every screen");
+  await startChat(page);
+  const sidebar = page.getByRole("complementary");
+  await expect(sidebar).toBeInViewport();
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(sidebar).not.toBeInViewport();
+  await page.reload();
+  await expect(sidebar).not.toBeInViewport();
+  for (const path of ["/", "/me"]) {
+    await page.goto(path);
+    await expect(page.getByRole("complementary")).not.toBeInViewport();
+  }
+  await menuButton(page).click();
+  await expect(page.getByRole("complementary")).toBeInViewport();
+  await page.goto("/");
+  await expect(page.getByRole("complementary")).toBeInViewport();
+});
+
 test("sidebar toggles in the chat room, shortcut included", async ({
   page,
   analytics,
+  isMobile,
 }) => {
   await home(page);
   await login(page);
   await card(page, "겨울").click();
   await expect(page).toHaveURL(/\/chats\//);
+  // A narrow screen starts with the drawer closed, a wide one with the sidebar open.
+  const first = isMobile;
+  const shown = async (open: boolean) => {
+    const root = page.locator("html");
+    if (isMobile) await expect(dialog(page)).toHaveCount(open ? 1 : 0);
+    else if (open)
+      await expect(root).not.toHaveAttribute("data-sidebar", "closed");
+    else await expect(root).toHaveAttribute("data-sidebar", "closed");
+  };
   await page.keyboard.press("ControlOrMeta+b");
-  await expect(dialog(page)).toBeVisible();
-  await sent(analytics, "sidebar_toggled", { open: true, page: "chat_room" });
+  await shown(first);
+  await sent(analytics, "sidebar_toggled", { open: first, page: "chat_room" });
   await page.keyboard.press("ControlOrMeta+b");
-  await expect(dialog(page)).toHaveCount(0);
-  await sent(analytics, "sidebar_toggled", { open: false, page: "chat_room" });
+  await shown(!first);
+  await sent(analytics, "sidebar_toggled", { open: !first, page: "chat_room" });
 
   // A held key toggles once.
   await page.keyboard.down("ControlOrMeta");
@@ -419,7 +452,7 @@ test("sidebar toggles in the chat room, shortcut included", async ({
   await page.keyboard.down("b");
   await page.keyboard.up("b");
   await page.keyboard.up("ControlOrMeta");
-  await expect(dialog(page)).toBeVisible();
+  await shown(first);
   // A Korean layout reports the key as ㅠ; its position is still B.
   await page.evaluate(() =>
     window.dispatchEvent(
@@ -432,7 +465,7 @@ test("sidebar toggles in the chat room, shortcut included", async ({
       }),
     ),
   );
-  await expect(dialog(page)).toHaveCount(0);
+  await shown(!first);
   await settle(page);
   expect(count(analytics, "sidebar_toggled")).toBe(4);
 });
@@ -517,8 +550,10 @@ test("recent chats: menu, delete outcomes and the room on screen", async ({
 
   // Deleting the room on screen, from the chat room's own sidebar. Esc while the delete
   // is on its way does not count as a cancel.
-  await menuButton(page).click();
-  await sent(analytics, "sidebar_toggled", { open: true, page: "chat_room" });
+  if (isMobile) {
+    await menuButton(page).click();
+    await sent(analytics, "sidebar_toggled", { open: true, page: "chat_room" });
+  }
   await setStubs(page, [
     { path: `/api/v1/chats/${room}`, method: "DELETE", delay: 1_500 },
   ]);
@@ -547,7 +582,7 @@ test("recent chat clicks from the chat room and My Page", async ({
 }) => {
   await startChat(page, "겨울");
   const second = await startChat(page, "골목 서점의 유진");
-  await menuButton(page).click();
+  await showRecent(page);
   await page.getByRole("link", { name: "겨울", exact: true }).click();
   const fromRoom = await sent(analytics, "recent_chat_clicked", {
     page: "chat_room",

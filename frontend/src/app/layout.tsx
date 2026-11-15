@@ -13,10 +13,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <html lang={defaultLocale} data-theme="dark" suppressHydrationWarning>
       <head>
         {/* Dark is the default; a saved light choice applies before first paint, and a
-            choice made in another tab applies here at once. */}
+            choice made in another tab applies here at once. The folded sidebar is kept
+            the same way. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem("dopia:theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}addEventListener("storage",function(e){if(e.key==="dopia:theme")document.documentElement.dataset.theme=e.newValue==="light"?"light":"dark"})`,
+            __html: `try{if(localStorage.getItem("dopia:theme")==="light")document.documentElement.dataset.theme="light";if(localStorage.getItem("dopia:sidebar")==="closed")document.documentElement.dataset.sidebar="closed"}catch(e){}addEventListener("storage",function(e){if(e.key==="dopia:theme")document.documentElement.dataset.theme=e.newValue==="light"?"light":"dark";if(e.key==="dopia:sidebar"){if(e.newValue==="closed")document.documentElement.dataset.sidebar="closed";else delete document.documentElement.dataset.sidebar}})`,
           }}
         />
       </head>

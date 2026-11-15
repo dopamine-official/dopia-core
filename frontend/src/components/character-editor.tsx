@@ -22,8 +22,8 @@ import { errorCode } from "@/lib/analytics";
 import { regionConfig } from "@/i18n";
 import { useCreatorOnly, useSession } from "./providers";
 import { Screen, useTrack } from "./page";
-import { ErrorState, Icon, Loading, Modal, useSidebarShortcut } from "./ui";
-import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
+import { ErrorState, Icon, Loading, Modal } from "./ui";
+import { Sidebar, useSidebar } from "./sidebar";
 
 // The text fields a creator writes: name, length limit and the step it is on (CHARACTER web 2-2-5).
 const TEXTS = [
@@ -200,10 +200,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   const queue = useRef<File[]>([]);
   const [cancelling, setCancelling] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
-  // The recent chats column folds away like the home sidebar: the menu button or Cmd/Ctrl+B.
-  const [recent, setRecent] = useState(true);
-  useSidebarShortcut(() => setRecent((open) => !open));
+  const sidebar = useSidebar();
   const alive = useRef(true);
   const mainRef = useRef<HTMLElement>(null);
   const thumbnailInput = useRef<HTMLInputElement>(null);
@@ -931,15 +928,15 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   ];
 
   return (
-    <div className={`ce_app ${recent ? "" : "recent_closed"}`}>
+    <div className="ce_app">
       <header className="ce_top">
         <div className="header_start">
           <button
             type="button"
             className="icon_button ce_menu"
             aria-label={t("common.menu")}
-            aria-expanded={recent}
-            onClick={() => setRecent(!recent)}
+            aria-expanded={sidebar.open}
+            onClick={() => sidebar.toggle(!sidebar.open)}
           >
             <Icon name="menu" />
           </button>
@@ -992,23 +989,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         )}
       </header>
 
-      <aside
-        className="ce_recent"
-        hidden={!recent}
-        aria-label={t("common.recent")}
-        onClickCapture={(event) => {
-          if ((event.target as HTMLElement).closest("a")) guardLeave(event);
-        }}
-      >
-        <h2>{t("common.recent")}</h2>
-        <RecentChats onDelete={setDeleteTarget} />
-      </aside>
-      {deleteTarget && (
-        <DeleteChatModal
-          chat={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-        />
-      )}
+      <Sidebar state={sidebar} onLinkClick={guardLeave} />
 
       <main
         id="main"

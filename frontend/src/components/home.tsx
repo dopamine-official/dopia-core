@@ -9,15 +9,8 @@ import { errorMessageKey } from "@/lib/errors";
 import { errorCode, track } from "@/lib/analytics";
 import { Screen, useRetry } from "./page";
 import { useSession } from "./providers";
-import {
-  ErrorState,
-  Footer,
-  Loading,
-  Modal,
-  SiteHeader,
-  useSidebarShortcut,
-} from "./ui";
-import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
+import { ErrorState, Footer, Loading, SiteHeader } from "./ui";
+import { Sidebar, useSidebar } from "./sidebar";
 
 export function Home() {
   return (
@@ -86,11 +79,8 @@ function HomeScreen() {
   } = useSession();
   const router = useRouter();
   const query = useQueryClient();
-  const [sidebar, setSidebar] = useState(true);
-  const [mobile, setMobile] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const sidebar = useSidebar();
   const [opening, setOpening] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
   const openingRef = useRef<AbortController | null>(null);
   const result = useQuery({
     queryKey: ["home", account.account_id, account.adult_mode, locale],
@@ -111,30 +101,12 @@ function HomeScreen() {
           : "empty",
     });
   }, [result.isPending, result.isError, result.data]);
-  const sidebarOpen = mobile ? mobileOpen : sidebar;
-  /** A change the visitor asked for: the menu button, the shortcut, or the drawer's close. */
-  function toggleSidebar(open: boolean) {
-    track("sidebar_toggled", "home", { open });
-    if (mobile) setMobileOpen(open);
-    else setSidebar(open);
-  }
   useEffect(() => () => openingRef.current?.abort(), []);
   function cancelOpening() {
     openingRef.current?.abort();
     openingRef.current = null;
     setOpening(null);
   }
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 650px)");
-    const update = () => {
-      setMobile(media.matches);
-      if (!media.matches) setMobileOpen(false);
-    };
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-  useSidebarShortcut(() => toggleSidebar(!sidebarOpen));
   async function open(characterId: string, source: "card") {
     // Chat is for members: a guest logs in first, and the chat they chose opens right after
     // (CHARACTER web 2-2).
@@ -204,45 +176,9 @@ function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per arrival
   }, [account.is_guest, accountRedirect]);
   return (
-    <div className={`home_page ${sidebar ? "" : "sidebar_closed"}`}>
-      <SiteHeader
-        safe
-        menu={{
-          open: sidebarOpen,
-          toggle: () => toggleSidebar(!sidebarOpen),
-        }}
-      />
-      <aside
-        className={`home_sidebar ${sidebar ? "" : "hidden"}`}
-        aria-label={t("common.recent")}
-      >
-        <h2>{t("common.recent")}</h2>
-        <RecentChats onNavigate={cancelOpening} onDelete={setDeleteTarget} />
-      </aside>
-      {mobileOpen && (
-        <Modal
-          drawer
-          title={t("common.recent")}
-          onClose={() => toggleSidebar(false)}
-        >
-          <RecentChats
-            onNavigate={() => {
-              cancelOpening();
-              setMobileOpen(false);
-            }}
-            onDelete={(chat) => {
-              setMobileOpen(false);
-              setDeleteTarget(chat);
-            }}
-          />
-        </Modal>
-      )}
-      {deleteTarget && (
-        <DeleteChatModal
-          chat={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-        />
-      )}
+    <div className="home_page">
+      <SiteHeader safe menu={sidebar} />
+      <Sidebar state={sidebar} onNavigate={cancelOpening} />
       <main id="main" className="home_main">
         {result.isPending ? (
           <>

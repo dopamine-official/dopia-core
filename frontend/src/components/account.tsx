@@ -16,6 +16,7 @@ import {
   type CloseReason,
 } from "./ui";
 import { RecentChats } from "./recent-chats";
+import { Sidebar, useSidebar } from "./sidebar";
 
 export function Profile() {
   return (
@@ -31,6 +32,7 @@ function ProfileScreen() {
   const { busy, leave: leaveAs } = useLeave();
   const leave = (remove = false) => leaveAs(remove, () => setWithdraw(false));
   const send = useTrack();
+  const sidebar = useSidebar();
   const viewed = useRef(false);
   useEffect(() => {
     // Members only: a guest is sent on to the login modal (TRACKING-PLAN 6-1).
@@ -47,8 +49,9 @@ function ProfileScreen() {
     setWithdraw(false);
   }
   return (
-    <>
-      <SiteHeader />
+    <div className="side_shift">
+      <SiteHeader menu={sidebar} />
+      <Sidebar state={sidebar} />
       <main id="main" className="account_main">
         <h1>{t("account.me.title")}</h1>
         <p className="muted">{t("account.me.subtitle")}</p>
@@ -123,7 +126,7 @@ function ProfileScreen() {
           </div>
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 function EditProfile({ onClose }: { onClose: () => void }) {

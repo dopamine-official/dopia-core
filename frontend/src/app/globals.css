@@ -983,22 +983,6 @@ p {
 .setting_label span {
   margin-left: 8px;
 }
-.conversation_art {
-  width: min(100%, calc(100dvh - 340px));
-  max-width: 480px;
-  aspect-ratio: 1;
-  margin: 0 auto;
-  border-radius: 14px;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: #fafafa;
-}
-.conversation_art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 77% center;
-}
 .message_list {
   display: flex;
   flex-direction: column;
@@ -1044,16 +1028,16 @@ p {
   font-style: italic;
 }
 .status_window {
-  align-self: flex-start;
+  align-self: stretch;
   max-width: 100%;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.65;
   color: #5f6661;
-  padding: 10px 14px;
+  padding: 13px 18px;
   border: 1px solid #ddd6c8;
-  border-radius: 12px;
+  border-radius: 18px;
 }
 .typing {
   align-self: flex-start;
@@ -1430,11 +1414,6 @@ p {
     font-size: 11px;
     max-width: 300px;
   }
-  .conversation_art {
-    width: 100%;
-    max-width: calc(100dvh - 350px);
-    border-radius: 12px;
-  }
   .composer {
     width: calc(100% - 20px);
     padding: 10px;
@@ -1772,8 +1751,7 @@ p {
 [data-theme="dark"] .empty_recent svg {
   color: #57534e;
 }
-[data-theme="dark"] .hero,
-[data-theme="dark"] .conversation_art {
+[data-theme="dark"] .hero {
   background: #1f1e1c;
 }
 [data-theme="dark"] .card_open {

@@ -454,12 +454,6 @@ function ChatRoom({ roomId }: { roomId: string }) {
               <p className="setting_label">
                 {t("chat.setting")} <span>〈 1 / 1 〉</span>
               </p>
-              <div className="conversation_art">
-                <img
-                  src={result.data.character.image_url}
-                  alt={result.data.character.name}
-                />
-              </div>
               <div
                 className="message_list"
                 role="log"

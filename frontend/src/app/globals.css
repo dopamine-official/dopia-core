@@ -11,6 +11,15 @@
   --sidebar: var(--sidebar-width);
   --header-height: 72px;
 }
+/* Registered as a length so it can slide: everything laid out from it moves with the sidebar. */
+@property --sidebar {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+html {
+  transition: --sidebar 0.2s;
+}
 html[data-sidebar="closed"] {
   --sidebar: 0px;
 }
@@ -480,16 +489,15 @@ p {
   margin-top: 7px;
   color: #929992;
 }
+/* Beside the sidebar, and centred in the room left once that is wider than the content. */
 .home_main {
+  --gutter: 40px;
   max-width: 1340px;
-  margin: 0 40px 0 340px;
+  margin: 0 var(--gutter) 0
+    calc(
+      var(--sidebar) + max(var(--gutter), (100% - var(--sidebar) - 1340px) / 2)
+    );
   padding: 112px 0 34px;
-}
-[data-sidebar="closed"] .home_main {
-  max-width: 1340px;
-  width: calc(100% - 80px);
-  margin-left: auto;
-  margin-right: auto;
 }
 .hero {
   display: block;
@@ -1260,19 +1268,12 @@ p {
     background-position: -100% 0;
   }
 }
-@media (min-width: 1800px) {
-  .home_main {
-    margin-left: calc(300px + (100% - 1640px) / 2);
-    margin-right: auto;
-  }
-}
 @media (max-width: 1000px) {
   :root {
     --sidebar-width: 260px;
   }
   .home_main {
-    margin-left: 284px;
-    margin-right: 24px;
+    --gutter: 24px;
   }
   .card_grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1364,9 +1365,7 @@ p {
   .home_sidebar {
     display: none;
   }
-  .home_main,
-  [data-sidebar="closed"] .home_main {
-    width: auto;
+  .home_main {
     margin: 0;
     padding: 88px 20px 30px;
   }

@@ -963,10 +963,8 @@ p {
 .conversation {
   max-width: 822px;
   margin: auto;
-  min-height: calc(100% - 44px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 20px;
 }
 .ai_notice {
@@ -1440,7 +1438,8 @@ p {
   .message.streaming {
     max-width: 90%;
   }
-  .message {
+  .message,
+  .status_window {
     font-size: 15px;
     padding: 12px 16px;
   }
@@ -2679,7 +2678,7 @@ p {
 }
 @media (max-width: 1280px) {
   .ce_app {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
   }
   .ce_app.recent_closed {
     grid-template-columns: 0 minmax(0, 1fr);
@@ -2696,7 +2695,7 @@ p {
     flex-wrap: wrap;
     padding-top: 10px;
   }
-  .ce_top .brand {
+  .ce_top .header_start {
     margin-right: auto;
   }
   .ce_steps {

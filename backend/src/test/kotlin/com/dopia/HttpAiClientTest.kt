@@ -3,6 +3,7 @@ package com.dopia
 import com.dopia.chat.ai.AiCharacter
 import com.dopia.chat.ai.AiFailure
 import com.dopia.chat.ai.AiGeneration
+import com.dopia.chat.ai.AiImage
 import com.dopia.chat.ai.AiStatusWindow
 import com.dopia.chat.ai.AiTurnListener
 import com.dopia.chat.ai.AiTurnRequest
@@ -110,6 +111,8 @@ class HttpAiClientTest {
         assertEquals("hi", sent.get("user_input").asString())
         // A character with the status window off: the object is left out, not sent as null.
         assertEquals(false, sent.get("character").has("status_window"))
+        // Likewise a character without situation images sends no list.
+        assertEquals(false, sent.get("character").has("images"))
         assertEquals(listOf("t0", "t1"), tokens)
         assertEquals("done", result.output)
         assertEquals("chat_v1", result.meta.promptVersion)
@@ -133,6 +136,39 @@ class HttpAiClientTest {
         val window = mapper.readTree(bodies.single()).get("character").get("status_window")
         assertEquals("Stage: <stage>", window.get("format").asString())
         assertEquals("slow", window.get("rules").asString())
+    }
+
+    @Test
+    fun `situation images are sent with the character as name and description`() {
+        serve(tokens = 1, gapMs = 0)
+        val withImages = request.copy(character = request.character.copy(images = listOf(AiImage("골목", "좁은 골목"), AiImage("눈길", ""))))
+        client().turn(
+            "req-images",
+            UUID.randomUUID(),
+            withImages,
+            UUID.randomUUID(),
+            object : AiTurnListener {
+                override fun onToken(text: String) {}
+
+                override fun stillWanted() = true
+            },
+        )
+        val images = mapper.readTree(bodies.single()).get("character").get("images")
+        assertEquals(
+            listOf("골목" to "좁은 골목", "눈길" to ""),
+            images.toList().map {
+                it.get("name").asString() to
+                    it.get("description").asString()
+            },
+        )
+        assertEquals(
+            setOf("name", "description"),
+            images
+                .get(0)
+                .properties()
+                .map { it.key }
+                .toSet(),
+        )
     }
 
     @Test

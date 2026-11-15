@@ -331,25 +331,30 @@ class CharacterCreationTest(
 
         // CH-BE-32
         assertEquals(mapOf("name" to "required"), errors(add(null)))
-        assertEquals(mapOf("name" to "too_long"), errors(add("가".repeat(41))))
+        assertEquals(mapOf("name" to "too_long"), errors(add("a".repeat(41))))
+        // English letters, digits, _ and - only; a space becomes _.
+        listOf("눈길", "sn{ow}", "snow!").forEach { assertEquals(mapOf("name" to "invalid_value"), errors(add(it)), it) }
+        val spaced = json(add(" snow path "))
+        assertEquals("snow_path", spaced.get("name").asString())
+        member.send("DELETE", "/characters/$id/images/${spaced.get("id").asString()}")
         assertEquals(mapOf("file" to "invalid_image"), errors(add("gif", picture(10, 10, "gif"))))
-        val first = json(add("눈길"))
+        val first = json(add("snow"))
         assertEquals(0, first.get("position").asInt())
         assertEquals("", first.get("description").asString())
         assertTrue(first.get("image_url").asString().contains("/characters/$id/images/"))
-        assertEquals(mapOf("name" to "duplicate"), errors(add("눈길")))
-        val second = json(add("골목"))
+        assertEquals(mapOf("name" to "duplicate"), errors(add("snow")))
+        val second = json(add("alley"))
         assertEquals(1, second.get("position").asInt())
 
         // CH-BE-34
         val firstId = first.get("id").asString()
         val renamed =
             json(member.send("PATCH", "/characters/$id/images/$firstId", """{"description":"눈 오는 거리"}""".toByteArray(), "application/json"))
-        assertEquals("눈길", renamed.get("name").asString())
+        assertEquals("snow", renamed.get("name").asString())
         assertEquals("눈 오는 거리", renamed.get("description").asString())
         assertEquals(
             mapOf("name" to "duplicate"),
-            errors(member.send("PATCH", "/characters/$id/images/$firstId", """{"name":"골목"}""".toByteArray(), "application/json")),
+            errors(member.send("PATCH", "/characters/$id/images/$firstId", """{"name":"alley"}""".toByteArray(), "application/json")),
         )
         val long = """{"description":"${"가".repeat(201)}"}"""
         assertEquals(
@@ -357,7 +362,7 @@ class CharacterCreationTest(
             errors(member.send("PATCH", "/characters/$id/images/$firstId", long.toByteArray(), "application/json")),
         )
         assertEquals(
-            listOf("눈길", "골목"),
+            listOf("snow", "alley"),
             json(member.send("GET", "/characters/$id")).get("images").toList().map { it.get("name").asString() },
         )
 
@@ -390,11 +395,23 @@ class CharacterCreationTest(
                     "SELECT :id, 'n' || n, '/x', 100 + n FROM generate_series(1, 99) AS n",
             ).param("id", uuid)
             .update()
-        assertEquals(409 to "image_limit_reached", code(add("하나 더", picture(8, 8))))
+        assertEquals(409 to "image_limit_reached", code(add("more", picture(8, 8))))
         jdbc.sql("DELETE FROM character_images WHERE character_id = :id AND name LIKE 'n%'").param("id", uuid).update()
-        assertEquals(200, member.save(everything, id, action = "submit", thumbnail = picture(64, 64)).statusCode())
+        // A picture without a description cannot be submitted: the AI picks a picture by it.
         val left = second.get("id").asString()
-        assertEquals(409 to "save_not_allowed", code(add("심사 중", picture(8, 8))))
+        assertEquals(
+            mapOf("images" to "description_required"),
+            errors(member.save(everything, id, action = "submit", thumbnail = picture(64, 64))),
+        )
+        assertEquals("draft", json(member.send("GET", "/characters/$id")).get("status").asString())
+        member.send("PATCH", "/characters/$id/images/$left", """{"description":"좁은 골목"}""".toByteArray(), "application/json")
+        assertEquals(200, member.save(everything, id, action = "submit", thumbnail = picture(64, 64)).statusCode())
+
+        // CHAT gets them in order: the AI the name and description, the room view the name and file.
+        val forChat = characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = null).images
+        assertEquals(listOf("alley" to "좁은 골목"), forChat.map { it.name to it.description })
+        assertEquals(second.get("image_url").asString(), forChat.single().imageUrl)
+        assertEquals(409 to "save_not_allowed", code(add("pending", picture(8, 8))))
         assertEquals(409 to "save_not_allowed", code(member.send("DELETE", "/characters/$id/images/$left")))
         assertEquals(
             409 to "save_not_allowed",

@@ -300,6 +300,66 @@ class ChatFlowTest(
     }
 
     @Test
+    fun `the room view carries the character's situation images, the chat list does not`() {
+        val winterId = UUID.fromString(winter)
+        val browser = Browser()
+        browser.login()
+        val room = browser.json("POST", "/chats/open", """{"character_id":"$winter"}""").get("room_id").asString()
+        // No images: an empty list, so the web knows every tag in a reply is unknown.
+        assertEquals(
+            0,
+            browser
+                .json("GET", "/chats/$room")
+                .get("character")
+                .get("images")
+                .size(),
+        )
+        try {
+            jdbc
+                .sql(
+                    "INSERT INTO character_images (character_id, name, description, image_url, position) " +
+                        "VALUES (:id, '눈길', '눈 오는 거리', '/files/b.webp', 1), (:id, '골목', '좁은 골목', '/files/a.webp', 0)",
+                ).param("id", winterId)
+                .update()
+            val images = browser.json("GET", "/chats/$room").get("character").get("images")
+            assertEquals(
+                listOf("골목" to "/files/a.webp", "눈길" to "/files/b.webp"),
+                images.toList().map { it.get("name").asString() to it.get("image_url").asString() },
+            )
+            // The description is for the AI only.
+            assertEquals(
+                setOf("name", "image_url"),
+                images
+                    .get(0)
+                    .properties()
+                    .map { it.key }
+                    .toSet(),
+            )
+            assertEquals(
+                listOf("골목" to "좁은 골목", "눈길" to "눈 오는 거리"),
+                characters.forChat(winterId, "ko-KR", adultAllowed = false).images.map { it.name to it.description },
+            )
+            // A reply that names a picture is saved, and sent, with the picture's address.
+            val sent = send(browser, room, "안녕").body()
+            assertTrue(sent.contains("event:completed"))
+            assertTrue(sent.contains("{{img::/files/a.webp}}"))
+            val reply =
+                browser
+                    .json("GET", "/chats/$room")
+                    .get("messages")
+                    .toList()
+                    .last()
+                    .get("content")
+                    .asString()
+            assertTrue(reply.startsWith("{{img::/files/a.webp}}\n"), reply)
+            val listed = browser.json("GET", "/chats/recent").get("chats").first { it.get("room_id").asString() == room }
+            assertEquals(false, listed.get("character").has("images"))
+        } finally {
+            jdbc.sql("DELETE FROM character_images WHERE character_id = :id").param("id", winterId).update()
+        }
+    }
+
+    @Test
     fun `the AI gets the character's own name, or the card name when none is set`() {
         val winterId = UUID.fromString(winter)
         // The sample's own name is the same as its card name.

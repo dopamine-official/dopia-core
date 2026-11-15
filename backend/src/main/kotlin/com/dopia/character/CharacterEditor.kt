@@ -307,6 +307,7 @@ class CharacterEditor(
         current: CharacterRow,
         change: CharacterChange,
         hasImage: Boolean,
+        imagesDescribed: Boolean,
     ) {
         if (!change.submit && (current.status == "pending" || current.status == "approved")) throw saveNotAllowed()
         val texts = rowTexts(current) + change.texts
@@ -320,6 +321,8 @@ class CharacterEditor(
         val errors = mutableListOf<FieldError>()
         if (statusWindow && texts.getValue("status_window_format").isEmpty()) errors += FieldError("status_window_format", "required")
         if (isAdult && (age == null || age < settings.adultMinAge)) errors += FieldError("is_adult", "age_too_low")
+        // A picture is not kept without its description, on a draft save as well as a submit.
+        if (!imagesDescribed) errors += FieldError("images", "description_required")
         if (change.submit) {
             required.filter { texts.getValue(it).isEmpty() }.forEach { errors += FieldError(it, "required") }
             if (gender == null) errors += FieldError("gender", "required")
@@ -350,7 +353,15 @@ class CharacterEditor(
                     // A public character is edited through its revision; what is public stays (4-1-2).
                     val revision = if (live.approved) repository.revision(characterId) else null
                     val current = live.with(revision)
-                    validate(identity, current, change, hasImage = thumbnail != null || current.imageUrl != null)
+                    validate(
+                        identity,
+                        current,
+                        change,
+                        hasImage = thumbnail != null || current.imageUrl != null,
+                        // The AI picks a picture by its description. A public character's pictures cannot
+                        // be edited, so one saved before this rule is not held against its edit.
+                        imagesDescribed = live.approved || repository.images(characterId).none { it.description.isEmpty() },
+                    )
                     if (thumbnail != null) {
                         uploaded = storage.put("characters/$characterId/thumbnail-${UUID.randomUUID()}.webp", thumbnail, "image/webp")
                     }
@@ -442,10 +453,15 @@ class CharacterEditor(
         return row
     }
 
+    /**
+     * The name goes inside `{{img::name}}` in a reply and the model has to write it back exactly,
+     * so it is plain: English letters, digits, `_` and `-`. A space becomes `_`.
+     */
     private fun imageName(value: String?): String {
-        val name = value?.let(::cleanText).orEmpty().replace('\n', ' ')
+        val name = value?.let(::cleanText).orEmpty().replace(Regex("\\s+"), "_")
         if (name.isEmpty()) throw ApiException.invalidInput(FieldError("name", "required"))
         if (textLength(name) > 40) throw ApiException.invalidInput(FieldError("name", "too_long"))
+        if (!Regex("[A-Za-z0-9_-]+").matches(name)) throw ApiException.invalidInput(FieldError("name", "invalid_value"))
         return name
     }
 

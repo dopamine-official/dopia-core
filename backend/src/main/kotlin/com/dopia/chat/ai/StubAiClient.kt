@@ -25,7 +25,13 @@ class StubAiClient(
         val behaviour = scenario.takeResponse()
         val replies = StubReplies.of(characterId, request.generation.locale)
         val completedTurns = request.history.count { it.role == "assistant" }
-        val reply = replies[completedTurns % replies.size]
+        // A character with situation images places its first one, so the tag has a path to run.
+        val image =
+            request.character.images
+                .firstOrNull()
+                ?.let { "{{img::${it.name}}}\n" }
+                .orEmpty()
+        val reply = image + replies[completedTurns % replies.size]
         val totalMs = if (behaviour == "slow") 6500L else 2200L
         val started = System.currentTimeMillis()
         var position = 0

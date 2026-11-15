@@ -8,6 +8,7 @@ import com.dopia.common.FieldError
 import com.dopia.common.Identity
 import com.dopia.common.RequestLocale
 import com.dopia.config.AppProperties
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.http.HttpStatus
@@ -20,6 +21,14 @@ import java.util.UUID
 // Responses (CHAT 4-2)
 data class CharacterSummary(
     val id: UUID,
+    val name: String,
+    val imageUrl: String,
+    /** The pictures a reply's `{{img::name}}` tags stand for. Only the room view carries them. */
+    @get:JsonInclude(JsonInclude.Include.NON_NULL)
+    val images: List<RoomImage>? = null,
+)
+
+data class RoomImage(
     val name: String,
     val imageUrl: String,
 )
@@ -168,7 +177,13 @@ class ChatService(
             val messages = repository.messagesOf(roomId)
             RoomView(
                 roomId = roomId,
-                character = CharacterSummary(character.id, character.name, character.imageUrl),
+                character =
+                    CharacterSummary(
+                        character.id,
+                        character.name,
+                        character.imageUrl,
+                        character.images.map { RoomImage(it.name, it.imageUrl) },
+                    ),
                 messages =
                     messages.map {
                         MessageView(it.id, it.role, it.content, it.createdAt, it.clientMessageId, it.turnStatus, it.errorCode)

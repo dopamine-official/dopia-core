@@ -45,6 +45,16 @@ data class StatusWindow(
     val rules: String?,
 )
 
+/**
+ * A situation image for CHAT. The AI gets [name] and [description] and writes `{{img::name}}`
+ * where the picture belongs; the web swaps that tag for [imageUrl].
+ */
+data class ChatImage(
+    val name: String,
+    val description: String,
+    val imageUrl: String,
+)
+
 // Character for CHAT (4-2-3)
 data class ChatCharacter(
     val id: UUID,
@@ -63,6 +73,8 @@ data class ChatCharacter(
     val firstMessage: String,
     val isAdult: Boolean,
     val canOpenNewRoom: Boolean,
+    /** In the creator's order. Empty for the list lookup, which shows no pictures. */
+    val images: List<ChatImage> = emptyList(),
 )
 
 class CharacterNotFound(
@@ -152,7 +164,8 @@ class CharacterService(
         val row = repository.find(characterId)?.takeIf { it.status != "draft" } ?: throw CharacterNotFound(characterId)
         // The creator gets what they last submitted; everyone else what is public (4-1-4 step 2).
         val seen = if (row.approved && row.creatorId == requesterId) row.with(repository.revision(row.id)) else row
-        return toChat(seen, locale, adultAllowed, requesterId)
+        val images = repository.images(row.id).map { ChatImage(it.name, it.description, it.imageUrl) }
+        return toChat(seen, locale, adultAllowed, requesterId).copy(images = images)
     }
 
     fun forChat(

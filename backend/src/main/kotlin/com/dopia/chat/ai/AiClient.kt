@@ -17,6 +17,15 @@ data class AiCharacter(
     /** Left out of the request when null (CHAT BE 4-2): the status window is turned off. */
     @get:JsonInclude(JsonInclude.Include.NON_NULL)
     val statusWindow: AiStatusWindow? = null,
+    /** Left out of the request when the character has no situation images. */
+    @get:JsonInclude(JsonInclude.Include.NON_EMPTY)
+    val images: List<AiImage> = emptyList(),
+)
+
+/** A situation image the reply may place with `{{img::name}}`; the file itself is not sent. */
+data class AiImage(
+    val name: String,
+    val description: String,
 )
 
 data class AiStatusWindow(

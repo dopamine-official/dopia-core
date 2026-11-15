@@ -91,6 +91,7 @@ test("three locales, preserved messages, no external requests", async ({
 
 test("a guest is asked to log in for chat; a member chats, edits the profile and logout isolates data", async ({
   page,
+  isMobile,
 }) => {
   await home(page);
   await page
@@ -113,10 +114,12 @@ test("a guest is asked to log in for chat; a member chats, edits the profile and
   const roomUrl = page.url();
   await send(page, "나의 첫 대화");
   await expect(page.locator(".message.assistant")).toHaveCount(2);
-  // Back home inside the app: the chat chosen before logging in does not open again.
-  await page
-    .getByRole("button", { name: "대화 목록 열기 또는 닫기", exact: true })
-    .click();
+  // Back home inside the app: the chat chosen before logging in does not open again. The
+  // logo is in the header on a wide screen and in the drawer on a narrow one.
+  if (isMobile)
+    await page
+      .getByRole("button", { name: "대화 목록 열기 또는 닫기", exact: true })
+      .click();
   await page.getByRole("link", { name: "캐릭터챗", exact: true }).click();
   await expect(page).toHaveURL("/");
   await page.waitForTimeout(1_000);
@@ -319,7 +322,25 @@ test("SAFE requires login and adult verification without sending a PATCH", async
   expect(changes).toEqual([]);
 });
 
-test("dialog Escape restores focus", async ({ page }) => {
+test("a modal closed with Escape returns focus to its opener", async ({
+  page,
+}) => {
+  await home(page);
+  const opener = page
+    .locator("header")
+    .getByRole("button", { name: "로그인", exact: true });
+  await opener.click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("the drawer restores focus and stays open on a click outside", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "the recent chats drawer exists on narrow screens only");
   await openChat(page);
   const menu = page.getByRole("button", {
     name: "대화 목록 열기 또는 닫기",

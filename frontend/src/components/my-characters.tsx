@@ -14,6 +14,7 @@ import { errorMessageKey } from "@/lib/errors";
 import { useCreatorOnly, useSession } from "./providers";
 import { Screen, useTrack } from "./page";
 import { ErrorState, Loading, Modal, SiteHeader } from "./ui";
+import { Sidebar, useSidebar } from "./sidebar";
 
 /** The creator's own characters, newest change first (CHARACTER web 2-2-6). */
 export function MyCharacters() {
@@ -29,6 +30,7 @@ function Gate() {
 function List() {
   const { t, account, notice } = useSession();
   const send = useTrack();
+  const sidebar = useSidebar();
   const router = useRouter();
   const query = useQueryClient();
   const key = ["my_characters", account.account_id];
@@ -123,8 +125,9 @@ function List() {
   }
 
   return (
-    <div className="mine_page">
-      <SiteHeader />
+    <div className="mine_page side_shift">
+      <SiteHeader menu={sidebar} />
+      <Sidebar state={sidebar} />
       <main id="main" className="mine_main">
         <div className="mine_head">
           <h1>{t("character.mine.title")}</h1>

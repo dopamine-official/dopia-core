@@ -10,16 +10,9 @@ import { errorMessageKey } from "@/lib/errors";
 import { splitStatusWindow, visibleWhileStreaming } from "@/lib/status-window";
 import { Screen } from "./page";
 import { useMembersOnly, useSession } from "./providers";
-import {
-  ErrorState,
-  Icon,
-  Loading,
-  Modal,
-  ProfileMenu,
-  ThemeToggle,
-  useSidebarShortcut,
-} from "./ui";
-import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
+import { ErrorState, Icon, Loading, ProfileMenu, ThemeToggle } from "./ui";
+import { type RecentChat } from "./recent-chats";
+import { Sidebar, useSidebar } from "./sidebar";
 
 type Pending = { client_message_id: string; content: string };
 function readPending(key: string): Pending | null {
@@ -58,14 +51,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
   const { account, locale, t, notice } = useSession();
   const query = useQueryClient();
   const router = useRouter();
-  const [menu, setMenu] = useState(false);
-  /** A change the visitor asked for: the menu button, the shortcut, or the drawer's close. */
-  function toggleMenu(open: boolean) {
-    track("sidebar_toggled", "chat_room", { open });
-    setMenu(open);
-  }
-  useSidebarShortcut(() => toggleMenu(!menu));
-  const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
+  const sidebar = useSidebar();
   const storageKey = `dopia:draft:${account.account_id}:${roomId}`;
   const pendingKey = `${storageKey}:pending`;
   // Chat is keyed by room and sits under a subtree keyed by account, so these keys never
@@ -371,11 +357,19 @@ function ChatRoom({ roomId }: { roomId: string }) {
         <button
           className="icon_button"
           aria-label={t("common.menu")}
-          aria-expanded={menu}
-          onClick={() => toggleMenu(true)}
+          aria-expanded={sidebar.open}
+          onClick={() => sidebar.toggle(!sidebar.open)}
         >
           <Icon name="menu" />
         </button>
+        {/* On a narrow screen the logo sits in the drawer instead. */}
+        <Link
+          className="brand chat_brand"
+          href="/"
+          onClick={() => track("logo_clicked", "chat_room")}
+        >
+          {t("common.brand")}
+        </Link>
         <div className="chat_identity">
           {result.data && (
             <>
@@ -389,40 +383,21 @@ function ChatRoom({ roomId }: { roomId: string }) {
           <ProfileMenu />
         </div>
       </header>
-      {menu && (
-        <Modal
-          drawer
-          title={t("common.recent")}
-          titleContent={
-            <Link
-              className="brand"
-              href="/"
-              onClick={() => track("logo_clicked", "chat_room")}
-              onNavigate={() => setMenu(false)}
-            >
-              {t("common.brand")}
-            </Link>
-          }
-          onClose={() => toggleMenu(false)}
-        >
-          <RecentChats
-            currentId={roomId}
-            onNavigate={() => setMenu(false)}
-            onDelete={(chat) => {
-              setMenu(false);
-              setDeleteTarget(chat);
-            }}
-          />
-        </Modal>
-      )}
-      {deleteTarget && (
-        <DeleteChatModal
-          chat={deleteTarget}
-          currentId={roomId}
-          onClose={() => setDeleteTarget(null)}
-          onDeleted={leaveDeletedRoom}
-        />
-      )}
+      <Sidebar
+        state={sidebar}
+        currentId={roomId}
+        onDeleted={leaveDeletedRoom}
+        drawerTitle={
+          <Link
+            className="brand"
+            href="/"
+            onClick={() => track("logo_clicked", "chat_room")}
+            onNavigate={sidebar.closeDrawer}
+          >
+            {t("common.brand")}
+          </Link>
+        }
+      />
       <main
         id="main"
         ref={scene}

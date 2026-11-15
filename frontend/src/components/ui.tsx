@@ -145,7 +145,7 @@ export function SiteHeader({
   menu,
   safe = false,
 }: {
-  menu?: { open: boolean; toggle: () => void };
+  menu?: { open: boolean; toggle: (open: boolean) => void };
   safe?: boolean;
 }) {
   const { t, account, openLogin } = useSession();
@@ -158,7 +158,7 @@ export function SiteHeader({
             className="icon_button"
             aria-label={t("common.menu")}
             aria-expanded={menu.open}
-            onClick={menu.toggle}
+            onClick={() => menu.toggle(!menu.open)}
           >
             <Icon name="menu" />
           </button>

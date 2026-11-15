@@ -5,6 +5,23 @@
   --muted: #737b76;
   --green: #00ac72;
   --line: #e4e7e4;
+  /* The recent chats sidebar: its width, and the room the content leaves for it (none when
+     it is folded or, on a narrow screen, a drawer). */
+  --sidebar-width: 300px;
+  --sidebar: var(--sidebar-width);
+  --header-height: 72px;
+}
+/* Registered as a length so it can slide: everything laid out from it moves with the sidebar. */
+@property --sidebar {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+html {
+  transition: --sidebar 0.2s;
+}
+html[data-sidebar="closed"] {
+  --sidebar: 0px;
 }
 * {
   box-sizing: border-box;
@@ -325,16 +342,20 @@ p {
 .home_sidebar {
   position: fixed;
   left: 0;
-  top: 72px;
+  top: var(--header-height);
   bottom: 0;
-  width: 300px;
+  width: var(--sidebar-width);
   background: #f3eee3;
   padding: 28px 12px 20px;
   overflow-y: auto;
   transition: transform 0.2s;
 }
-.home_sidebar.hidden {
+[data-sidebar="closed"] .home_sidebar {
   transform: translateX(-100%);
+}
+/* A screen whose content is centred: it centres in the room beside the sidebar. */
+.side_shift {
+  padding-left: var(--sidebar);
 }
 .home_sidebar > h2 {
   font-size: 12px;
@@ -468,16 +489,15 @@ p {
   margin-top: 7px;
   color: #929992;
 }
+/* Beside the sidebar, and centred in the room left once that is wider than the content. */
 .home_main {
+  --gutter: 40px;
   max-width: 1340px;
-  margin: 0 40px 0 340px;
+  margin: 0 var(--gutter) 0
+    calc(
+      var(--sidebar) + max(var(--gutter), (100% - var(--sidebar) - 1340px) / 2)
+    );
   padding: 112px 0 34px;
-}
-.sidebar_closed .home_main {
-  max-width: 1340px;
-  width: calc(100% - 80px);
-  margin-left: auto;
-  margin-right: auto;
 }
 .hero {
   display: block;
@@ -916,6 +936,7 @@ p {
   transform: translate(-50%, 0);
 }
 .chat_page {
+  --header-height: 62px;
   background: #fffdf8;
   height: 100dvh;
 }
@@ -954,7 +975,7 @@ p {
 }
 .chat_scene {
   height: 100dvh;
-  padding: 86px 24px 210px;
+  padding: 86px 24px 210px calc(24px + var(--sidebar));
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: #00000035 transparent;
@@ -1071,9 +1092,9 @@ p {
 .composer {
   position: fixed;
   bottom: max(8px, env(safe-area-inset-bottom));
-  left: 50%;
+  left: calc(50% + var(--sidebar) / 2);
   transform: translateX(-50%);
-  width: min(878px, calc(100% - 32px));
+  width: min(878px, calc(100% - 32px - var(--sidebar)));
   background: #faf6ee;
   border: 1px solid #d3d8d5;
   border-radius: 23px;
@@ -1144,7 +1165,7 @@ p {
 }
 .scroll_bottom {
   position: fixed;
-  left: 50%;
+  left: calc(50% + var(--sidebar) / 2);
   bottom: 174px;
   transform: translateX(-50%);
   background: #fffdf8;
@@ -1247,19 +1268,12 @@ p {
     background-position: -100% 0;
   }
 }
-@media (min-width: 1800px) {
-  .home_main {
-    margin-left: calc(300px + (100% - 1640px) / 2);
-    margin-right: auto;
-  }
-}
 @media (max-width: 1000px) {
-  .home_sidebar {
-    width: 260px;
+  :root {
+    --sidebar-width: 260px;
   }
   .home_main {
-    margin-left: 284px;
-    margin-right: 24px;
+    --gutter: 24px;
   }
   .card_grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1279,6 +1293,9 @@ p {
   }
 }
 @media (max-width: 650px) {
+  html:root {
+    --sidebar: 0px;
+  }
   .site_header {
     height: 64px;
     padding: 0 10px;
@@ -1348,9 +1365,7 @@ p {
   .home_sidebar {
     display: none;
   }
-  .home_main,
-  .sidebar_closed .home_main {
-    width: auto;
+  .home_main {
     margin: 0;
     padding: 88px 20px 30px;
   }
@@ -1395,6 +1410,9 @@ p {
     height: 58px;
     padding: 0 8px;
     gap: 6px;
+  }
+  .chat_brand {
+    display: none;
   }
   .chat_identity h1 {
     font-size: 14px;
@@ -1882,15 +1900,12 @@ p {
 }
 .ce_app {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   grid-template-rows: 72px minmax(0, 1fr) 44px;
   gap: 0 12px;
   height: 100dvh;
-  padding: 0 12px 0 0;
+  padding: 0 12px;
   font-size: 15px;
-}
-.ce_app.recent_closed {
-  grid-template-columns: 0 minmax(0, 1fr) 380px;
 }
 .ce_app .button {
   min-height: 40px;
@@ -1909,7 +1924,7 @@ p {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  padding-left: 28px;
+  padding-left: 16px;
 }
 .ce_steps {
   display: flex;
@@ -1954,25 +1969,6 @@ p {
   color: var(--green);
   font-size: 13px;
 }
-/* The same column as the home sidebar: its colour, width and padding, down to the bottom. */
-.ce_recent {
-  grid-column: 1;
-  grid-row: 2 / -1;
-  min-height: 0;
-  overflow: auto;
-  padding: 28px 12px 20px;
-  background: #f3eee3;
-}
-[data-theme="dark"] .ce_recent {
-  background: #1a1918;
-}
-.ce_recent > h2 {
-  margin-bottom: 18px;
-  padding: 0 12px;
-  color: #868b87;
-  font-size: 12px;
-  font-weight: 500;
-}
 .ce_main,
 .ce_side {
   grid-row: 2;
@@ -1981,11 +1977,11 @@ p {
 }
 /* The form sits on the page background, as the home screen's content does. */
 .ce_main {
-  grid-column: 2;
+  grid-column: 1;
   padding: 0 24px 40px;
 }
 .ce_side {
-  grid-column: 3;
+  grid-column: 2;
   border: 1px solid var(--ce-line);
   border-radius: 14px 14px 0 0;
 }
@@ -2547,7 +2543,7 @@ p {
   margin-top: 12px;
 }
 .ce_foot {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   grid-row: 3;
   display: flex;
   align-items: center;
@@ -2678,10 +2674,7 @@ p {
 }
 @media (max-width: 1280px) {
   .ce_app {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-  .ce_app.recent_closed {
-    grid-template-columns: 0 minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .ce_side {
     display: none;
@@ -2706,22 +2699,13 @@ p {
   }
 }
 @media (max-width: 650px) {
-  .ce_app,
-  .ce_app.recent_closed {
+  .ce_app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) 40px;
     padding: 0 8px;
   }
   .ce_top {
     padding-left: 0;
-  }
-  .ce_recent,
-  .ce_menu {
-    display: none;
-  }
-  .ce_main,
-  .ce_foot {
-    grid-column: 1;
   }
   .ce_main {
     padding: 0 16px 32px;

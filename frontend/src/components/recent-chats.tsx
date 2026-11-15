@@ -16,11 +16,15 @@ export function RecentChats({
   currentId,
   onNavigate,
   onDelete,
+  watching = true,
 }: {
   currentId?: string;
   onNavigate?: () => void;
   // When set, each item gets a "more" button whose menu offers deletion.
   onDelete?: (chat: RecentChat) => void;
+  // False while the list is out of sight (a folded sidebar, or the column on a narrow
+  // screen): it is read once and not asked for again until it is back in sight.
+  watching?: boolean;
 }) {
   const { account, locale, t } = useSession();
   const send = useTrack();
@@ -28,8 +32,16 @@ export function RecentChats({
   const result = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => api("/chats/recent", recentSchema, { signal }),
-    refetchInterval: (query) => (query.state.status === "error" ? false : 3000),
+    refetchInterval: (query) =>
+      !watching || query.state.status === "error" ? false : 3000,
   });
+  // Back in sight: read at once, not at the next interval.
+  const { refetch } = result;
+  const watched = useRef(watching);
+  useEffect(() => {
+    if (watching && !watched.current) void refetch({ cancelRefetch: false });
+    watched.current = watching;
+  }, [watching, refetch]);
   const retry = useRetry("recent_chats", () => result.refetch());
   // Once per failure shown on this screen, until the list loads again. A later read that
   // fails again (window focus, a failed retry) or the mobile drawer opened again shows the

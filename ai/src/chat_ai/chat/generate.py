@@ -21,6 +21,8 @@ from chat_ai.prompt.assembler import AssembledPrompt, PromptAssembler
 log = logging.getLogger("chat_ai.chat")
 # Same tolerance as the web parser: case and spaces inside the tags do not matter.
 STATUS_WINDOW_RE = re.compile(r"<\s*status\s*>.*?<\s*/\s*status\s*>", re.IGNORECASE | re.DOTALL)
+# A name never holds a brace or a line break, so a tag left open cannot swallow the next one.
+IMAGE_TAG_RE = re.compile(r"\{\{img::([^{}\n]*)\}\}")
 
 
 @dataclass(frozen=True)
@@ -124,6 +126,11 @@ async def generate_turn(
     if outcome == "completed" and turn.has_status_window:
         # Recorded only, never repaired: a reply without the window is still a completed reply.
         extra["status_window_present"] = STATUS_WINDOW_RE.search(final.data["output"]) is not None
+    if outcome == "completed" and turn.image_names:
+        # Recorded only, never repaired: the web leaves out a tag whose name it does not know.
+        names = [name.strip() for name in IMAGE_TAG_RE.findall(final.data["output"])]
+        extra["image_tag_count"] = len(names)
+        extra["image_tag_unknown_count"] = sum(name not in turn.image_names for name in names)
     trace.finish(
         outcome=outcome,
         output=final.data if outcome == "failed" else final.data["output"],

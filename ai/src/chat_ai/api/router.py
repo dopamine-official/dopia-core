@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from chat_ai.api.schemas import ChatTurnRequest, CompactRequest, HistoryItem
+from chat_ai.api.schemas import CharacterImage, ChatTurnRequest, CompactRequest, HistoryItem
 from chat_ai.chat.compact import CompactFailure, compact
 from chat_ai.chat.generate import Event, assemble_chat_prompt, generate_turn
 from chat_ai.chat.inputs import ChatTurnInput, CompactInput
@@ -52,8 +52,24 @@ def _clean_history(items: list[HistoryItem]) -> list[Message]:
     return [Message(role=i.role, content=i.content.strip()) for i in items if i.content.strip()]
 
 
+def _image_lines(images: list[CharacterImage]) -> dict[str, str]:
+    """Name -> its line in the prompt's image list, in the order sent.
+
+    A nameless image cannot be placed, so it is dropped; a repeated name keeps its first entry.
+    The description is folded onto one line so each image stays one list item.
+    """
+    lines: dict[str, str] = {}
+    for image in images:
+        name = image.name.strip()
+        if not name or name in lines:
+            continue
+        description = " ".join(image.description.split())
+        lines[name] = f"- {name}: {description}" if description else f"- {name}"
+    return lines
+
+
 def chat_input(request_id: str, account_id: str, body: ChatTurnRequest) -> ChatTurnInput:
-    settings = body.character.model_dump(exclude={"is_adult", "status_window", "age"})
+    settings = body.character.model_dump(exclude={"is_adult", "status_window", "age", "images"})
     character = {k: v.strip() for k, v in settings.items()}
     detail = [{"field": f"character.{k}", "reason": "empty"} for k, v in character.items() if not v]
     # Template values: both empty when the character has no status window. Rules mean nothing
@@ -66,6 +82,10 @@ def chat_input(request_id: str, account_id: str, body: ChatTurnRequest) -> ChatT
     character["status_window_rules"] = (
         (window.rules or "").strip() if window and character["status_window_format"] else ""
     )
+    image_lines = _image_lines(body.character.images or [])
+    character["image_list"] = "\n".join(image_lines.values())
+    # The template's example tag names the first image, so the example is always a usable one.
+    character["image_example"] = next(iter(image_lines), "")
     user_input = body.user_input.strip()
     if not user_input:
         detail.append({"field": "user_input", "reason": "empty"})
@@ -81,6 +101,7 @@ def chat_input(request_id: str, account_id: str, body: ChatTurnRequest) -> ChatT
         user_input=user_input,
         locale=body.generation.locale.strip(),
         is_adult=body.character.is_adult,
+        image_names=frozenset(image_lines),
     )
 
 

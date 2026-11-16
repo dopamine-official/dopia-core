@@ -147,8 +147,7 @@ class CharacterEditor(
         return row
     }
 
-    private fun saveNotAllowed() =
-        ApiException("save_not_allowed", HttpStatus.CONFLICT, message = "a public character takes only a submit")
+    private fun saveNotAllowed() = ApiException("save_not_allowed", HttpStatus.CONFLICT, message = "a public character takes only a submit")
 
     private fun text(
         row: CharacterRow,

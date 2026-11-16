@@ -412,10 +412,9 @@ class CharacterCreationTest(
         assertEquals(second.get("image_url").asString(), forChat.single().imageUrl)
         // Under review the pictures still change; once public they do not.
         val added = json(add("pending", picture(8, 8))).get("id").asString()
-        assertEquals(
-            200,
-            member.send("PATCH", "/characters/$id/images/$added", """{"name":"x","description":"밤"}""".toByteArray(), "application/json").statusCode(),
-        )
+        val underReview =
+            member.send("PATCH", "/characters/$id/images/$added", """{"name":"x","description":"밤"}""".toByteArray(), "application/json")
+        assertEquals(200, underReview.statusCode())
         assertEquals(204, member.send("DELETE", "/characters/$id/images/$added").statusCode())
         approve(id)
         assertEquals(409 to "save_not_allowed", code(add("public", picture(8, 8))))

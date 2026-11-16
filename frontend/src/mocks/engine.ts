@@ -737,11 +737,11 @@ export function saveCharacter(
   const isAdult = flag("is_adult", current.is_adult);
   if (errors.length) throw invalid(...errors);
   const submit = action === "submit";
-  if (
-    !submit &&
-    (current.status === "pending" || current.status === "approved")
-  )
+  // A public character changes only through a revision; one under review may still be edited.
+  if (!submit && current.status === "approved")
     throw new ApiError("save_not_allowed", 409);
+  // Only a draft may be incomplete, so a save of one under review or rejected is checked like a submit.
+  const complete = submit || current.status !== "draft";
   if (isAdult && !user.adult_verified)
     throw new ApiError("adult_verification_required", 403);
   if (statusWindow && !texts.status_window_format)
@@ -749,7 +749,7 @@ export function saveCharacter(
   if (isAdult && (age === null || age < ADULT_MIN_AGE))
     errors.push(["is_adult", "age_too_low"]);
   const image = thumbnail ?? current.image_url;
-  if (submit) {
+  if (complete) {
     for (const key of REQUIRED) if (!texts[key]) errors.push([key, "required"]);
     if (!gender) errors.push(["gender", "required"]);
     if (age === null) errors.push(["age", "required"]);
@@ -757,9 +757,6 @@ export function saveCharacter(
     if (statusWindow && !texts.status_window_initial)
       errors.push(["status_window_initial", "required"]);
   }
-  // A picture is not kept without its description, on a draft save as well as a submit.
-  if (current.images.some((image) => !image.description))
-    errors.push(["images", "description_required"]);
   if (errors.length) throw invalid(...errors);
   Object.assign(current, {
     texts,
@@ -787,7 +784,7 @@ export function cancelRevision(state: State, characterId: string) {
 }
 function editable(state: State, characterId: string) {
   const character = owned(state, characterId);
-  if (character.status === "pending" || character.status === "approved")
+  if (character.status === "approved")
     throw new ApiError("save_not_allowed", 409);
   return character;
 }

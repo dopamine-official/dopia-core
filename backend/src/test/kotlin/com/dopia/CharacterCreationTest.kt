@@ -239,8 +239,12 @@ class CharacterCreationTest(
         assertTrue(done.get("image_url").asString().contains("/characters/$draft/thumbnail-"))
         assertTrue(done.get("image_url").asString().endsWith(".webp"))
 
-        // CH-BE-18: under review or public takes a submit only; a submit of a public one stays public.
-        assertEquals(409 to "save_not_allowed", code(member.save(mapOf("name" to "새 이름"), draft)))
+        // CH-BE-18: one under review is still saved, as long as it stays complete; a public one takes
+        // a submit only, and that submit leaves it public.
+        val saved = json(member.save(mapOf("name" to "심사 중 이름"), draft))
+        assertEquals("심사 중 이름", saved.get("name").asString())
+        assertEquals("pending", saved.get("status").asString())
+        assertEquals(mapOf("name" to "required"), errors(member.save(mapOf("name" to ""), draft)))
         approve(draft)
         assertEquals(409 to "save_not_allowed", code(member.save(mapOf("name" to "새 이름"), draft)))
         val edited = json(member.save(mapOf("name" to "새 이름"), draft, action = "submit"))
@@ -397,13 +401,8 @@ class CharacterCreationTest(
             .update()
         assertEquals(409 to "image_limit_reached", code(add("more", picture(8, 8))))
         jdbc.sql("DELETE FROM character_images WHERE character_id = :id AND name LIKE 'n%'").param("id", uuid).update()
-        // A picture without a description cannot be submitted: the AI picks a picture by it.
+        // A description is optional: a picture without one is submitted as it is.
         val left = second.get("id").asString()
-        assertEquals(
-            mapOf("images" to "description_required"),
-            errors(member.save(everything, id, action = "submit", thumbnail = picture(64, 64))),
-        )
-        assertEquals("draft", json(member.send("GET", "/characters/$id")).get("status").asString())
         member.send("PATCH", "/characters/$id/images/$left", """{"description":"좁은 골목"}""".toByteArray(), "application/json")
         assertEquals(200, member.save(everything, id, action = "submit", thumbnail = picture(64, 64)).statusCode())
 
@@ -411,7 +410,15 @@ class CharacterCreationTest(
         val forChat = characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = null).images
         assertEquals(listOf("alley" to "좁은 골목"), forChat.map { it.name to it.description })
         assertEquals(second.get("image_url").asString(), forChat.single().imageUrl)
-        assertEquals(409 to "save_not_allowed", code(add("pending", picture(8, 8))))
+        // Under review the pictures still change; once public they do not.
+        val added = json(add("pending", picture(8, 8))).get("id").asString()
+        assertEquals(
+            200,
+            member.send("PATCH", "/characters/$id/images/$added", """{"name":"x","description":"밤"}""".toByteArray(), "application/json").statusCode(),
+        )
+        assertEquals(204, member.send("DELETE", "/characters/$id/images/$added").statusCode())
+        approve(id)
+        assertEquals(409 to "save_not_allowed", code(add("public", picture(8, 8))))
         assertEquals(409 to "save_not_allowed", code(member.send("DELETE", "/characters/$id/images/$left")))
         assertEquals(
             409 to "save_not_allowed",
@@ -470,6 +477,8 @@ class CharacterCreationTest(
         jdbc.sql("UPDATE characters SET status = 'rejected', rejection_reason = '이름 확인' WHERE id = :id").param("id", uuid).update()
         val rejected = json(creator.send("GET", "/characters/$id"))
         assertEquals("이름 확인", rejected.get("rejection_reason").asString())
+        // A rejected character is complete too: a save that empties a required field is refused.
+        assertEquals(mapOf("name" to "required"), errors(creator.save(mapOf("name" to ""), id)))
         // A new submit clears the reason.
         assertTrue(json(creator.save(emptyMap(), id, action = "submit")).get("rejection_reason").isNull)
 

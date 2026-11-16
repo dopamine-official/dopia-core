@@ -148,7 +148,7 @@ class CharacterEditor(
     }
 
     private fun saveNotAllowed() =
-        ApiException("save_not_allowed", HttpStatus.CONFLICT, message = "a character under review or public takes only a submit")
+        ApiException("save_not_allowed", HttpStatus.CONFLICT, message = "a public character takes only a submit")
 
     private fun text(
         row: CharacterRow,
@@ -307,9 +307,13 @@ class CharacterEditor(
         current: CharacterRow,
         change: CharacterChange,
         hasImage: Boolean,
-        imagesDescribed: Boolean,
     ) {
-        if (!change.submit && (current.status == "pending" || current.status == "approved")) throw saveNotAllowed()
+        // A public character changes only through a reviewed revision. One under review may still be
+        // edited: the operator approves what is there at that moment.
+        if (!change.submit && current.status == "approved") throw saveNotAllowed()
+        // Only a draft may be incomplete (the characters_complete constraint), so a save of one
+        // under review or rejected is checked like a submit.
+        val complete = change.submit || current.status != "draft"
         val texts = rowTexts(current) + change.texts
         val gender = if (change.gender != null) change.gender.value else current.gender
         val age = if (change.age != null) change.age.value else current.age
@@ -321,9 +325,7 @@ class CharacterEditor(
         val errors = mutableListOf<FieldError>()
         if (statusWindow && texts.getValue("status_window_format").isEmpty()) errors += FieldError("status_window_format", "required")
         if (isAdult && (age == null || age < settings.adultMinAge)) errors += FieldError("is_adult", "age_too_low")
-        // A picture is not kept without its description, on a draft save as well as a submit.
-        if (!imagesDescribed) errors += FieldError("images", "description_required")
-        if (change.submit) {
+        if (complete) {
             required.filter { texts.getValue(it).isEmpty() }.forEach { errors += FieldError(it, "required") }
             if (gender == null) errors += FieldError("gender", "required")
             if (age == null) errors += FieldError("age", "required")
@@ -353,15 +355,7 @@ class CharacterEditor(
                     // A public character is edited through its revision; what is public stays (4-1-2).
                     val revision = if (live.approved) repository.revision(characterId) else null
                     val current = live.with(revision)
-                    validate(
-                        identity,
-                        current,
-                        change,
-                        hasImage = thumbnail != null || current.imageUrl != null,
-                        // The AI picks a picture by its description. A public character's pictures cannot
-                        // be edited, so one saved before this rule is not held against its edit.
-                        imagesDescribed = live.approved || repository.images(characterId).none { it.description.isEmpty() },
-                    )
+                    validate(identity, current, change, hasImage = thumbnail != null || current.imageUrl != null)
                     if (thumbnail != null) {
                         uploaded = storage.put("characters/$characterId/thumbnail-${UUID.randomUUID()}.webp", thumbnail, "image/webp")
                     }
@@ -448,8 +442,8 @@ class CharacterEditor(
         characterId: UUID,
     ): CharacterRow {
         val row = owned(repository.lock(characterId), identity)
-        // Pictures of a character under review or public do not change without a review (2-2).
-        if (row.status == "pending" || row.status == "approved") throw saveNotAllowed()
+        // Pictures are not part of a revision, so those of a public character do not change (2-2).
+        if (row.status == "approved") throw saveNotAllowed()
         return row
     }
 

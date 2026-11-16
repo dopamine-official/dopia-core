@@ -214,8 +214,9 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   const mediaInput = useRef<HTMLInputElement>(null);
 
   const status = saved?.status ?? "draft";
-  const canSaveDraft = status === "draft" || status === "rejected";
-  const mediaLocked = status === "pending" || status === "approved";
+  // A public character takes only a submit, which makes a revision.
+  const canSaveDraft = status !== "approved";
+  const mediaLocked = status === "approved";
   const adultAvailable =
     regionConfig().content.adult_mode_available && account.adult_verified;
   const age = values.age === "" ? null : Number(values.age);
@@ -453,21 +454,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       say(t(`character.create.media.${nameProblem(badImages[0])}`), true);
       return null;
     }
-    // The AI picks a picture by its description: a picture is not kept without one.
-    const undescribed = images.filter(
-      (image) => !draftOf(image).description.trim(),
-    );
-    if (!mediaLocked && undescribed.length) {
-      setImageErrors((now) => ({
-        ...now,
-        ...Object.fromEntries(
-          undescribed.map((image) => [image.id, "description_required"]),
-        ),
-      }));
-      jump("media");
-      say(t("character.create.media.description_required"), true);
-      return null;
-    }
     busyRef.current = true;
     setBusy(true);
     const current = savedRef.current;
@@ -478,7 +464,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     const event =
       action === "save" ? "character_draft_saved" : "character_submitted";
     try {
-      // The pictures first: once submitted they can no longer be changed.
+      // The pictures first, so a failed picture stops the save before the character changes.
       if (current && !(await saveImages(current.id))) return null;
       const detail = await api(
         current ? `/characters/${current.id}` : "/characters",
@@ -676,10 +662,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         [key]: key === "name" ? imageName(value) : clip(value, 200),
       },
     }));
-    if (
-      imageErrors[image.id] &&
-      (key === "name" || imageErrors[image.id] === "description_required")
-    )
+    if (key === "name" && imageErrors[image.id])
       setImageErrors((now) => ({ ...now, [image.id]: "" }));
   }
   function dropImage(id: string) {

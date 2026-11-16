@@ -113,15 +113,8 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await names.nth(1).fill("window");
   await names.nth(1).blur();
   await expect(line(page)).not.toContainText("저장됨");
-  // A picture is not kept without a description: the save stops and says so on the picture.
-  await page.getByRole("button", { name: "임시 저장", exact: true }).click();
-  await expect(page.locator(".ce_item .ce_error")).toHaveText([
-    "상황 설명을 적어 주세요. AI가 이 설명을 보고 이미지를 골라요.",
-    "상황 설명을 적어 주세요. AI가 이 설명을 보고 이미지를 골라요.",
-  ]);
-  await expect(line(page)).not.toContainText("저장됨");
+  // A description is optional: one picture is saved with it and the other without.
   await descriptions.nth(0).fill("눈 오는 거리를 걸을 때");
-  await descriptions.nth(1).fill("창가에 앉아 있을 때");
   await expect(page.locator(".ce_item .ce_error")).toHaveCount(0);
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
   await expect(line(page)).toContainText("저장됨");
@@ -139,21 +132,31 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await expect(item).toContainText("눈 내리는 도시");
   await expect(item).toContainText("심사 중");
 
-  // Under review: no draft save, and the pictures are read-only.
+  // Under review it can still be edited: the draft save and the pictures stay open.
   await item.getByRole("link", { name: "수정", exact: true }).click();
   await expect(page.locator("#ce_name")).toHaveValue("눈 내리는 도시");
   await expect(
     page.getByRole("button", { name: "임시 저장", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
+  // A save keeps it under review, and it stays complete: an emptied name is refused.
+  await page.locator("#ce_name").fill("");
+  await page.getByRole("button", { name: "임시 저장", exact: true }).click();
+  await expect(line(page)).toContainText("저장하지 못했어요");
+  await page.locator("#ce_name").fill("눈 내리는 도시");
   await step(page, "미디어 관리").click();
   await expect(
-    page.getByText(
-      "심사 중이거나 공개된 캐릭터의 상황 이미지는 바꿀 수 없어요.",
-    ),
-  ).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "이미지 이름" })).toHaveCount(
-    0,
-  );
+    page.getByText("공개된 캐릭터의 상황 이미지는 바꿀 수 없어요."),
+  ).toHaveCount(0);
+  const reviewNames = page.getByRole("textbox", { name: "이미지 이름" });
+  await expect(reviewNames).toHaveCount(1);
+  await reviewNames.first().fill("window_night");
+  await page.getByRole("button", { name: "임시 저장", exact: true }).click();
+  await expect(line(page)).toContainText("저장됨");
+  await page.reload();
+  await step(page, "미디어 관리").click();
+  await expect(reviewNames.first()).toHaveValue("window_night");
+  await page.goto("/characters/mine");
+  await expect(page.locator(".mine_item")).toContainText("심사 중");
 
   // The creator chats with it before any review; the first status values are in the room.
   await page.goto("/characters/mine");
@@ -169,7 +172,7 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await page.getByRole("textbox", { name: "메시지", exact: true }).fill("안녕");
   await page.keyboard.press("Enter");
   const reply = page.locator(".message_wrap.assistant").last().locator("> *");
-  await expect(reply.nth(0)).toHaveAttribute("alt", "window");
+  await expect(reply.nth(0)).toHaveAttribute("alt", "window_night");
   await expect(reply.nth(1)).toHaveText("고개를 끄덕인다. 계속 말해 봐.");
   await expect(page.locator(".message_list")).not.toContainText("{{");
 

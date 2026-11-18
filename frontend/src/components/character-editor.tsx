@@ -948,13 +948,28 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         {canSaveDraft && (
           <button
             type="button"
-            className="button primary"
+            className="button"
             disabled={busy || !!uploading}
             onClick={() => void persist("save")}
           >
             {t("character.create.save_draft")}
           </button>
         )}
+        <button
+          type="button"
+          className="button primary"
+          disabled={
+            busy ||
+            !!uploading ||
+            (status === "approved" &&
+              !dirty &&
+              !imagesTouched &&
+              saved?.revision_status !== "draft")
+          }
+          onClick={() => void persist("submit")}
+        >
+          {t("character.create.submit")}
+        </button>
       </header>
 
       <nav className="ce_steps" aria-label={t("character.create.steps_label")}>
@@ -1478,20 +1493,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
                 </tbody>
               </table>
             </div>
-            <button
-              type="button"
-              className="button primary ce_submit"
-              disabled={
-                busy ||
-                (status === "approved" &&
-                  !dirty &&
-                  !imagesTouched &&
-                  saved?.revision_status !== "draft")
-              }
-              onClick={() => void persist("submit")}
-            >
-              {t("character.create.submit")}
-            </button>
           </section>
         )}
       </main>

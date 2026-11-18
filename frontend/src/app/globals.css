@@ -2283,10 +2283,6 @@ p {
 .ce_pane .ce_sum tr {
   cursor: pointer;
 }
-.ce_app .button.ce_submit {
-  padding: 13px 26px;
-  font-size: 15px;
-}
 .ce_card {
   width: 190px;
 }

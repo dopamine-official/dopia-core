@@ -10,7 +10,7 @@ import { errorMessageKey } from "@/lib/errors";
 import { splitStatusWindow, visibleWhileStreaming } from "@/lib/status-window";
 import { Screen } from "./page";
 import { useMembersOnly, useSession } from "./providers";
-import { ErrorState, Icon, Loading, ProfileMenu, ThemeToggle } from "./ui";
+import { ErrorState, Icon, Loading, ProfileMenu } from "./ui";
 import { type RecentChat } from "./recent-chats";
 import { Sidebar, useSidebar } from "./sidebar";
 
@@ -379,7 +379,6 @@ function ChatRoom({ roomId }: { roomId: string }) {
           )}
         </div>
         <div className="header_actions">
-          <ThemeToggle />
           <ProfileMenu />
         </div>
       </header>

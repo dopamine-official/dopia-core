@@ -228,7 +228,7 @@ function HomeScreen() {
                             void open(character.id, "card");
                           }}
                         >
-                          <div className={`card_art art_${index}`}>
+                          <div className="card_art">
                             <img
                               src={character.image_url}
                               alt=""

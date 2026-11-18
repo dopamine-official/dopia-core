@@ -33,7 +33,6 @@ test("chat room view, sends, replies and buttons", async ({
     is_member: true,
     adult_mode: false,
     locale: "ko-KR",
-    theme: "dark",
   });
 
   await input(page).fill("안녕");

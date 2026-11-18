@@ -84,7 +84,8 @@ export const recentSchema = z.object({
 });
 export type RecentResponse = z.infer<typeof recentSchema>;
 const characterStatus = z.enum(["draft", "pending", "approved", "rejected"]);
-const revisionStatus = z.enum(["pending", "rejected"]).nullable();
+// draft: the pictures of a public character were changed and not submitted yet.
+const revisionStatus = z.enum(["pending", "rejected", "draft"]).nullable();
 export const myCharactersSchema = z.object({
   characters: z.array(
     z.object({

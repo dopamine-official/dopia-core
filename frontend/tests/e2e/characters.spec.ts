@@ -144,9 +144,6 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await expect(line(page)).toContainText("저장하지 못했어요");
   await page.locator("#ce_name").fill("눈 내리는 도시");
   await step(page, "미디어 관리").click();
-  await expect(
-    page.getByText("공개된 캐릭터의 상황 이미지는 바꿀 수 없어요."),
-  ).toHaveCount(0);
   const reviewNames = page.getByRole("textbox", { name: "이미지 이름" });
   await expect(reviewNames).toHaveCount(1);
   await reviewNames.first().fill("window_night");

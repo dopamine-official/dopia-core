@@ -782,11 +782,9 @@ export function cancelRevision(state: State, characterId: string) {
   owned(state, characterId);
   throw new ApiError("revision_not_found", 404);
 }
+/** The preview never approves, so the pictures here are always the creator's own to change. */
 function editable(state: State, characterId: string) {
-  const character = owned(state, characterId);
-  if (character.status === "approved")
-    throw new ApiError("save_not_allowed", 409);
-  return character;
+  return owned(state, characterId);
 }
 function imageName(value: string | undefined) {
   // English letters, digits, _ and - only; a space becomes _ (CharacterEditor.imageName).

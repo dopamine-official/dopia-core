@@ -29,7 +29,10 @@ data class CharacterImageView(
 data class CharacterDetail(
     val id: UUID,
     val status: String,
-    /** pending or rejected while a public character has a revision; otherwise null. */
+    /**
+     * pending or rejected while a public character has a revision, draft while only its images
+     * were changed and not submitted; otherwise null.
+     */
     val revisionStatus: String?,
     val rejectionReason: String?,
     val name: String?,
@@ -176,7 +179,7 @@ class CharacterEditor(
         return CharacterDetail(
             id = row.id,
             status = row.status,
-            revisionStatus = revision?.status,
+            revisionStatus = revisionStatus(live, revision),
             rejectionReason = revision?.rejectionReason ?: row.rejectionReason,
             name = texts["name"],
             characterName = texts["character_name"],
@@ -198,6 +201,11 @@ class CharacterEditor(
         )
     }
 
+    private fun revisionStatus(
+        live: CharacterRow,
+        revision: RevisionRow?,
+    ): String? = revision?.status ?: "draft".takeIf { live.approved && live.hasImageRevision }
+
     private fun view(image: CharacterImageRow) = CharacterImageView(image.id, image.name, image.description, image.imageUrl, image.position)
 
     fun mine(identity: Identity): MyCharacters =
@@ -213,7 +221,7 @@ class CharacterEditor(
                         text(row, row.name).ifEmpty { null },
                         row.imageUrl,
                         row.status,
-                        revision?.status,
+                        revisionStatus(live, revision),
                         revision?.rejectionReason ?: row.rejectionReason,
                         row.updatedAt,
                     )
@@ -393,34 +401,37 @@ class CharacterEditor(
         identity: Identity,
         id: UUID,
     ) {
-        val revisionFile =
+        val revisionFiles =
             tx.execute {
                 val live = owned(repository.lock(id), identity)
-                // The thumbnail of an edit that was never approved goes with it; the rest stays for rooms.
+                // What an edit that was never approved added goes with it; the rest stays for rooms.
                 val file = repository.revision(id)?.imageUrl?.takeIf { it != live.imageUrl }
+                val images = if (live.hasImageRevision) repository.restorePublicImages(id) else emptyList()
                 repository.softDelete(id)
-                listOfNotNull(file)
+                listOfNotNull(file) + images
             }!!
-        revisionFile.forEach(storage::delete)
+        revisionFiles.forEach(storage::delete)
         characters.clearCache()
     }
 
-    /** Drops the revision of a public character; what is public is untouched (4-2-7). */
+    /** Drops the revision of a public character and its changed images; what is public is untouched (4-2-7). */
     fun cancelRevision(
         identity: Identity,
         id: UUID,
     ) {
-        val file =
+        val files =
             tx.execute {
                 val live = owned(repository.lock(id), identity)
-                val revision =
-                    repository.revision(id)
-                        ?: throw ApiException("revision_not_found", HttpStatus.NOT_FOUND, message = "this character has no revision")
+                val revision = repository.revision(id)
+                if (revision == null && !live.hasImageRevision) {
+                    throw ApiException("revision_not_found", HttpStatus.NOT_FOUND, message = "this character has no revision")
+                }
                 repository.deleteRevision(id)
+                val images = if (live.hasImageRevision) repository.restorePublicImages(id) else emptyList()
                 repository.touch(id)
-                listOfNotNull(revision.imageUrl.takeIf { it != live.imageUrl })
+                listOfNotNull(revision?.imageUrl?.takeIf { it != live.imageUrl }) + images
             }!!
-        file.forEach(storage::delete)
+        files.forEach(storage::delete)
     }
 
     /**
@@ -441,8 +452,9 @@ class CharacterEditor(
         characterId: UUID,
     ): CharacterRow {
         val row = owned(repository.lock(characterId), identity)
-        // Pictures are not part of a revision, so those of a public character do not change (2-2).
-        if (row.status == "approved") throw saveNotAllowed()
+        // The first change to a public character's images keeps them as they are for everyone
+        // else; an operator's approval makes the changed ones public (4-1-8 step 1-1).
+        if (row.approved && !row.hasImageRevision) repository.copyPublicImages(characterId)
         return row
     }
 
@@ -540,9 +552,10 @@ class CharacterEditor(
                 val current = repository.findImage(characterId, imageId) ?: throw imageNotFound()
                 repository.deleteImage(imageId)
                 repository.touch(characterId)
-                current.imageUrl
-            }!!
-        storage.delete(url)
+                // Others still see the picture through its public copy.
+                current.imageUrl.takeUnless { repository.publicCopyUses(characterId, it) }
+            }
+        url?.let(storage::delete)
     }
 
     /** A creator's public characters, for anyone (4-1-3). */

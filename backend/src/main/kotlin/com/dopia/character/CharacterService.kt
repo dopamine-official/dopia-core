@@ -164,7 +164,9 @@ class CharacterService(
         val row = repository.find(characterId)?.takeIf { it.status != "draft" } ?: throw CharacterNotFound(characterId)
         // The creator gets what they last submitted; everyone else what is public (4-1-4 step 2).
         val seen = if (row.approved && row.creatorId == requesterId) row.with(repository.revision(row.id)) else row
-        val images = repository.images(row.id).map { ChatImage(it.name, it.description, it.imageUrl) }
+        // While the creator changes a public character's images, everyone else gets the copies.
+        val publicCopy = row.hasImageRevision && row.creatorId != requesterId
+        val images = repository.images(row.id, publicCopy).map { ChatImage(it.name, it.description, it.imageUrl) }
         return toChat(seen, locale, adultAllowed, requesterId).copy(images = images)
     }
 

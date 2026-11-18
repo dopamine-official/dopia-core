@@ -208,6 +208,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   const queue = useRef<File[]>([]);
   const [cancelling, setCancelling] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
+  // True once a public character's pictures were added or removed here: the change waits for a submit.
+  const [imagesTouched, setImagesTouched] = useState(false);
   const alive = useRef(true);
   const mainRef = useRef<HTMLElement>(null);
   const thumbnailInput = useRef<HTMLInputElement>(null);
@@ -216,7 +218,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   const status = saved?.status ?? "draft";
   // A public character takes only a submit, which makes a revision.
   const canSaveDraft = status !== "approved";
-  const mediaLocked = status === "approved";
   const adultAvailable =
     regionConfig().content.adult_mode_available && account.adult_verified;
   const age = values.age === "" ? null : Number(values.age);
@@ -260,6 +261,19 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     savedRef.current = next;
     setSaved(next);
     putImages(next.images);
+  }
+  /**
+   * Adding or removing a picture of a public character starts an edit on the server; it is
+   * reviewed only after a submit, and until then it can be cancelled (2-2).
+   */
+  function imagesChanged() {
+    const now = savedRef.current;
+    if (now?.status !== "approved") return;
+    setImagesTouched(true);
+    if (now.revision_status) return;
+    const next: CharacterDetail = { ...now, revision_status: "draft" };
+    savedRef.current = next;
+    setSaved(next);
   }
 
   const viewed = useRef(false);
@@ -438,9 +452,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         return null;
       }
     }
-    // A picture name that is empty or taken would be refused: fix it first. Pictures that can
-    // no longer be changed are not checked: there would be no way to fix them.
-    if (!mediaLocked && badImages.length) {
+    // A picture name that is empty or taken would be refused: fix it first.
+    if (badImages.length) {
       // An empty name says so only now, not while it is being typed again.
       setImageErrors((now) => ({
         ...now,
@@ -553,8 +566,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   async function addFiles(list: FileList | File[] | null) {
     const files = Array.from(list ?? []);
     // One upload at a time: the screen is locked while one runs.
-    if (!files.length || mediaLocked || busyRef.current || queue.current.length)
-      return;
+    if (!files.length || busyRef.current || queue.current.length) return;
     queue.current.push(...files);
     let added = 0;
     const skipped: string[] = [];
@@ -599,6 +611,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             }
             if (!alive.current) return;
             putImages([...imagesRef.current, image]);
+            imagesChanged();
             added++;
           } catch (error) {
             if (!alive.current) return;
@@ -606,10 +619,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             if (code === "image_limit_reached") {
               stop = true;
               skip("skipped_limit", file);
-            } else if (code === "save_not_allowed") {
-              queue.current = [];
-              void reload();
-              return;
             } else if (leaveOn(error)) {
               queue.current = [];
               return;
@@ -706,8 +715,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
           dropImage(image.id);
           continue;
         }
-        if (code === "save_not_allowed") void reload();
-        else if (!leaveOn(error)) {
+        if (!leaveOn(error)) {
           setImageErrors((now) => ({
             ...now,
             [image.id]: fieldErrors(error).some(
@@ -738,7 +746,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       } catch (error) {
         if (!alive.current) return;
         const code = errorCode(error);
-        if (code === "save_not_allowed") return void reload();
         if (leaveOn(error)) return;
         if (code !== "image_not_found") {
           failed = true;
@@ -747,6 +754,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       }
       if (!alive.current) return;
       dropImage(imageId);
+      imagesChanged();
       removed++;
     }
     say(
@@ -779,6 +787,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     query.removeQueries({ queryKey: ["my_characters"] });
     await reload();
     if (!alive.current) return;
+    setImagesTouched(false);
     setCancelBusy(false);
     setCancelling(false);
   }
@@ -993,7 +1002,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         // meanwhile is lost and a submit cannot cut the upload short.
         inert={busy || !!uploading}
         onDragOver={(event) => {
-          if (step !== "media" || mediaLocked) return;
+          if (step !== "media") return;
           event.preventDefault();
           setOver(true);
         }}
@@ -1002,7 +1011,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             setOver(false);
         }}
         onDrop={(event) => {
-          if (step !== "media" || mediaLocked) return;
+          if (step !== "media") return;
           event.preventDefault();
           setOver(false);
           void addFiles(event.dataTransfer.files);
@@ -1232,47 +1241,42 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
 
         {step === "media" && (
           <section className="ce_pane">
-            {mediaLocked ? (
+            {status === "approved" && (
               <div className="ce_notice">
-                <p>{t("character.create.media.locked")}</p>
-              </div>
-            ) : (
-              <div className="ce_tip">
-                <ul>
-                  <li>{t("character.create.media.tip_1")}</li>
-                  <li>{t("character.create.media.tip_2")}</li>
-                  <li>{t("character.create.media.tip_3")}</li>
-                </ul>
+                <p>{t("character.create.media.revision_notice")}</p>
               </div>
             )}
+            <div className="ce_tip">
+              <ul>
+                <li>{t("character.create.media.tip_1")}</li>
+                <li>{t("character.create.media.tip_2")}</li>
+                <li>{t("character.create.media.tip_3")}</li>
+              </ul>
+            </div>
             <div className="ce_media_bar">
               <h3>
                 {t("character.create.media.all", { count: images.length })}
               </h3>
-              {!mediaLocked && (
-                <>
-                  <button
-                    type="button"
-                    className="button"
-                    disabled={!picked.length}
-                    onClick={() => void removeImages(picked)}
-                  >
-                    {picked.length
-                      ? t("character.create.media.delete_selected_count", {
-                          count: picked.length,
-                        })
-                      : t("character.create.media.delete_selected")}
-                  </button>
-                  <button
-                    type="button"
-                    id="ce_media_add"
-                    className="button"
-                    onClick={() => mediaInput.current?.click()}
-                  >
-                    {t("character.create.media.add")}
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                className="button"
+                disabled={!picked.length}
+                onClick={() => void removeImages(picked)}
+              >
+                {picked.length
+                  ? t("character.create.media.delete_selected_count", {
+                      count: picked.length,
+                    })
+                  : t("character.create.media.delete_selected")}
+              </button>
+              <button
+                type="button"
+                id="ce_media_add"
+                className="button"
+                onClick={() => mediaInput.current?.click()}
+              >
+                {t("character.create.media.add")}
+              </button>
               <div
                 className="ce_seg"
                 role="group"
@@ -1319,21 +1323,19 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
                   (typed === "name_required" ? "" : typed);
                 return (
                   <div key={image.id} className={`ce_item ${bad ? "bad" : ""}`}>
-                    {!mediaLocked && (
-                      <input
-                        type="checkbox"
-                        className="ce_pick"
-                        aria-label={t("character.create.media.select")}
-                        checked={picked.includes(image.id)}
-                        onChange={(event) =>
-                          setPicked((now) =>
-                            event.target.checked
-                              ? [...now, image.id]
-                              : now.filter((id) => id !== image.id),
-                          )
-                        }
-                      />
-                    )}
+                    <input
+                      type="checkbox"
+                      className="ce_pick"
+                      aria-label={t("character.create.media.select")}
+                      checked={picked.includes(image.id)}
+                      onChange={(event) =>
+                        setPicked((now) =>
+                          event.target.checked
+                            ? [...now, image.id]
+                            : now.filter((id) => id !== image.id),
+                        )
+                      }
+                    />
                     <button
                       type="button"
                       className="ce_thumb"
@@ -1343,68 +1345,51 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
                       <img src={image.image_url} alt="" loading="lazy" />
                     </button>
                     <div className="ce_texts">
-                      {mediaLocked ? (
-                        <>
-                          <strong>{image.name}</strong>
-                          <span className="ce_meta">{image.description}</span>
-                        </>
-                      ) : (
-                        <>
-                          <input
-                            type="text"
-                            aria-label={t("character.create.media.image_name")}
-                            placeholder={t("character.create.media.image_name")}
-                            value={draft.name}
-                            onChange={(event) =>
-                              editImage(image, "name", event.target.value)
-                            }
-                          />
-                          <textarea
-                            aria-label={t("character.create.media.description")}
-                            placeholder={t(
-                              "character.create.media.description_placeholder",
-                            )}
-                            value={draft.description}
-                            onChange={(event) =>
-                              editImage(
-                                image,
-                                "description",
-                                event.target.value,
-                              )
-                            }
-                          />
-                          {problem && (
-                            <span className="ce_error" role="alert">
-                              {t(`character.create.media.${problem}`)}
-                            </span>
-                          )}
-                        </>
+                      <input
+                        type="text"
+                        aria-label={t("character.create.media.image_name")}
+                        placeholder={t("character.create.media.image_name")}
+                        value={draft.name}
+                        onChange={(event) =>
+                          editImage(image, "name", event.target.value)
+                        }
+                      />
+                      <textarea
+                        aria-label={t("character.create.media.description")}
+                        placeholder={t(
+                          "character.create.media.description_placeholder",
+                        )}
+                        value={draft.description}
+                        onChange={(event) =>
+                          editImage(image, "description", event.target.value)
+                        }
+                      />
+                      {problem && (
+                        <span className="ce_error" role="alert">
+                          {t(`character.create.media.${problem}`)}
+                        </span>
                       )}
                     </div>
-                    {!mediaLocked && (
-                      <button
-                        type="button"
-                        className="ce_del"
-                        aria-label={t("character.create.media.delete")}
-                        onClick={() => void removeImages([image.id])}
-                      >
-                        ×
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="ce_del"
+                      aria-label={t("character.create.media.delete")}
+                      onClick={() => void removeImages([image.id])}
+                    >
+                      ×
+                    </button>
                   </div>
                 );
               })}
             </div>
-            {!mediaLocked && (
-              <button
-                type="button"
-                className={`ce_dropzone ${images.length ? "small" : ""}`}
-                onClick={() => mediaInput.current?.click()}
-              >
-                <strong>{t("character.create.media.drop_title")}</strong>
-                {t("character.create.media.drop_hint")}
-              </button>
-            )}
+            <button
+              type="button"
+              className={`ce_dropzone ${images.length ? "small" : ""}`}
+              onClick={() => mediaInput.current?.click()}
+            >
+              <strong>{t("character.create.media.drop_title")}</strong>
+              {t("character.create.media.drop_hint")}
+            </button>
           </section>
         )}
 
@@ -1512,7 +1497,13 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             <button
               type="button"
               className="button primary ce_submit"
-              disabled={busy || (status === "approved" && !dirty)}
+              disabled={
+                busy ||
+                (status === "approved" &&
+                  !dirty &&
+                  !imagesTouched &&
+                  saved?.revision_status !== "draft")
+              }
               onClick={() => void persist("submit")}
             >
               {t("character.create.submit")}

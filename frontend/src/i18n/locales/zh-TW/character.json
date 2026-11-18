@@ -113,7 +113,7 @@
       "name_duplicate": "已有相同名稱的圖片。",
       "name_invalid": "圖片名稱只能使用英文字母、數字、_ 和 -。",
       "limit_reached": "最多可放入 100 張圖片。",
-      "locked": "已公開的角色無法變更情境圖片。",
+      "revision_notice": "變更的圖片在提交並核准後才會顯示給其他人。",
       "image_name": "圖片名稱",
       "description": "情境說明",
       "description_placeholder": "這張圖片出現的情境（例：穿著制服在走廊相遇時）",
@@ -192,7 +192,8 @@
     },
     "revision": {
       "pending": "修改審核中",
-      "rejected": "修改退回"
+      "rejected": "修改退回",
+      "draft": "修改尚未提交"
     },
     "unnamed": "未命名的角色",
     "edit": "編輯",

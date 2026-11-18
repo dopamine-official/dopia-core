@@ -113,7 +113,7 @@
       "name_duplicate": "Another picture has the same name.",
       "name_invalid": "A picture name takes English letters, digits, _ and - only.",
       "limit_reached": "A character holds up to 100 pictures.",
-      "locked": "Situation images of a public character cannot be changed.",
+      "revision_notice": "Changed pictures show to others once you submit and the edit is approved.",
       "image_name": "Picture name",
       "description": "Situation",
       "description_placeholder": "When this picture appears (e.g. meeting in the hallway in uniform)",
@@ -192,7 +192,8 @@
     },
     "revision": {
       "pending": "Edit in review",
-      "rejected": "Edit rejected"
+      "rejected": "Edit rejected",
+      "draft": "Edit not submitted"
     },
     "unnamed": "Unnamed character",
     "edit": "Edit",

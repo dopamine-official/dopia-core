@@ -46,6 +46,7 @@ import {
 } from "./providers";
 import { useTrack } from "./page";
 import { forgetBrowserConsent } from "@/lib/consent";
+import { LegalDocument } from "./legal";
 
 export function Icon({
   name,
@@ -863,7 +864,7 @@ export function ConsentHost() {
   return account.consent_required ? <Consent /> : null;
 }
 function Consent() {
-  const { t, account, replaceAccount } = useSession();
+  const { t, locale, account, replaceAccount } = useSession();
   const send = useOverlayTrack();
   const consentItems = account.consent_items;
   // Once per showing (TRACKING-PLAN 9-1).
@@ -996,8 +997,11 @@ function Consent() {
                 })}
                 tabIndex={0}
               >
-                {/* Placeholder until the documents are written (TBD). */}
-                <p>{t("account.consent.body_placeholder")}</p>
+                <LegalDocument
+                  doc={item.id}
+                  locale={locale}
+                  fallback={<p>{t("account.consent.body_placeholder")}</p>}
+                />
                 {item.document_url && (
                   <a href={item.document_url} target="_blank" rel="noreferrer">
                     {t("account.consent.open_document")}

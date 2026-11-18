@@ -47,7 +47,7 @@
     "view_item": "{name} 자세히 보기",
     "hide": "숨기기",
     "hide_item": "{name} 숨기기",
-    "body_placeholder": "[약관 내용]",
+    "body_placeholder": "약관을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.",
     "body_label": "{name} 내용",
     "open_document": "새 창에서 전문 보기",
     "agree": "동의하고 시작하기",

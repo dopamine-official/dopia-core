@@ -4,3 +4,4 @@ public/mockServiceWorker.js
 test-results*
 playwright-report
 pnpm-lock.yaml
+public/legal/

@@ -47,7 +47,7 @@
     "view_item": "{name} details",
     "hide": "Hide",
     "hide_item": "Hide {name}",
-    "body_placeholder": "[Terms text]",
+    "body_placeholder": "Could not load the terms. Please try again shortly.",
     "body_label": "{name} text",
     "open_document": "Open the full text",
     "agree": "Agree and start",

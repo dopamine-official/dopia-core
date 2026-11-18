@@ -85,7 +85,7 @@ class ServerEventsTest(
                 json(
                     "POST",
                     "/account/me/consents",
-                    """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+                    """{"items":[{"id":"terms","version":"0.1"},{"id":"privacy","version":"0.1"}]}""",
                 )
             }
             return mapper.readTree(response.body())
@@ -265,14 +265,14 @@ class ServerEventsTest(
         assertEquals(true, consented.properties["is_guest"])
         // A consent sets only the consent versions.
         assertEquals(
-            mapOf("consent_terms_version" to "2026-11-10", "consent_privacy_version" to "2026-11-10"),
+            mapOf("consent_terms_version" to "0.1", "consent_privacy_version" to "0.1"),
             consented.person,
         )
         // Agreeing again records nothing new.
         browser.json(
             "POST",
             "/account/me/consents",
-            """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+            """{"items":[{"id":"terms","version":"0.1"},{"id":"privacy","version":"0.1"}]}""",
         )
         only(guest, "server_consents_recorded")
 
@@ -280,7 +280,7 @@ class ServerEventsTest(
         browser.session = token
         // The guest's consents were copied: the member's person has them from the login on.
         val loginPerson = only(member, "server_login_succeeded").person
-        assertEquals("2026-11-10", loginPerson["consent_terms_version"])
+        assertEquals("0.1", loginPerson["consent_terms_version"])
         assertEquals(false, loginPerson["adult_verified"])
 
         val birth = LocalDate.of(1990, 5, 5)

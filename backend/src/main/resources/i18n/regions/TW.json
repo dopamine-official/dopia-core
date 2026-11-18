@@ -9,7 +9,7 @@
     ]
   },
   "age": {
-    "adult_age": 18,
+    "adult_age": 20,
     "time_zone": "Asia/Taipei",
     "verification_method": "birth_date_only",
     "rating_mark_url": "/rating/restricted.svg",
@@ -20,13 +20,13 @@
       {
         "id": "terms",
         "required": true,
-        "version": "2026-11-10",
+        "version": "0.1",
         "document_url": ""
       },
       {
         "id": "privacy",
         "required": true,
-        "version": "2026-11-10",
+        "version": "0.1",
         "document_url": ""
       }
     ]

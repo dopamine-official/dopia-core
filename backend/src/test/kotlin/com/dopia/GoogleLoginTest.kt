@@ -133,7 +133,7 @@ class GoogleLoginTest(
                 ) {
                     send(
                         "/account/me/consents",
-                        """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+                        """{"items":[{"id":"terms","version":"0.1"},{"id":"privacy","version":"0.1"}]}""",
                     )
                 }
             }

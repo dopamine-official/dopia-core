@@ -7,7 +7,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -26,12 +25,7 @@ import {
   ApiError,
 } from "@/lib/contracts";
 import { errorMessageKey } from "@/lib/errors";
-import {
-  errorCode,
-  syncAnalyticsTheme,
-  track,
-  type EventProperties,
-} from "@/lib/analytics";
+import { errorCode, track, type EventProperties } from "@/lib/analytics";
 import {
   clearLoginStart,
   pageForPath,
@@ -46,6 +40,7 @@ import {
 } from "./providers";
 import { useTrack } from "./page";
 import { forgetBrowserConsent } from "@/lib/consent";
+import { LegalDocument } from "./legal";
 
 export function Icon({
   name,
@@ -172,7 +167,6 @@ export function SiteHeader({
         {safe && (
           <SafeToggle onLogin={() => openLogin({ trigger: "safe_toggle" })} />
         )}
-        <ThemeToggle />
         {account.is_guest ? (
           <button
             type="button"
@@ -498,67 +492,6 @@ export function ProfileMenu() {
     </div>
   );
 }
-type Theme = "dark" | "light";
-const readTheme = (): Theme =>
-  document.documentElement.dataset.theme === "light" ? "light" : "dark";
-const watchTheme = (onChange: () => void) => {
-  const observer = new MutationObserver(onChange);
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["data-theme"],
-  });
-  return () => observer.disconnect();
-};
-/** Shows the theme a click switches to: the sun in dark mode, the moon in light mode. */
-export function ThemeToggle() {
-  const { t } = useSession();
-  const send = useTrack();
-  const theme = useSyncExternalStore<Theme>(
-    watchTheme,
-    readTheme,
-    () => "dark",
-  );
-  const next: Theme = theme === "dark" ? "light" : "dark";
-  // Also follows a change made in another tab.
-  useEffect(syncAnalyticsTheme, [theme]);
-  return (
-    <button
-      type="button"
-      className="icon_button theme_toggle"
-      aria-label={t(`common.theme_${next}`)}
-      onClick={() => {
-        document.documentElement.dataset.theme = next;
-        // After the switch, so the event carries the new `theme` like the screen does.
-        syncAnalyticsTheme();
-        send("theme_changed", { from: theme, to: next });
-        try {
-          localStorage.setItem("dopia:theme", next);
-        } catch {
-          // The choice still holds for this visit.
-        }
-      }}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        {theme === "dark" ? (
-          <>
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-          </>
-        ) : (
-          <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
-        )}
-      </svg>
-    </button>
-  );
-}
 function SafeToggle({ onLogin }: { onLogin: () => void }) {
   const { account, changeAccount, t, notice, openAdultVerification } =
     useSession();
@@ -863,7 +796,7 @@ export function ConsentHost() {
   return account.consent_required ? <Consent /> : null;
 }
 function Consent() {
-  const { t, account, replaceAccount } = useSession();
+  const { t, locale, account, replaceAccount } = useSession();
   const send = useOverlayTrack();
   const consentItems = account.consent_items;
   // Once per showing (TRACKING-PLAN 9-1).
@@ -996,8 +929,11 @@ function Consent() {
                 })}
                 tabIndex={0}
               >
-                {/* Placeholder until the documents are written (TBD). */}
-                <p>{t("account.consent.body_placeholder")}</p>
+                <LegalDocument
+                  doc={item.id}
+                  locale={locale}
+                  fallback={<p>{t("account.consent.body_placeholder")}</p>}
+                />
                 {item.document_url && (
                   <a href={item.document_url} target="_blank" rel="noreferrer">
                     {t("account.consent.open_document")}

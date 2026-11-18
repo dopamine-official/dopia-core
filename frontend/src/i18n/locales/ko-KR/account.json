@@ -61,13 +61,13 @@
     "title": "성인 인증",
     "close": "성인 인증 닫기",
     "rating_mark_alt": "등급 표시",
-    "notice_restricted": "이 콘텐츠는 제한 등급입니다. 만 18세 미만은 이용할 수 없습니다.",
+    "notice_restricted": "이 콘텐츠는 제한 등급입니다. 만 20세 미만은 이용할 수 없습니다.",
     "gender": "성별",
     "gender_male": "남성",
     "gender_female": "여성",
     "birth_date": "생년월일",
     "irreversible": "제출한 성별과 생년월일은 바꿀 수 없어요.",
-    "rejected": "만 18세 미만은 성인 콘텐츠를 이용할 수 없어요.",
+    "rejected": "만 20세 미만은 성인 콘텐츠를 이용할 수 없어요.",
     "failed": "인증하지 못했어요. 다시 시도해 주세요.",
     "submit": "확인"
   }

@@ -61,13 +61,13 @@
     "title": "Adult verification",
     "close": "Close adult verification",
     "rating_mark_alt": "Rating mark",
-    "notice_restricted": "This content is restricted. No one under 18 may view it.",
+    "notice_restricted": "This content is restricted. No one under 20 may view it.",
     "gender": "Gender",
     "gender_male": "Male",
     "gender_female": "Female",
     "birth_date": "Date of birth",
     "irreversible": "Your gender and date of birth cannot be changed after you submit.",
-    "rejected": "Adult content is not available to anyone under 18.",
+    "rejected": "Adult content is not available to anyone under 20.",
     "failed": "Verification failed. Please try again.",
     "submit": "Confirm"
   }

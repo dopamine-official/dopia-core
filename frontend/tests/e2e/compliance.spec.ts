@@ -24,7 +24,7 @@ test.describe("terms", () => {
     await expect(hide).toHaveAttribute("aria-expanded", "true");
     await expect(
       dialog.getByRole("region", { name: "이용약관 내용" }),
-    ).toHaveText(/\[약관 내용\]/);
+    ).toContainText("제1조 목적과 정의");
     await hide.click();
     await expect(dialog.locator("#consent_body_terms")).toBeHidden();
     await dialog.getByRole("checkbox", { name: "이용약관" }).check();
@@ -164,7 +164,7 @@ test("the adult verification modal sends its events (TRACKING-PLAN 9-6 to 9-9)",
   await setStubs(page, []);
   await dialog.getByRole("button", { name: "확인" }).click();
   await expect(
-    dialog.getByText("만 18세 미만은 성인 콘텐츠를 이용할 수 없어요."),
+    dialog.getByText("만 20세 미만은 성인 콘텐츠를 이용할 수 없어요."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "취소" }).click();
   await sent(analytics, "adult_verification_closed", {
@@ -191,7 +191,7 @@ test("SAFE off asks an unverified member for gender and birth date once", async 
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("img", { name: "등급 표시" })).toBeVisible();
   await expect(
-    dialog.getByText("만 18세 미만은 이용할 수 없습니다"),
+    dialog.getByText("만 20세 미만은 이용할 수 없습니다"),
   ).toBeVisible();
   const submit = dialog.getByRole("button", { name: "확인" });
   await expect(submit).toBeDisabled();
@@ -217,7 +217,7 @@ test("an underage submission is refused and SAFE stays on", async ({
   await dialog.getByLabel("생년월일").fill(young.toISOString().slice(0, 10));
   await dialog.getByRole("button", { name: "확인" }).click();
   await expect(
-    dialog.getByText("만 18세 미만은 성인 콘텐츠를 이용할 수 없어요."),
+    dialog.getByText("만 20세 미만은 성인 콘텐츠를 이용할 수 없어요."),
   ).toBeVisible();
   await expect(dialog.getByRole("button", { name: "확인" })).toBeDisabled();
   await dialog.getByRole("button", { name: "취소" }).click();

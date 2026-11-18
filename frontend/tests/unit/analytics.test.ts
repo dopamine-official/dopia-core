@@ -26,6 +26,9 @@ function fake(prefix: string) {
       Object.assign(instance.superProperties, props);
       calls.push([`${prefix}register`, props]);
     }),
+    unregister: vi.fn((key: string) => {
+      delete instance.superProperties[key];
+    }),
     identify: vi.fn((id: string) => {
       distinctId = id;
       calls.push([`${prefix}identify`, id]);
@@ -106,6 +109,14 @@ describe("analytics identity", () => {
       adult_mode: false,
       locale: "ko-KR",
     });
+  });
+
+  it("drops the theme property an earlier version left in the browser", async () => {
+    main.superProperties = { theme: "light" };
+    const analytics = await load();
+    analytics.syncAnalyticsAccount(guest);
+    analytics.track("home_viewed", "home");
+    expect(named("capture").at(-1)?.[2]).not.toHaveProperty("theme");
   });
 
   it("merges the guest into the member on login and starts over as a new guest on logout", async () => {

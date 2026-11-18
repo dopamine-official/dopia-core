@@ -75,6 +75,8 @@ function accountProperties(account: Account) {
 }
 
 function registerAll(account: Account) {
+  // Browsers that visited while there was a light theme still hold its `theme` property.
+  posthog.unregister("theme");
   posthog.register({
     ...releaseProperties(),
     ...accountProperties(account),

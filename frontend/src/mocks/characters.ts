@@ -142,7 +142,16 @@ const previewCharacters: Character[] = [
 export const characters: Character[] =
   process.env.NEXT_PUBLIC_MOCK_FIXTURES === "test"
     ? fixtureCharacters
-    : previewCharacters;
+    : previewCharacters.map((character) => ({
+        ...character,
+        image_url: "/images/mock_gray.svg",
+        texts: Object.fromEntries(
+          Object.entries(character.texts).map(([locale, text]) => [
+            locale,
+            { ...text, name: "제목", tagline: "한줄 요약" },
+          ]),
+        ) as Character["texts"],
+      }));
 export function getCharacter(id: string) {
   return characters.find((character) => character.id === id);
 }

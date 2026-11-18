@@ -1629,6 +1629,42 @@ p {
 .consent_body p {
   margin: 0;
 }
+.consent_body {
+  max-height: 280px;
+}
+.legal_document h2,
+.legal_document h3,
+.legal_document h4,
+.legal_document h5 {
+  margin: 14px 0 6px;
+  color: var(--ink, inherit);
+  font-size: 13px;
+}
+.legal_document h2:first-child {
+  margin-top: 0;
+  font-size: 15px;
+}
+.legal_document p {
+  margin: 0 0 6px;
+}
+.legal_document ol,
+.legal_document ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.legal_document table {
+  width: 100%;
+  margin: 4px 0 10px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.legal_document th,
+.legal_document td {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
 .consent_body a {
   display: inline-block;
   margin-top: 8px;

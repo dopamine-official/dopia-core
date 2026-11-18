@@ -26,7 +26,7 @@ import kotlin.test.assertTrue
 
 /**
  * Adult verification and consent records (DOMAIN/ACCOUNT/BE 5-5 AC-BE-22 to AC-BE-28) against the
- * TW region config: adult age 18, birth date only, required `terms` and `privacy`.
+ * TW region config: adult age 20, birth date only, required `terms` and `privacy`.
  */
 @Import(TestcontainersConfiguration::class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -38,7 +38,7 @@ class AccountComplianceTest(
 ) {
     private val mapper = ObjectMapper()
     private val base = "http://127.0.0.1:$port"
-    private val consents = """{"items":[{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}"""
+    private val consents = """{"items":[{"id":"terms","version":"0.1"},{"id":"privacy","version":"0.1"}]}"""
 
     private inner class Browser {
         val cookies = CookieManager()
@@ -100,10 +100,10 @@ class AccountComplianceTest(
     ) = """{"gender":"$gender","birth_date":"$birth"}"""
 
     @Test
-    fun `adult on the 18th birthday passes and turns adult mode on`() {
+    fun `adult on the 20th birthday passes and turns adult mode on`() {
         val browser = Browser()
         val member = browser.login()
-        val me = browser.json("POST", "/account/me/adult_verification", verification("male", today().minusYears(18)))
+        val me = browser.json("POST", "/account/me/adult_verification", verification("male", today().minusYears(20)))
         assertTrue(me.get("adult_verified").asBoolean())
         assertTrue(me.get("adult_mode").asBoolean())
         assertFalse(me.get("adult_verification_rejected").asBoolean())
@@ -113,7 +113,7 @@ class AccountComplianceTest(
                 .param("id", UUID.fromString(member))
                 .query { rs, _ -> rs.getString("gender") to rs.getObject("birth_date", LocalDate::class.java) }
                 .single()
-        assertEquals("male" to today().minusYears(18), stored)
+        assertEquals("male" to today().minusYears(20), stored)
         // Never shown back to the web.
         assertFalse(me.has("gender") || me.has("birth_date"))
 
@@ -122,10 +122,10 @@ class AccountComplianceTest(
     }
 
     @Test
-    fun `one day short of 18 is rejected, stored and cannot be resubmitted`() {
+    fun `one day short of 20 is rejected, stored and cannot be resubmitted`() {
         val browser = Browser()
         browser.login()
-        val me = browser.json("POST", "/account/me/adult_verification", verification("female", today().minusYears(18).plusDays(1)))
+        val me = browser.json("POST", "/account/me/adult_verification", verification("female", today().minusYears(20).plusDays(1)))
         assertFalse(me.get("adult_verified").asBoolean())
         assertFalse(me.get("adult_mode").asBoolean())
         assertTrue(me.get("adult_verification_rejected").asBoolean())
@@ -190,14 +190,14 @@ class AccountComplianceTest(
         assertTrue(browser.json("GET", "/account/me").get("consent_required").asBoolean())
         assertEquals(
             422 to "invalid_input",
-            browser.code("POST", "/account/me/consents", """{"items":[{"id":"terms","version":"2026-11-10"}]}"""),
+            browser.code("POST", "/account/me/consents", """{"items":[{"id":"terms","version":"0.1"}]}"""),
         )
         assertEquals(
             422 to "invalid_input",
             browser.code(
                 "POST",
                 "/account/me/consents",
-                """{"items":[{"id":"terms","version":"2000-01-01"},{"id":"privacy","version":"2026-11-10"}]}""",
+                """{"items":[{"id":"terms","version":"2000-01-01"},{"id":"privacy","version":"0.1"}]}""",
             ),
         )
         assertEquals(
@@ -205,7 +205,7 @@ class AccountComplianceTest(
             browser.code(
                 "POST",
                 "/account/me/consents",
-                """{"items":[{"id":"unknown","version":"1"},{"id":"terms","version":"2026-11-10"},{"id":"privacy","version":"2026-11-10"}]}""",
+                """{"items":[{"id":"unknown","version":"1"},{"id":"terms","version":"0.1"},{"id":"privacy","version":"0.1"}]}""",
             ),
         )
         assertTrue(browser.json("GET", "/account/me").get("consent_required").asBoolean())
@@ -221,7 +221,7 @@ class AccountComplianceTest(
         val me = browser.json("GET", "/account/me")
         assertEquals(listOf("terms", "privacy"), me.get("consent_items").values().map { it.get("id").asString() })
         assertEquals(
-            "2026-11-10",
+            "0.1",
             me
                 .get("consent_items")
                 .get(0)

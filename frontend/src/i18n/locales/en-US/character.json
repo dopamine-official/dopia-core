@@ -152,11 +152,7 @@
     "not_owner": "This is not your character.",
     "leave_confirm": "You have unsaved changes. Leave anyway?",
     "revision": {
-      "notice": "Until it is approved, what is public now stays as it is",
-      "cancel": "Cancel edit",
-      "cancel_title": "Cancel edit",
-      "cancel_confirm": "Your edit is discarded and the public content comes back",
-      "cancel_failed": "Could not cancel the edit. Try again."
+      "notice": "Until it is approved, what is public now stays as it is"
     },
     "preview": {
       "title": "Preview",

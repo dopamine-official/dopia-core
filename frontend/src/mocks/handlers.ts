@@ -434,15 +434,6 @@ export const handlers = [
       return new HttpResponse(null, { status: 204 });
     }),
   ),
-  http.delete(
-    "/api/v1/characters/:character_id/revision",
-    guarded(async (req, params) => {
-      await run(req, (state) =>
-        engine.cancelRevision(state, String(params.character_id)),
-      );
-      return new HttpResponse(null, { status: 204 });
-    }),
-  ),
   http.post(
     "/api/v1/characters/:character_id/images",
     guarded(async (req, params) => {

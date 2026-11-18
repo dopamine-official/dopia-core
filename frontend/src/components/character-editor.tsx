@@ -22,7 +22,7 @@ import { errorCode } from "@/lib/analytics";
 import { regionConfig } from "@/i18n";
 import { useCreatorOnly, useSession } from "./providers";
 import { Screen, useTrack } from "./page";
-import { ErrorState, Icon, Loading, Modal } from "./ui";
+import { ErrorState, Icon, Loading } from "./ui";
 
 // The text fields a creator writes: name, length limit and the step it is on (CHARACTER web 2-2-5).
 const TEXTS = [
@@ -206,8 +206,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     total: number;
   } | null>(null);
   const queue = useRef<File[]>([]);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelBusy, setCancelBusy] = useState(false);
   // True once a public character's pictures were added or removed here: the change waits for a submit.
   const [imagesTouched, setImagesTouched] = useState(false);
   const alive = useRef(true);
@@ -264,7 +262,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   }
   /**
    * Adding or removing a picture of a public character starts an edit on the server; it is
-   * reviewed only after a submit, and until then it can be cancelled (2-2).
+   * reviewed only after a submit (2-2).
    */
   function imagesChanged() {
     const now = savedRef.current;
@@ -274,6 +272,25 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     const next: CharacterDetail = { ...now, revision_status: "draft" };
     savedRef.current = next;
     setSaved(next);
+  }
+  /**
+   * After a picture of a public character was removed or renamed: the server ends the edit
+   * when the pictures are again what is public, and then nothing is left to submit (2-2).
+   */
+  async function syncRevision() {
+    const id = savedRef.current?.id;
+    if (!id || savedRef.current?.status !== "approved") return;
+    try {
+      const detail = await api(`/characters/${id}`, characterDetailSchema);
+      const now = savedRef.current;
+      if (!alive.current || !now) return;
+      const next = { ...now, revision_status: detail.revision_status };
+      savedRef.current = next;
+      setSaved(next);
+      if (!detail.revision_status) setImagesTouched(false);
+    } catch {
+      // The next load of this screen says it.
+    }
   }
 
   const viewed = useRef(false);
@@ -690,6 +707,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   async function saveImages(id: string) {
     // What an earlier try was refused for is asked again now.
     setImageErrors({});
+    let changed = false;
     for (const image of [...imagesRef.current]) {
       const draft = drafts[image.id];
       if (!draft) continue;
@@ -708,6 +726,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         putImages(
           imagesRef.current.map((item) => (item.id === next.id ? next : item)),
         );
+        imagesChanged();
+        changed = true;
       } catch (error) {
         if (!alive.current) return false;
         const code = errorCode(error);
@@ -731,7 +751,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       }
     }
     setDrafts({});
-    return true;
+    if (changed) await syncRevision();
+    return alive.current;
   }
   async function removeImages(ids: string[]) {
     const id = savedRef.current?.id;
@@ -757,39 +778,14 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       imagesChanged();
       removed++;
     }
+    if (removed) await syncRevision();
+    if (!alive.current) return;
     say(
       failed
         ? t("character.create.media.failed")
         : t("character.create.media.deleted", { count: removed }),
       failed,
     );
-  }
-  async function cancelRevision() {
-    const id = savedRef.current?.id;
-    if (!id || cancelBusy) return;
-    setCancelBusy(true);
-    try {
-      await request(`/characters/${id}/revision`, { method: "DELETE" });
-      send("character_revision_cancelled", { result: "succeeded" });
-    } catch (error) {
-      if (!alive.current) return;
-      const code = errorCode(error);
-      if (code !== "revision_not_found") {
-        send("character_revision_cancelled", { result: "failed", code });
-        setCancelBusy(false);
-        setCancelling(false);
-        if (!leaveOn(error))
-          say(t("character.create.revision.cancel_failed"), true);
-        return;
-      }
-    }
-    if (!alive.current) return;
-    query.removeQueries({ queryKey: ["my_characters"] });
-    await reload();
-    if (!alive.current) return;
-    setImagesTouched(false);
-    setCancelBusy(false);
-    setCancelling(false);
   }
   /** A link out of this screen: with unsaved changes the browser asks first. */
   function guardLeave(event: { preventDefault: () => void }) {
@@ -949,39 +945,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             {t("common.brand")}
           </Link>
         </div>
-        <nav
-          className="ce_steps"
-          aria-label={t("character.create.steps_label")}
-        >
-          {STEPS.map((id, index) => (
-            <button
-              key={id}
-              type="button"
-              className="ce_step"
-              aria-current={step === id ? "step" : undefined}
-              onClick={() => go(id)}
-            >
-              <span className="ce_num">{index + 1}</span>
-              {t(`character.create.step.${id}`)}
-              {id !== "media" && <span className="ce_req">*</span>}
-              {done[id] && (
-                <span className="ce_done" aria-hidden="true">
-                  ✓
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-        {saved?.revision_status && (
-          <button
-            type="button"
-            className="button"
-            disabled={busy || cancelBusy || !!uploading}
-            onClick={() => setCancelling(true)}
-          >
-            {t("character.create.revision.cancel")}
-          </button>
-        )}
         {canSaveDraft && (
           <button
             type="button"
@@ -993,6 +956,27 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
           </button>
         )}
       </header>
+
+      <nav className="ce_steps" aria-label={t("character.create.steps_label")}>
+        {STEPS.map((id, index) => (
+          <button
+            key={id}
+            type="button"
+            className="ce_step"
+            aria-current={step === id ? "step" : undefined}
+            onClick={() => go(id)}
+          >
+            <span className="ce_num">{index + 1}</span>
+            {t(`character.create.step.${id}`)}
+            {id !== "media" && <span className="ce_req">*</span>}
+            {done[id] && (
+              <span className="ce_done" aria-hidden="true">
+                ✓
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
 
       <main
         id="main"
@@ -1623,34 +1607,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         >
           <img src={zoom} alt="" />
         </button>
-      )}
-      {cancelling && (
-        <Modal
-          title={t("character.create.revision.cancel_title")}
-          onClose={() => {
-            if (!cancelBusy) setCancelling(false);
-          }}
-        >
-          <p className="muted">
-            {t("character.create.revision.cancel_confirm")}
-          </p>
-          <div className="modal_actions">
-            <button
-              className="button"
-              disabled={cancelBusy}
-              onClick={() => setCancelling(false)}
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              className="button danger"
-              disabled={cancelBusy}
-              onClick={() => void cancelRevision()}
-            >
-              {t("character.create.revision.cancel")}
-            </button>
-          </div>
-        </Modal>
       )}
     </div>
   );

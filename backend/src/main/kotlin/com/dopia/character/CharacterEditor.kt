@@ -414,26 +414,6 @@ class CharacterEditor(
         characters.clearCache()
     }
 
-    /** Drops the revision of a public character and its changed images; what is public is untouched (4-2-7). */
-    fun cancelRevision(
-        identity: Identity,
-        id: UUID,
-    ) {
-        val files =
-            tx.execute {
-                val live = owned(repository.lock(id), identity)
-                val revision = repository.revision(id)
-                if (revision == null && !live.hasImageRevision) {
-                    throw ApiException("revision_not_found", HttpStatus.NOT_FOUND, message = "this character has no revision")
-                }
-                repository.deleteRevision(id)
-                val images = if (live.hasImageRevision) repository.restorePublicImages(id) else emptyList()
-                repository.touch(id)
-                listOfNotNull(revision?.imageUrl?.takeIf { it != live.imageUrl }) + images
-            }!!
-        files.forEach(storage::delete)
-    }
-
     /**
      * Deletes the pictures an operator's approval or takedown left without a user (4-1-9). The
      * operator works in the console, so the database only notes them and this does the deleting.
@@ -523,7 +503,7 @@ class CharacterEditor(
     ): CharacterImageView {
         assertEnabled(identity)
         return tx.execute {
-            editable(identity, characterId)
+            val row = editable(identity, characterId)
             val current = repository.findImage(characterId, imageId) ?: throw imageNotFound()
             val newName = if (name == null) current.name else imageName(name)
             val newDescription = if (description == null) current.description else imageDescription(description)
@@ -536,6 +516,8 @@ class CharacterEditor(
                 throw ApiException.invalidInput(FieldError("name", "duplicate"))
             }
             repository.touch(characterId)
+            // Back to what is public: nothing is left to review (4-1-8 step 1-2).
+            if (row.approved) repository.dropUnchangedImageRevision(characterId)
             view(current.copy(name = newName, description = newDescription))
         }!!
     }
@@ -548,12 +530,14 @@ class CharacterEditor(
         assertEnabled(identity)
         val url =
             tx.execute {
-                editable(identity, characterId)
+                val row = editable(identity, characterId)
                 val current = repository.findImage(characterId, imageId) ?: throw imageNotFound()
                 repository.deleteImage(imageId)
                 repository.touch(characterId)
                 // Others still see the picture through its public copy.
-                current.imageUrl.takeUnless { repository.publicCopyUses(characterId, it) }
+                val unused = current.imageUrl.takeUnless { repository.publicCopyUses(characterId, it) }
+                if (row.approved) repository.dropUnchangedImageRevision(characterId)
+                unused
             }
         url?.let(storage::delete)
     }

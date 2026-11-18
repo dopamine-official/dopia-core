@@ -481,6 +481,17 @@ class CharacterCreationTest(
         approve(id)
         assertEquals(false, flagged())
 
+        // CH-BE-49: a change that is undone leaves nothing to submit.
+        val rain = add("rain")
+        assertEquals(true, flagged())
+        assertEquals("draft", detail().get("revision_status").asString())
+        assertEquals(204, creator.send("DELETE", "/characters/$id/images/${rain.get("id").asString()}").statusCode())
+        assertEquals(false, flagged())
+        assertEquals(0, copies())
+        assertTrue(detail().get("revision_status").isNull)
+        assertEquals(404, served(rain.get("image_url").asString()))
+        assertEquals(listOf("snow", "alley"), names(visitor))
+
         // CH-BE-46: the creator changes the images; everyone else keeps the two that are public.
         val (addedFile, removedFile) = change(keep = snow, drop = alley, added = "night")
         assertEquals(true, flagged())
@@ -527,19 +538,9 @@ class CharacterCreationTest(
         assertEquals(200, served(removedFile))
         assertEquals(200, served(addedFile))
 
-        // CH-BE-48: cancelling brings the public images back and deletes what the change added.
         fun current() = detail().get("images").toList()
-        val (cancelledFile, keptFile) = change(keep = current()[0], drop = current()[1], added = "rain")
-        assertEquals(204, creator.send("DELETE", "/characters/$id/revision").statusCode())
-        assertEquals(false, flagged())
-        assertEquals(0, copies())
-        assertEquals(listOf("night_kept", "night"), detail().get("images").toList().map { it.get("name").asString() })
-        assertTrue(detail().get("revision_status").isNull)
-        assertEquals(404, served(cancelledFile))
-        assertEquals(200, served(keptFile))
-        assertEquals(404 to "revision_not_found", code(creator.send("DELETE", "/characters/$id/revision")))
-
-        // Taking the character down does the same, through the list of files to delete.
+        // CH-BE-48: taking the character down brings the public images back and deletes what the
+        // change added, through the list of files to delete.
         val (takenDownFile, _) = change(keep = current()[0], drop = current()[1], added = "fog")
         jdbc.sql("UPDATE characters SET status = 'rejected', rejection_reason = '내림' WHERE id = :id").param("id", uuid).update()
         assertEquals(false, flagged())
@@ -850,16 +851,6 @@ class CharacterCreationTest(
                 .exists(folder),
         )
         assertFailsWith<org.springframework.dao.DataAccessException> { operator("approve_character(:id)") }
-
-        // CH-BE-40: the creator can drop a revision; its own file goes, the public one stays.
-        val dropped = json(creator.save(mapOf("name" to "또 고침"), id, action = "submit", thumbnail = picture(16, 16)))
-        val droppedImage = dropped.get("image_url").asString()
-        assertEquals(403 to "not_owner", code(visitor.send("DELETE", "/characters/$id/revision")))
-        assertEquals(204, creator.send("DELETE", "/characters/$id/revision").statusCode())
-        assertEquals(404, served(droppedImage))
-        assertEquals(200, served(revisionImage))
-        assertEquals("새 제목", detail().get("name").asString())
-        assertEquals(404 to "revision_not_found", code(creator.send("DELETE", "/characters/$id/revision")))
 
         // Taking a public character down drops its revision; so does deleting it.
         val takenDown = json(creator.save(mapOf("name" to "내려가기 전"), id, action = "submit", thumbnail = picture(12, 12)))

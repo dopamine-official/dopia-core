@@ -440,6 +440,14 @@ class CharacterRepository(
         jdbc.sql("UPDATE characters SET has_image_revision = true WHERE id = :id").param("id", characterId).update()
     }
 
+    /** Ends the image edit of a public character once its images are again what is public. */
+    fun dropUnchangedImageRevision(characterId: UUID) {
+        fun content(copy: Boolean) = images(characterId, copy).map { Triple(it.name, it.description, it.imageUrl) }
+        if (content(false) != content(true)) return
+        jdbc.sql("DELETE FROM character_images WHERE character_id = :id AND public_copy").param("id", characterId).update()
+        jdbc.sql("UPDATE characters SET has_image_revision = false WHERE id = :id").param("id", characterId).update()
+    }
+
     /**
      * Drops the images changed while the character was public and makes the copies its images
      * again. Returns the files only the dropped images used, for the caller to delete after the

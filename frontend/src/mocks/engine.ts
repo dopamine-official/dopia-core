@@ -777,11 +777,6 @@ export function saveCharacter(
 export function deleteCharacter(state: State, characterId: string) {
   owned(state, characterId).deleted = true;
 }
-/** The preview never approves, so a public character with a revision does not exist here. */
-export function cancelRevision(state: State, characterId: string) {
-  owned(state, characterId);
-  throw new ApiError("revision_not_found", 404);
-}
 /** The preview never approves, so the pictures here are always the creator's own to change. */
 function editable(state: State, characterId: string) {
   return owned(state, characterId);

@@ -152,11 +152,7 @@
     "not_owner": "這不是你的角色。",
     "leave_confirm": "有尚未儲存的變更，要離開嗎？",
     "revision": {
-      "notice": "在核准之前，仍會顯示目前公開的內容",
-      "cancel": "取消修改",
-      "cancel_title": "取消修改",
-      "cancel_confirm": "將捨棄修改內容並恢復為公開的內容",
-      "cancel_failed": "無法取消修改，請再試一次。"
+      "notice": "在核准之前，仍會顯示目前公開的內容"
     },
     "preview": {
       "title": "預覽",

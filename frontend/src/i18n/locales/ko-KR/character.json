@@ -152,11 +152,7 @@
     "not_owner": "내 캐릭터가 아니에요.",
     "leave_confirm": "저장하지 않은 변경이 있어요. 나갈까요?",
     "revision": {
-      "notice": "승인 전까지는 지금 공개된 내용이 그대로 보입니다",
-      "cancel": "수정 취소",
-      "cancel_title": "수정 취소",
-      "cancel_confirm": "고친 내용을 버리고 공개된 내용으로 되돌립니다",
-      "cancel_failed": "수정을 취소하지 못했어요. 다시 시도해 주세요."
+      "notice": "승인 전까지는 지금 공개된 내용이 그대로 보입니다"
     },
     "preview": {
       "title": "미리보기",

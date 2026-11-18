@@ -1901,7 +1901,7 @@ p {
 }
 .ce_app {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: 240px minmax(0, 1fr) 460px;
   grid-template-rows: 72px minmax(0, 1fr) 44px;
   gap: 0 12px;
   height: 100dvh;
@@ -1927,13 +1927,21 @@ p {
   min-width: 0;
   padding-left: 16px;
 }
+.ce_top .header_start {
+  margin-right: auto;
+}
+/* The steps run down the left side, next to the form. */
 .ce_steps {
+  grid-column: 1;
+  grid-row: 2;
   display: flex;
-  flex: 1;
-  justify-content: center;
+  flex-direction: column;
   gap: 4px;
   min-width: 0;
-  overflow-x: auto;
+  min-height: 0;
+  padding: 20px 12px 0 4px;
+  border-right: 1px solid var(--ce-line);
+  overflow: auto;
 }
 .ce_step {
   display: flex;
@@ -1978,11 +1986,16 @@ p {
 }
 /* The form sits on the page background, as the home screen's content does. */
 .ce_main {
-  grid-column: 1;
+  grid-column: 2;
   padding: 0 24px 40px;
 }
+/* The form keeps one reading width in the middle, however wide the window is. */
+.ce_main > * {
+  max-width: 760px;
+  margin-inline: auto;
+}
 .ce_side {
-  grid-column: 2;
+  grid-column: 3;
   border: 1px solid var(--ce-line);
   border-radius: 14px 14px 0 0;
 }
@@ -2675,34 +2688,38 @@ p {
 }
 @media (max-width: 1280px) {
   .ce_app {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 240px minmax(0, 1fr);
   }
   .ce_side {
     display: none;
   }
 }
+/* No room for a side column: the steps go back above the form, in one row. */
 @media (max-width: 1000px) {
   .ce_app {
-    grid-template-rows: auto minmax(0, 1fr) 44px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) 44px;
   }
   .ce_top {
-    flex-wrap: wrap;
     padding-top: 10px;
-  }
-  .ce_top .header_start {
-    margin-right: auto;
+    padding-bottom: 10px;
   }
   .ce_steps {
-    order: 9;
-    flex-basis: 100%;
-    justify-content: flex-start;
-    padding-bottom: 8px;
+    flex-direction: row;
+    padding: 0 0 8px;
+    border-right: 0;
+  }
+  .ce_main {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .ce_foot {
+    grid-row: 4;
   }
 }
 @media (max-width: 650px) {
   .ce_app {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) 40px;
+    grid-template-rows: auto auto minmax(0, 1fr) 40px;
     padding: 0 8px;
   }
   .ce_top {

@@ -26,19 +26,25 @@ export function LegalDocument({
   locale: Locale;
   fallback: ReactNode;
 }) {
-  const [source, setSource] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Keyed by what was asked for, so a result for another document or locale is never shown.
+  const key = `${doc}:${locale}`;
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    source: string | null;
+  } | null>(null);
   useEffect(() => {
     let live = true;
     load(doc, locale).then(
-      (value) => live && setSource(value),
-      () => live && setFailed(true),
+      (source) => live && setLoaded({ key, source }),
+      () => live && setLoaded({ key, source: null }),
     );
     return () => {
       live = false;
     };
-  }, [doc, locale]);
-  if (failed || source === null) return <>{failed ? fallback : null}</>;
+  }, [doc, locale, key]);
+  if (loaded?.key !== key) return null;
+  if (loaded.source === null) return <>{fallback}</>;
+  const source = loaded.source;
   return <div className="legal_document">{blocks(source)}</div>;
 }
 

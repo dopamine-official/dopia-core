@@ -1293,7 +1293,7 @@ p {
   .site_header {
     height: 64px;
     padding: 0 10px;
-    gap: 6px;
+    gap: 8px;
   }
   /* A long name (English) goes to two lines rather than push the buttons out;
      keep-all stops Korean and Chinese breaking inside the word. */
@@ -1307,10 +1307,7 @@ p {
     gap: 3px;
   }
   .header_actions {
-    gap: 3px;
-  }
-  .site_header .icon_button {
-    width: 36px;
+    gap: 5px;
   }
   .language_select svg {
     display: none;
@@ -1321,7 +1318,7 @@ p {
   }
   .login_link {
     font-size: 12px;
-    padding: 10px;
+    padding: 10px 12px;
   }
   .avatar {
     width: 36px;
@@ -1330,7 +1327,7 @@ p {
   }
   .safe_toggle {
     min-height: 34px;
-    padding: 0 6px;
+    padding: 0 7px;
     gap: 5px;
     font-size: 9px;
   }
@@ -1508,10 +1505,10 @@ p {
     width: 32px;
   }
   .safe_toggle {
-    padding: 0 4px;
+    padding: 0 6px;
   }
   .header_actions {
-    gap: 2px;
+    gap: 3px;
   }
   .language_select select {
     max-width: 77px;

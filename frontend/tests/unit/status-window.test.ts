@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { splitStatusWindow, visibleWhileStreaming } from "@/lib/status-window";
+import {
+  markStatusChanges,
+  splitStatusWindow,
+  visibleWhileStreaming,
+} from "@/lib/status-window";
 
 describe("status window", () => {
   it("takes the block out of the message and returns its text", () => {
@@ -101,5 +105,31 @@ describe("status window", () => {
     expect(splitStatusWindow("a `b`").body).toBe("a `b`");
     expect(visibleWhileStreaming("a ```\n")).toBe("a");
     expect(visibleWhileStreaming("a ```\ncode")).toBe("a ```\ncode");
+  });
+});
+describe("status changes", () => {
+  it("marks each amount that went up or down", () => {
+    expect(
+      markStatusChanges(
+        "관계: 1단계\n호감도: 40\n신뢰: 10%\n장소: 서점",
+        "관계: 2단계\n호감도: 45\n신뢰: 7%\n장소: 카페",
+      ),
+    ).toBe("관계: 2단계 (+1)\n호감도: 45 (+5)\n신뢰: 7% (-3%)\n장소: 카페");
+  });
+  it("leaves unchanged and uncomparable lines alone", () => {
+    expect(
+      markStatusChanges(
+        "호감도: 40\n체력: 120/200\n돈: 3%\n**기분**: 좋음",
+        "호감도: 40\n체력: 100/200\n돈: 5\n**기분**: 나쁨\n새 항목: 3",
+      ),
+    ).toBe("호감도: 40\n체력: 100/200\n돈: 5\n**기분**: 나쁨\n새 항목: 3");
+  });
+  it("compares labels without emphasis and keeps decimals clean", () => {
+    expect(markStatusChanges("**호감도**: 0.1", "호감도: *0.3*")).toBe(
+      "호감도: *0.3* (+0.2)",
+    );
+  });
+  it("marks nothing without an earlier window", () => {
+    expect(markStatusChanges(null, "호감도: 45")).toBe("호감도: 45");
   });
 });

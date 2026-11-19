@@ -7,7 +7,11 @@ import { api, readStream, request } from "@/lib/api";
 import { ApiError, roomSchema, type Message, type Room } from "@/lib/contracts";
 import { errorCode, track } from "@/lib/analytics";
 import { errorMessageKey } from "@/lib/errors";
-import { splitStatusWindow, visibleWhileStreaming } from "@/lib/status-window";
+import {
+  markStatusChanges,
+  splitStatusWindow,
+  visibleWhileStreaming,
+} from "@/lib/status-window";
 import {
   holdBackSceneImage,
   splitSceneImages,
@@ -347,6 +351,14 @@ function ChatRoom({ roomId }: { roomId: string }) {
     result.data?.messages.filter(
       (message) => message.turn_status !== "failed",
     ) ?? [];
+  // Each message's view of the character's last status window before it.
+  const previousStatuses: (string | null)[] = [];
+  let lastStatus: string | null = null;
+  for (const message of savedMessages) {
+    previousStatuses.push(lastStatus);
+    if (message.role === "assistant")
+      lastStatus = splitStatusWindow(message.content).status ?? lastStatus;
+  }
   const hasPendingUser = savedMessages.some(
     (message) => message.client_message_id === pending?.client_message_id,
   );
@@ -454,6 +466,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
                   <Bubble
                     key={message.id}
                     message={message}
+                    previousStatus={previousStatuses[index]}
                     locale={locale}
                     // The room's first message is the creator's text, not a reply: no pictures.
                     {...(index === 0 && message.client_message_id === null
@@ -634,12 +647,15 @@ function SceneParts({
 }
 function Bubble({
   message,
+  previousStatus = null,
   locale,
   images,
   saved,
   onImageLoad,
 }: {
   message: Message;
+  /** The status window of the character's reply before this one, to mark what changed. */
+  previousStatus?: string | null;
   locale: string;
   images: SceneImage[];
   /** Read from the room, so its picture addresses are the server's (lib/scene-images.ts). */
@@ -672,7 +688,7 @@ function Bubble({
           role="note"
           aria-label={t("chat.status_window")}
         >
-          {status}
+          {markStatusChanges(previousStatus, status)}
         </p>
       )}
       <time dateTime={message.created_at}>

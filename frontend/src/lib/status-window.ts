@@ -53,3 +53,57 @@ export function visibleWhileStreaming(partial: string) {
   const { body } = strip(partial);
   return body.slice(0, body.search(OPENING)).trimEnd();
 }
+
+// A line "label: value" whose value holds exactly one number, maybe with a % right after it.
+// Anything else (a place, an outfit, "120/200") has no single amount to compare.
+const LINE = /^(.+?)\s*[:：]\s*(.*)$/;
+const NUMBER = /[-+]?\d+(?:[.,]\d+)?/g;
+
+function amount(value: string) {
+  const numbers = [...value.matchAll(NUMBER)];
+  if (numbers.length !== 1) return null;
+  const [match] = numbers;
+  const percent = value
+    .slice(match.index + match[0].length)
+    .trimStart()
+    .startsWith("%");
+  return { value: Number(match[0].replace(",", ".")), percent };
+}
+
+/** The label without the emphasis marks a model may put around it. */
+const labelOf = (label: string) => label.replace(/[*_`]/g, "").trim();
+
+function amounts(status: string) {
+  const found = new Map<string, ReturnType<typeof amount>>();
+  for (const line of status.split("\n")) {
+    const match = LINE.exec(line);
+    if (!match) continue;
+    const label = labelOf(match[1]);
+    // A label written twice is ambiguous: compare neither.
+    found.set(label, found.has(label) ? null : amount(match[2]));
+  }
+  return found;
+}
+
+/**
+ * The status window with each changed amount marked against the one before it: "(+5)", or
+ * "(-3%)" for a percentage. Only the screen shows the marks; the stored reply stays as written.
+ */
+export function markStatusChanges(previous: string | null, current: string) {
+  if (!previous) return current;
+  const before = amounts(previous);
+  return current
+    .split("\n")
+    .map((line) => {
+      const match = LINE.exec(line);
+      if (!match) return line;
+      const now = amount(match[2]);
+      const then = before.get(labelOf(match[1]));
+      if (!now || !then || now.percent !== then.percent) return line;
+      // Rounded so 0.1 + 0.2 does not show as 0.30000000000000004.
+      const change = Math.round((now.value - then.value) * 100) / 100;
+      if (change === 0) return line;
+      return `${line} (${change > 0 ? "+" : ""}${change}${now.percent ? "%" : ""})`;
+    })
+    .join("\n");
+}

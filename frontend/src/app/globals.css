@@ -2494,7 +2494,7 @@ p {
   min-height: 38px;
   padding: 8px 14px;
 }
-@media (max-width: 1280px) {
+@media (max-width: 1400px) {
   .ce_app {
     grid-template-columns: 240px minmax(0, 1fr);
   }

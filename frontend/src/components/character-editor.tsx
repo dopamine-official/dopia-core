@@ -104,6 +104,11 @@ function imageName(value: string) {
     .replace(/[^A-Za-z0-9_-]/g, "")
     .slice(0, 40);
 }
+function imagesKey(images: CharacterImage[]) {
+  return JSON.stringify(
+    images.map((image) => [image.id, image.name, image.description]),
+  );
+}
 function fieldErrors(error: unknown): { field: string; reason: string }[] {
   if (!(error instanceof ApiError) || !Array.isArray(error.detail)) return [];
   return error.detail.filter(
@@ -206,8 +211,10 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     total: number;
   } | null>(null);
   const queue = useRef<File[]>([]);
-  // True once a public character's pictures were added or removed here: the change waits for a submit.
-  const [imagesTouched, setImagesTouched] = useState(false);
+  // The pictures a public character had when nothing of them waited for a submit.
+  const [imagesBase, setImagesBase] = useState(() =>
+    imagesKey(initial?.images ?? []),
+  );
   const alive = useRef(true);
   const mainRef = useRef<HTMLElement>(null);
   const thumbnailInput = useRef<HTMLInputElement>(null);
@@ -242,6 +249,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     values.age !== base.age ||
     values.status_window_enabled !== base.status_window_enabled ||
     isAdult !== base.is_adult;
+  // Pictures put back as they were leave nothing to submit.
+  const imagesTouched = imagesKey(images) !== imagesBase;
   const imageUrl = thumbnail?.url ?? saved?.image_url ?? null;
   const say = (text: string, error = false) => setLine({ text, error });
   const savedAt = () =>
@@ -266,9 +275,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
    */
   function imagesChanged() {
     const now = savedRef.current;
-    if (now?.status !== "approved") return;
-    setImagesTouched(true);
-    if (now.revision_status) return;
+    if (now?.status !== "approved" || now.revision_status) return;
     const next: CharacterDetail = { ...now, revision_status: "draft" };
     savedRef.current = next;
     setSaved(next);
@@ -287,7 +294,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       const next = { ...now, revision_status: detail.revision_status };
       savedRef.current = next;
       setSaved(next);
-      if (!detail.revision_status) setImagesTouched(false);
+      if (!detail.revision_status) setImagesBase(imagesKey(imagesRef.current));
     } catch {
       // The next load of this screen says it.
     }

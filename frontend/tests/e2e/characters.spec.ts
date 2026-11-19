@@ -364,6 +364,27 @@ test("the situation images of a public character are changed through a revision"
   await step(page, "등록").click();
   await expect(submit).toBeDisabled();
 
+  // With a rejected edit too, an image added and removed again is nothing to submit.
+  await setStubs(page, [
+    {
+      path: `/api/v1/characters/${id}`,
+      method: "GET",
+      merge: { status: "approved", revision_status: "rejected" },
+    },
+  ]);
+  await page.goBack();
+  await edit.click();
+  await expect(submit).toBeDisabled();
+  await step(page, "미디어 관리").click();
+  await page
+    .locator(".ce_pane > input[type=file]")
+    .setInputFiles(picture("snow.png"));
+  await expect(page.locator(".ce_item")).toHaveCount(1);
+  await expect(submit).toBeEnabled();
+  await page.getByRole("button", { name: "삭제", exact: true }).last().click();
+  await expect(page.locator(".ce_item")).toHaveCount(0);
+  await expect(submit).toBeDisabled();
+
   // The list says when a change is not submitted yet.
   await setStubs(page, [
     {

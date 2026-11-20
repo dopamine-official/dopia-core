@@ -425,8 +425,9 @@ export function openRoom(state: State, characterId: string, locale: Locale) {
     )
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
   if (existing) return { room_id: existing.room_id, created: false };
+  // The character is there; adult mode is what is missing (CHAT 4-1-1).
   if (character.is_adult && !user.adult_mode)
-    throw new ApiError("character_not_found", 404);
+    throw new ApiError("adult_mode_required", 403);
   const room: StoredRoom = {
     room_id: id(),
     owner_id: user.account_id,

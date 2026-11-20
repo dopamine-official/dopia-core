@@ -17,6 +17,7 @@
     "policy_close": "關閉政策"
   },
   "adult": "成人角色",
+  "adult_mode_required": "這是成人角色，關閉 SAFE 後才能對話。",
   "adult_mode_unavailable": "目前無法使用成人模式。",
   "not_found": "目前無法與這個角色對話。",
   "adult_verification_rejected": "未符合成人認證條件，無法關閉 SAFE。",

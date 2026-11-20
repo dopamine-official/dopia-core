@@ -299,6 +299,35 @@ class CharacterCreationTest(
     }
 
     @Test
+    fun `a new room with an adult character says adult mode is off instead of not found`() {
+        // Verifying turns adult mode on.
+        val creator = Browser().login().verifyAdult()
+        val id = json(creator.save(everything + mapOf("is_adult" to "true"), thumbnail = picture(64, 64))).get("id").asString()
+        assertEquals(200, creator.save(emptyMap(), id, action = "submit").statusCode())
+        approve(id)
+        val open = """{"character_id":"$id"}""".toByteArray()
+
+        fun Browser.open() = send("POST", "/chats/open", open, "application/json")
+
+        fun Browser.adultMode(on: Boolean) {
+            val body = """{"adult_mode":$on}""".toByteArray()
+            assertEquals(200, send("PATCH", "/account/me/adult_mode", body, "application/json").statusCode())
+        }
+
+        assertEquals(403 to "adult_mode_required", code(Browser().login().open()))
+        creator.adultMode(false)
+        assertEquals(403 to "adult_mode_required", code(creator.open()))
+        creator.adultMode(true)
+        val room = json(creator.open()).get("room_id").asString()
+        // A room already there opens whatever the mode is.
+        creator.adultMode(false)
+        assertEquals(room, json(creator.open()).get("room_id").asString())
+        // Anything else in the way is still "not found".
+        assertEquals(204, creator.send("DELETE", "/characters/$id").statusCode())
+        assertEquals(404 to "room_not_found", code(Browser().login().open()))
+    }
+
+    @Test
     fun `the first status values reach chat inside the tags, only while the status window is on`() {
         // CH-BE-31
         val member = Browser().login()

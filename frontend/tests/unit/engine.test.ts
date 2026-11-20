@@ -98,7 +98,7 @@ describe("account and conversation contracts", () => {
     });
     recordConsents(state, account(state).consent_items);
     expect(() => openRoom(state, adult.id, "ko-KR")).toThrow(
-      "character_not_found",
+      "adult_mode_required",
     );
     expect(logout(state)).toMatchObject({
       is_guest: true,
@@ -311,7 +311,7 @@ describe("account and conversation contracts", () => {
     expect(openRoom(state, adult.id, "ko-KR").room_id).toBe(roomId);
     ownedRoom(state, roomId).deleted = true;
     expect(() => openRoom(state, adult.id, "ko-KR")).toThrow(
-      "character_not_found",
+      "adult_mode_required",
     );
   });
   it("attributes completion to the room owner after logout", () => {

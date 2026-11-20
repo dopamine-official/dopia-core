@@ -357,6 +357,20 @@ p {
 .side_shift {
   padding-left: var(--sidebar);
 }
+/* The chat room: the column reaches the top and carries the logo and the fold button. */
+.home_sidebar.with_head {
+  top: 0;
+  padding-top: 0;
+  z-index: 11;
+}
+.sidebar_head {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 0 12px;
+  margin-bottom: 18px;
+}
 .home_sidebar > h2 {
   font-size: 12px;
   font-weight: 500;
@@ -935,7 +949,7 @@ p {
 .chat_header {
   height: 62px;
   position: fixed;
-  inset: 0 0 auto;
+  inset: 0 0 auto var(--sidebar);
   z-index: 10;
   display: flex;
   align-items: center;
@@ -960,7 +974,7 @@ p {
   object-position: 75% center;
 }
 .chat_identity h1 {
-  font-size: 18px;
+  font-size: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1097,6 +1111,18 @@ p {
   padding: 12px;
   z-index: 5;
   box-shadow: 0 2px 5px #00000004;
+}
+/* Covers the gap under the floating composer, so messages do not scroll past below it. */
+.chat_page::after {
+  content: "";
+  position: fixed;
+  bottom: 0;
+  left: calc(50% + var(--sidebar) / 2);
+  transform: translateX(-50%);
+  width: min(878px, calc(100% - 32px - var(--sidebar)));
+  height: calc(max(8px, env(safe-area-inset-bottom)) + 30px);
+  background: var(--bg);
+  z-index: 4;
 }
 .composer textarea {
   display: block;
@@ -1398,9 +1424,6 @@ p {
     padding: 0 8px;
     gap: 6px;
   }
-  .chat_brand {
-    display: none;
-  }
   .chat_identity h1 {
     font-size: 14px;
   }
@@ -1421,6 +1444,9 @@ p {
     width: calc(100% - 20px);
     padding: 10px;
     border-radius: 19px;
+  }
+  .chat_page::after {
+    width: calc(100% - 20px);
   }
   .composer textarea {
     font-size: 16px;

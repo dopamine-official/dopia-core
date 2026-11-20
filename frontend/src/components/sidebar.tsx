@@ -83,6 +83,7 @@ export function Sidebar({
   onNavigate,
   onDeleted,
   drawerTitle,
+  head,
 }: {
   state: SidebarState;
   /** The room on screen: shown in the list but not a link. */
@@ -92,12 +93,18 @@ export function Sidebar({
   onDeleted?: (chat: RecentChat) => void | Promise<void>;
   /** Shown in place of the drawer's title, for a screen whose header has no logo. */
   drawerTitle?: ReactNode;
+  /** The top row of the column, for a screen whose sidebar reaches the top (the chat room). */
+  head?: ReactNode;
 }) {
   const { t } = useSession();
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
   return (
     <>
-      <aside className="home_sidebar" aria-label={t("common.recent")}>
+      <aside
+        className={head ? "home_sidebar with_head" : "home_sidebar"}
+        aria-label={t("common.recent")}
+      >
+        {head && <div className="sidebar_head">{head}</div>}
         <h2>{t("common.recent")}</h2>
         <RecentChats
           currentId={currentId}

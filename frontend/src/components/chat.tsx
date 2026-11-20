@@ -381,22 +381,17 @@ function ChatRoom({ roomId }: { roomId: string }) {
   return (
     <div className="chat_page">
       <header className="chat_header">
-        <button
-          className="icon_button"
-          aria-label={t("common.menu")}
-          aria-expanded={sidebar.open}
-          onClick={() => sidebar.toggle(!sidebar.open)}
-        >
-          <Icon name="menu" />
-        </button>
-        {/* On a narrow screen the logo sits in the drawer instead. */}
-        <Link
-          className="brand chat_brand"
-          href="/"
-          onClick={() => track("logo_clicked", "chat_room")}
-        >
-          {t("common.brand")}
-        </Link>
+        {/* The logo and the button that folds the list sit in the sidebar (or the drawer). */}
+        {!sidebar.open && (
+          <button
+            className="icon_button"
+            aria-label={t("common.menu")}
+            aria-expanded={false}
+            onClick={() => sidebar.toggle(true)}
+          >
+            <Icon name="menu" />
+          </button>
+        )}
         <div className="chat_identity">
           {result.data && (
             <>
@@ -413,6 +408,25 @@ function ChatRoom({ roomId }: { roomId: string }) {
         state={sidebar}
         currentId={roomId}
         onDeleted={leaveDeletedRoom}
+        head={
+          <>
+            <Link
+              className="brand"
+              href="/"
+              onClick={() => track("logo_clicked", "chat_room")}
+            >
+              {t("common.brand")}
+            </Link>
+            <button
+              className="icon_button"
+              aria-label={t("common.menu")}
+              aria-expanded
+              onClick={() => sidebar.toggle(false)}
+            >
+              <Icon name="menu" />
+            </button>
+          </>
+        }
         drawerTitle={
           <Link
             className="brand"

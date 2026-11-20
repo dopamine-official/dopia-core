@@ -54,20 +54,26 @@ export function visibleWhileStreaming(partial: string) {
   return body.slice(0, body.search(OPENING)).trimEnd();
 }
 
-// A line "label: value" whose value holds exactly one number, maybe with a % right after it.
-// Anything else (a place, an outfit, "120/200") has no single amount to compare.
+// A line "label: value" whose value is an amount: a number, then at most a short unit ("45",
+// "15%", "2회", "1,500원"). A value that is text with a number in it (a place, a thought,
+// "120/200") has no amount to compare.
 const LINE = /^(.+?)\s*[:：]\s*(.*)$/;
-const NUMBER = /[-+]?\d+(?:[.,]\d+)?/g;
+const AMOUNT =
+  /^([-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|[-+]?\d+(?:[.,]\d+)?)\s*(%|[^\s\d]{0,3})$/;
+const GROUPED = /^[-+]?\d{1,3}(?:,\d{3})+/;
 
 function amount(value: string) {
-  const numbers = [...value.matchAll(NUMBER)];
-  if (numbers.length !== 1) return null;
-  const [match] = numbers;
-  const percent = value
-    .slice(match.index + match[0].length)
-    .trimStart()
-    .startsWith("%");
-  return { value: Number(match[0].replace(",", ".")), percent };
+  const match = AMOUNT.exec(value.replace(/[*_`]/g, "").trim());
+  if (!match) return null;
+  // "1,500" groups thousands; "1,5" is a decimal comma.
+  const grouped = GROUPED.test(match[1]);
+  return {
+    value: Number(
+      grouped ? match[1].replaceAll(",", "") : match[1].replace(",", "."),
+    ),
+    percent: match[2] === "%",
+    grouped,
+  };
 }
 
 /** The label without the emphasis marks a model may put around it. */
@@ -103,7 +109,8 @@ export function markStatusChanges(previous: string | null, current: string) {
       // Rounded so 0.1 + 0.2 does not show as 0.30000000000000004.
       const change = Math.round((now.value - then.value) * 100) / 100;
       if (change === 0) return line;
-      return `${line} (${change > 0 ? "+" : ""}${change}${now.percent ? "%" : ""})`;
+      const text = now.grouped ? change.toLocaleString("en-US") : `${change}`;
+      return `${line} (${change > 0 ? "+" : ""}${text}${now.percent ? "%" : ""})`;
     })
     .join("\n");
 }

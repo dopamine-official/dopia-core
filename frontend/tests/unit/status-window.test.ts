@@ -129,6 +129,21 @@ describe("status changes", () => {
       "호감도: *0.3* (+0.2)",
     );
   });
+  it("compares only values that are an amount, not text with a number in it", () => {
+    expect(
+      markStatusChanges(
+        "현위치 : 3층 복도\n속마음 : 3년 만인데 왜 이래\n횟수 : 1회\n시간 : 10시 반",
+        "현위치 : 4층 옥상\n속마음 : 5분만 더 있고 싶다\n횟수 : 2회\n시간 : 11시 반",
+      ),
+    ).toBe(
+      "현위치 : 4층 옥상\n속마음 : 5분만 더 있고 싶다\n횟수 : 2회 (+1)\n시간 : 11시 반",
+    );
+  });
+  it("reads a comma between thousands as grouping", () => {
+    expect(
+      markStatusChanges("돈: 1,000원\n키: 1,5", "돈: 12,500원\n키: 1,7"),
+    ).toBe("돈: 12,500원 (+11,500)\n키: 1,7 (+0.2)");
+  });
   it("marks nothing without an earlier window", () => {
     expect(markStatusChanges(null, "호감도: 45")).toBe("호감도: 45");
   });

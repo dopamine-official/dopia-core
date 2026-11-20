@@ -378,7 +378,12 @@ p {
 .side_shift {
   padding-left: var(--sidebar);
 }
+/* Stays in place while the list under it scrolls. */
 .sidebar_head {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: #1a1918;
   height: var(--header-height);
   display: flex;
   align-items: center;

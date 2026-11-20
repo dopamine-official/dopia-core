@@ -339,29 +339,44 @@ p {
 .safe_toggle.on .safe_track span {
   transform: translateX(11px);
 }
+/* The column runs from the top of the screen and carries the logo and the fold button; a
+   screen's header starts beside it. */
 .home_sidebar {
   position: fixed;
   left: 0;
-  top: var(--header-height);
+  top: 0;
   bottom: 0;
+  z-index: 11;
   width: var(--sidebar-width);
   background: #1a1918;
-  padding: 28px 12px 20px;
+  padding: 0 12px 20px;
   overflow-y: auto;
   transition: transform 0.2s;
 }
+/* Folded: out of sight and out of reach of the keyboard and screen readers. */
 [data-sidebar="closed"] .home_sidebar {
   transform: translateX(-100%);
+  visibility: hidden;
+  transition:
+    transform 0.2s,
+    visibility 0s 0.2s;
+}
+.site_header.beside_sidebar {
+  left: var(--sidebar);
+}
+/* Stays at the right edge when the logo beside it is hidden. */
+.site_header .header_actions {
+  margin-left: auto;
+}
+@media (min-width: 651px) {
+  html:not([data-sidebar="closed"]) .beside_sidebar .header_start,
+  html:not([data-sidebar="closed"]) .sidebar_opener {
+    display: none;
+  }
 }
 /* A screen whose content is centred: it centres in the room beside the sidebar. */
 .side_shift {
   padding-left: var(--sidebar);
-}
-/* The chat room: the column reaches the top and carries the logo and the fold button. */
-.home_sidebar.with_head {
-  top: 0;
-  padding-top: 0;
-  z-index: 11;
 }
 .sidebar_head {
   height: var(--header-height);

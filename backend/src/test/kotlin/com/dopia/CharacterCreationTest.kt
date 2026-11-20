@@ -239,8 +239,12 @@ class CharacterCreationTest(
         assertTrue(done.get("image_url").asString().contains("/characters/$draft/thumbnail-"))
         assertTrue(done.get("image_url").asString().endsWith(".webp"))
 
-        // CH-BE-18: under review or public takes a submit only; a submit of a public one stays public.
-        assertEquals(409 to "save_not_allowed", code(member.save(mapOf("name" to "새 이름"), draft)))
+        // CH-BE-18: one under review is still saved, as long as it stays complete; a public one takes
+        // a submit only, and that submit leaves it public.
+        val saved = json(member.save(mapOf("name" to "심사 중 이름"), draft))
+        assertEquals("심사 중 이름", saved.get("name").asString())
+        assertEquals("pending", saved.get("status").asString())
+        assertEquals(mapOf("name" to "required"), errors(member.save(mapOf("name" to ""), draft)))
         approve(draft)
         assertEquals(409 to "save_not_allowed", code(member.save(mapOf("name" to "새 이름"), draft)))
         val edited = json(member.save(mapOf("name" to "새 이름"), draft, action = "submit"))
@@ -331,25 +335,30 @@ class CharacterCreationTest(
 
         // CH-BE-32
         assertEquals(mapOf("name" to "required"), errors(add(null)))
-        assertEquals(mapOf("name" to "too_long"), errors(add("가".repeat(41))))
+        assertEquals(mapOf("name" to "too_long"), errors(add("a".repeat(41))))
+        // English letters, digits, _ and - only; a space becomes _.
+        listOf("눈길", "sn{ow}", "snow!").forEach { assertEquals(mapOf("name" to "invalid_value"), errors(add(it)), it) }
+        val spaced = json(add(" snow path "))
+        assertEquals("snow_path", spaced.get("name").asString())
+        member.send("DELETE", "/characters/$id/images/${spaced.get("id").asString()}")
         assertEquals(mapOf("file" to "invalid_image"), errors(add("gif", picture(10, 10, "gif"))))
-        val first = json(add("눈길"))
+        val first = json(add("snow"))
         assertEquals(0, first.get("position").asInt())
         assertEquals("", first.get("description").asString())
         assertTrue(first.get("image_url").asString().contains("/characters/$id/images/"))
-        assertEquals(mapOf("name" to "duplicate"), errors(add("눈길")))
-        val second = json(add("골목"))
+        assertEquals(mapOf("name" to "duplicate"), errors(add("snow")))
+        val second = json(add("alley"))
         assertEquals(1, second.get("position").asInt())
 
         // CH-BE-34
         val firstId = first.get("id").asString()
         val renamed =
             json(member.send("PATCH", "/characters/$id/images/$firstId", """{"description":"눈 오는 거리"}""".toByteArray(), "application/json"))
-        assertEquals("눈길", renamed.get("name").asString())
+        assertEquals("snow", renamed.get("name").asString())
         assertEquals("눈 오는 거리", renamed.get("description").asString())
         assertEquals(
             mapOf("name" to "duplicate"),
-            errors(member.send("PATCH", "/characters/$id/images/$firstId", """{"name":"골목"}""".toByteArray(), "application/json")),
+            errors(member.send("PATCH", "/characters/$id/images/$firstId", """{"name":"alley"}""".toByteArray(), "application/json")),
         )
         val long = """{"description":"${"가".repeat(201)}"}"""
         assertEquals(
@@ -357,7 +366,7 @@ class CharacterCreationTest(
             errors(member.send("PATCH", "/characters/$id/images/$firstId", long.toByteArray(), "application/json")),
         )
         assertEquals(
-            listOf("눈길", "골목"),
+            listOf("snow", "alley"),
             json(member.send("GET", "/characters/$id")).get("images").toList().map { it.get("name").asString() },
         )
 
@@ -390,16 +399,165 @@ class CharacterCreationTest(
                     "SELECT :id, 'n' || n, '/x', 100 + n FROM generate_series(1, 99) AS n",
             ).param("id", uuid)
             .update()
-        assertEquals(409 to "image_limit_reached", code(add("하나 더", picture(8, 8))))
+        assertEquals(409 to "image_limit_reached", code(add("more", picture(8, 8))))
         jdbc.sql("DELETE FROM character_images WHERE character_id = :id AND name LIKE 'n%'").param("id", uuid).update()
-        assertEquals(200, member.save(everything, id, action = "submit", thumbnail = picture(64, 64)).statusCode())
+        // A description is optional: a picture without one is submitted as it is.
         val left = second.get("id").asString()
-        assertEquals(409 to "save_not_allowed", code(add("심사 중", picture(8, 8))))
-        assertEquals(409 to "save_not_allowed", code(member.send("DELETE", "/characters/$id/images/$left")))
+        member.send("PATCH", "/characters/$id/images/$left", """{"description":"좁은 골목"}""".toByteArray(), "application/json")
+        assertEquals(200, member.save(everything, id, action = "submit", thumbnail = picture(64, 64)).statusCode())
+
+        // CHAT gets them in order: the AI the name and description, the room view the name and file.
+        val forChat = characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = null).images
+        assertEquals(listOf("alley" to "좁은 골목"), forChat.map { it.name to it.description })
+        assertEquals(second.get("image_url").asString(), forChat.single().imageUrl)
+        // Under review the pictures still change.
+        val added = json(add("pending", picture(8, 8))).get("id").asString()
+        val underReview =
+            member.send("PATCH", "/characters/$id/images/$added", """{"name":"x","description":"밤"}""".toByteArray(), "application/json")
+        assertEquals(200, underReview.statusCode())
+        assertEquals(204, member.send("DELETE", "/characters/$id/images/$added").statusCode())
+    }
+
+    @Test
+    fun `images changed on a public character wait for approval while the public ones stay`() {
+        val creator = Browser().login()
+        val id = creator.submitted()
+        val uuid = UUID.fromString(id)
+        val creatorId = UUID.fromString(creator.memberId)
+        val visitor = UUID.randomUUID()
+
+        fun add(name: String) =
+            json(creator.multipart("POST", "/characters/$id/images", mapOf("name" to name), mapOf("file" to picture(8, 8))))
+
+        fun detail() = json(creator.send("GET", "/characters/$id"))
+
+        fun names(requester: UUID) = characters.forChat(uuid, "ko-KR", adultAllowed = false, requesterId = requester).images.map { it.name }
+
+        fun copies() =
+            jdbc
+                .sql("SELECT count(*) FROM character_images WHERE character_id = :id AND public_copy")
+                .param("id", uuid)
+                .query(Int::class.java)
+                .single()
+
+        fun flagged() =
+            jdbc
+                .sql("SELECT has_image_revision FROM characters WHERE id = :id")
+                .param("id", uuid)
+                .query(Boolean::class.java)
+                .single()
+
+        fun operator(
+            call: String,
+            reason: String? = null,
+        ) {
+            val statement = jdbc.sql("SELECT $call").param("id", uuid)
+            (if (reason == null) statement else statement.param("reason", reason)).query { _, _ -> 1 }.list()
+        }
+
+        fun served(url: String) =
+            HttpClient
+                .newHttpClient()
+                .send(HttpRequest.newBuilder(URI("http://127.0.0.1:$port$url")).build(), HttpResponse.BodyHandlers.discarding())
+                .statusCode()
+
+        /** Adds one, renames one and removes one of the two public images. Returns the added and the removed file. */
+        fun change(
+            keep: JsonNode,
+            drop: JsonNode,
+            added: String,
+        ): Pair<String, String> {
+            val new = add(added)
+            val keepId = keep.get("id").asString()
+            val renamed =
+                creator.send("PATCH", "/characters/$id/images/$keepId", """{"name":"${added}_kept"}""".toByteArray(), "application/json")
+            assertEquals(200, renamed.statusCode(), renamed.body())
+            assertEquals(204, creator.send("DELETE", "/characters/$id/images/${drop.get("id").asString()}").statusCode())
+            return new.get("image_url").asString() to drop.get("image_url").asString()
+        }
+
+        val snow = add("snow")
+        val alley = add("alley")
+        approve(id)
+        assertEquals(false, flagged())
+
+        // CH-BE-49: a change that is undone leaves nothing to submit.
+        val rain = add("rain")
+        assertEquals(true, flagged())
+        assertEquals("draft", detail().get("revision_status").asString())
+        assertEquals(204, creator.send("DELETE", "/characters/$id/images/${rain.get("id").asString()}").statusCode())
+        assertEquals(false, flagged())
+        assertEquals(0, copies())
+        assertTrue(detail().get("revision_status").isNull)
+        assertEquals(404, served(rain.get("image_url").asString()))
+        assertEquals(listOf("snow", "alley"), names(visitor))
+
+        // CH-BE-46: the creator changes the images; everyone else keeps the two that are public.
+        val (addedFile, removedFile) = change(keep = snow, drop = alley, added = "night")
+        assertEquals(true, flagged())
+        assertEquals(2, copies())
+        assertEquals(listOf("night_kept", "night"), detail().get("images").toList().map { it.get("name").asString() })
+        // The ids the creator holds did not change.
         assertEquals(
-            409 to "save_not_allowed",
-            code(member.send("PATCH", "/characters/$id/images/$left", """{"name":"x"}""".toByteArray(), "application/json")),
+            snow.get("id").asString(),
+            detail()
+                .get("images")
+                .first()
+                .get("id")
+                .asString(),
         )
+        assertEquals("approved", detail().get("status").asString())
+        assertEquals("draft", detail().get("revision_status").asString())
+        val listed = json(creator.send("GET", "/characters/mine")).get("characters").first { it.get("id").asString() == id }
+        assertEquals("draft", listed.get("revision_status").asString())
+        assertEquals(listOf("snow", "alley"), names(visitor))
+        assertEquals(listOf("night_kept", "night"), names(creatorId))
+        // The removed picture is still public through its copy.
+        assertEquals(200, served(removedFile))
+
+        // CH-BE-47: the change is reviewed with the revision. A rejection leaves both sides as they are.
+        assertEquals("pending", json(creator.save(emptyMap(), id, action = "submit")).get("revision_status").asString())
+        val queued =
+            jdbc
+                .sql("SELECT has_image_revision FROM character_review_queue WHERE character_id = :id")
+                .param("id", uuid)
+                .query(Boolean::class.java)
+                .single()
+        assertEquals(true, queued)
+        operator("reject_character(:id, :reason)", "이미지 확인")
+        assertEquals(listOf("snow", "alley"), names(visitor))
+        assertEquals(listOf("night_kept", "night"), names(creatorId))
+        creator.save(emptyMap(), id, action = "submit")
+        operator("approve_character(:id)")
+        assertEquals(0, copies())
+        assertEquals(false, flagged())
+        assertEquals(listOf("night_kept", "night"), names(visitor))
+        assertTrue(detail().get("revision_status").isNull)
+        // Replies in rooms that exist show the replaced picture by address, so its file stays.
+        editor.deleteDiscardedFiles()
+        assertEquals(200, served(removedFile))
+        assertEquals(200, served(addedFile))
+
+        fun current() = detail().get("images").toList()
+        // CH-BE-48: taking the character down brings the public images back and deletes what the
+        // change added, through the list of files to delete.
+        val (takenDownFile, _) = change(keep = current()[0], drop = current()[1], added = "fog")
+        jdbc.sql("UPDATE characters SET status = 'rejected', rejection_reason = '내림' WHERE id = :id").param("id", uuid).update()
+        assertEquals(false, flagged())
+        assertEquals(0, copies())
+        assertEquals(listOf("night_kept", "night"), detail().get("images").toList().map { it.get("name").asString() })
+        assertEquals(200, served(takenDownFile))
+        editor.deleteDiscardedFiles()
+        assertEquals(404, served(takenDownFile))
+
+        // So does deleting it.
+        approve(id)
+        val (deletedFile, stillPublic) = change(keep = current()[0], drop = current()[1], added = "dawn")
+        assertEquals(204, creator.send("DELETE", "/characters/$id").statusCode())
+        assertEquals(0, copies())
+        assertEquals(listOf("night_kept", "night"), names(visitor))
+        assertEquals(404, served(deletedFile))
+        assertEquals(200, served(stillPublic))
     }
 
     @Test
@@ -453,6 +611,8 @@ class CharacterCreationTest(
         jdbc.sql("UPDATE characters SET status = 'rejected', rejection_reason = '이름 확인' WHERE id = :id").param("id", uuid).update()
         val rejected = json(creator.send("GET", "/characters/$id"))
         assertEquals("이름 확인", rejected.get("rejection_reason").asString())
+        // A rejected character is complete too: a save that empties a required field is refused.
+        assertEquals(mapOf("name" to "required"), errors(creator.save(mapOf("name" to ""), id)))
         // A new submit clears the reason.
         assertTrue(json(creator.save(emptyMap(), id, action = "submit")).get("rejection_reason").isNull)
 
@@ -691,16 +851,6 @@ class CharacterCreationTest(
                 .exists(folder),
         )
         assertFailsWith<org.springframework.dao.DataAccessException> { operator("approve_character(:id)") }
-
-        // CH-BE-40: the creator can drop a revision; its own file goes, the public one stays.
-        val dropped = json(creator.save(mapOf("name" to "또 고침"), id, action = "submit", thumbnail = picture(16, 16)))
-        val droppedImage = dropped.get("image_url").asString()
-        assertEquals(403 to "not_owner", code(visitor.send("DELETE", "/characters/$id/revision")))
-        assertEquals(204, creator.send("DELETE", "/characters/$id/revision").statusCode())
-        assertEquals(404, served(droppedImage))
-        assertEquals(200, served(revisionImage))
-        assertEquals("새 제목", detail().get("name").asString())
-        assertEquals(404 to "revision_not_found", code(creator.send("DELETE", "/characters/$id/revision")))
 
         // Taking a public character down drops its revision; so does deleting it.
         val takenDown = json(creator.save(mapOf("name" to "내려가기 전"), id, action = "submit", thumbnail = picture(12, 12)))

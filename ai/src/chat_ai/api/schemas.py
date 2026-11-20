@@ -15,6 +15,14 @@ class StatusWindow(BaseModel):
     rules: StrictStr | None = None
 
 
+class CharacterImage(BaseModel):
+    """A situation image the reply may place with `{{img::name}}`. The file itself never comes here."""
+
+    model_config = ConfigDict(extra="ignore")
+    name: StrictStr
+    description: StrictStr = ""
+
+
 class Character(BaseModel):
     model_config = ConfigDict(extra="ignore")
     name: StrictStr
@@ -25,6 +33,7 @@ class Character(BaseModel):
     speech_style: StrictStr
     world_setting: StrictStr
     status_window: StatusWindow | None = None
+    images: list[CharacterImage] | None = None
     is_adult: StrictBool
 
 

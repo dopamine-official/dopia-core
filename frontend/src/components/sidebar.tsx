@@ -7,7 +7,8 @@ import {
 } from "react";
 import { useSession } from "./providers";
 import { useTrack } from "./page";
-import { Modal, useSidebarShortcut } from "./ui";
+import Link from "next/link";
+import { Icon, Modal, useSidebarShortcut } from "./ui";
 import { DeleteChatModal, RecentChats, type RecentChat } from "./recent-chats";
 
 // The recent chats sidebar, the same on every screen. On a wide screen it is a column beside
@@ -94,10 +95,26 @@ export function Sidebar({
   drawerTitle?: ReactNode;
 }) {
   const { t } = useSession();
+  const send = useTrack();
   const [deleteTarget, setDeleteTarget] = useState<RecentChat | null>(null);
   return (
     <>
       <aside className="home_sidebar" aria-label={t("common.recent")}>
+        {/* The column reaches the top of the screen: the logo and the button that folds it
+            sit here, and the screen's header starts beside it. */}
+        <div className="sidebar_head">
+          <Link className="brand" href="/" onClick={() => send("logo_clicked")}>
+            {t("common.brand")}
+          </Link>
+          <button
+            className="icon_button"
+            aria-label={t("common.menu")}
+            aria-expanded
+            onClick={() => state.toggle(false)}
+          >
+            <Icon name="menu" />
+          </button>
+        </div>
         <h2>{t("common.recent")}</h2>
         <RecentChats
           currentId={currentId}

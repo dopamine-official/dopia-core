@@ -32,6 +32,8 @@ data class CharacterRow(
     val age: Int?,
     val imageUrl: String?,
     val isAdult: Boolean,
+    /** True while a public character's images are being changed: the copies are what is public (3-2-9). */
+    val hasImageRevision: Boolean,
     val deleted: Boolean,
     val updatedAt: Instant,
 ) {
@@ -152,7 +154,7 @@ class CharacterRepository(
     private val columns =
         "id, creator_id, status, rejection_reason, source_locale, name, tagline, first_message, personality, speech_style, " +
             "world_setting, status_window_enabled, status_window_format, status_window_initial, status_window_rules, " +
-            "character_name, gender, age, image_url, is_adult, deleted_at, updated_at"
+            "character_name, gender, age, image_url, is_adult, has_image_revision, deleted_at, updated_at"
 
     private fun json(
         rs: ResultSet,
@@ -182,6 +184,7 @@ class CharacterRepository(
                 age = rs.getObject("age") as Int?,
                 imageUrl = rs.getString("image_url"),
                 isAdult = rs.getBoolean("is_adult"),
+                hasImageRevision = rs.getBoolean("has_image_revision"),
                 deleted = rs.getObject("deleted_at") != null,
                 updatedAt = rs.getObject("updated_at", OffsetDateTime::class.java).toInstant(),
             )
@@ -422,11 +425,70 @@ class CharacterRepository(
     }
 
     /**
-     * A creator who withdraws takes their characters off every list; rooms that exist keep working
-     * (4-1-6). Returns the thumbnails only their revisions used, for the caller to delete after the
+     * Keeps the images of a public character as they are now for everyone else, before its creator
+     * changes them (4-1-8 step 1-1). The copies are what is public; the creator edits the originals,
+     * so their ids stay.
+     */
+    fun copyPublicImages(characterId: UUID) {
+        jdbc
+            .sql(
+                "INSERT INTO character_images (character_id, name, description, image_url, position, public_copy) " +
+                    "SELECT character_id, name, description, image_url, position, true " +
+                    "FROM character_images WHERE character_id = :id AND NOT public_copy",
+            ).param("id", characterId)
+            .update()
+        jdbc.sql("UPDATE characters SET has_image_revision = true WHERE id = :id").param("id", characterId).update()
+    }
+
+    /** Ends the image edit of a public character once its images are again what is public. */
+    fun dropUnchangedImageRevision(characterId: UUID) {
+        fun content(copy: Boolean) = images(characterId, copy).map { Triple(it.name, it.description, it.imageUrl) }
+        if (content(false) != content(true)) return
+        jdbc.sql("DELETE FROM character_images WHERE character_id = :id AND public_copy").param("id", characterId).update()
+        jdbc.sql("UPDATE characters SET has_image_revision = false WHERE id = :id").param("id", characterId).update()
+    }
+
+    /**
+     * Drops the images changed while the character was public and makes the copies its images
+     * again. Returns the files only the dropped images used, for the caller to delete after the
      * commit.
      */
+    fun restorePublicImages(characterId: UUID): List<String> {
+        val files =
+            jdbc
+                .sql("SELECT restore_public_images(:id)")
+                .param("id", characterId)
+                .query { rs, _ -> rs.getString(1) }
+                .list()
+        jdbc.sql("UPDATE characters SET has_image_revision = false WHERE id = :id").param("id", characterId).update()
+        return files
+    }
+
+    /** True when a public copy shows this file, so deleting the edited image must leave the file. */
+    fun publicCopyUses(
+        characterId: UUID,
+        imageUrl: String,
+    ): Boolean =
+        jdbc
+            .sql("SELECT EXISTS (SELECT 1 FROM character_images WHERE character_id = :id AND public_copy AND image_url = :url)")
+            .param("id", characterId)
+            .param("url", imageUrl)
+            .query(Boolean::class.java)
+            .single()
+
+    /**
+     * A creator who withdraws takes their characters off every list; rooms that exist keep working
+     * (4-1-6). Returns the thumbnails only their revisions used and the images changed while public
+     * that no public copy shows, for the caller to delete after the commit.
+     */
     fun softDeleteByCreator(creatorId: UUID): List<String> {
+        val images =
+            jdbc
+                .sql("SELECT id FROM characters WHERE creator_id = :creator AND deleted_at IS NULL AND has_image_revision")
+                .param("creator", creatorId)
+                .query { rs, _ -> rs.getObject("id", UUID::class.java) }
+                .list()
+                .flatMap { restorePublicImages(it) }
         val files =
             jdbc
                 .sql(
@@ -441,13 +503,23 @@ class CharacterRepository(
             .sql("UPDATE characters SET deleted_at = now() WHERE creator_id = :creator AND deleted_at IS NULL")
             .param("creator", creatorId)
             .update()
-        return files
+        return files + images
     }
 
-    fun images(characterId: UUID): List<CharacterImageRow> =
+    /**
+     * The character's images in order. [publicCopy] picks the copies others see while the creator
+     * of a public character changes the images; without it, the images the creator edits.
+     */
+    fun images(
+        characterId: UUID,
+        publicCopy: Boolean = false,
+    ): List<CharacterImageRow> =
         jdbc
-            .sql("SELECT id, name, description, image_url, position FROM character_images WHERE character_id = :id ORDER BY position")
-            .param("id", characterId)
+            .sql(
+                "SELECT id, name, description, image_url, position FROM character_images " +
+                    "WHERE character_id = :id AND public_copy = :copy ORDER BY position",
+            ).param("id", characterId)
+            .param("copy", publicCopy)
             .query(image)
             .list()
 
@@ -456,8 +528,10 @@ class CharacterRepository(
         imageId: UUID,
     ): CharacterImageRow? =
         jdbc
-            .sql("SELECT id, name, description, image_url, position FROM character_images WHERE character_id = :character AND id = :id")
-            .param("character", characterId)
+            .sql(
+                "SELECT id, name, description, image_url, position FROM character_images " +
+                    "WHERE character_id = :character AND id = :id AND NOT public_copy",
+            ).param("character", characterId)
             .param("id", imageId)
             .query(image)
             .optional()
@@ -473,7 +547,7 @@ class CharacterRepository(
             .sql(
                 "INSERT INTO character_images (character_id, name, description, image_url, position) " +
                     "SELECT :character, :name, :description, :url, coalesce(max(position) + 1, 0) " +
-                    "FROM character_images WHERE character_id = :character " +
+                    "FROM character_images WHERE character_id = :character AND NOT public_copy " +
                     "RETURNING id, name, description, image_url, position",
             ).param("character", characterId)
             .param("name", name)

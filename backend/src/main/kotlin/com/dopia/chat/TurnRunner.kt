@@ -6,6 +6,7 @@ import com.dopia.chat.ai.AiClient
 import com.dopia.chat.ai.AiFailure
 import com.dopia.chat.ai.AiGeneration
 import com.dopia.chat.ai.AiHistoryItem
+import com.dopia.chat.ai.AiImage
 import com.dopia.chat.ai.AiStatusWindow
 import com.dopia.chat.ai.AiTurnListener
 import com.dopia.chat.ai.AiTurnRequest
@@ -115,9 +116,23 @@ class TurnRunner(
                             character.worldSetting,
                             started.isAdult,
                             character.statusWindow?.let { AiStatusWindow(it.format, it.rules) },
+                            character.images.map { AiImage(it.name, it.description) },
                         ),
                     prologue = material.prologue,
-                    history = material.history.map { AiHistoryItem(it.role, it.content) },
+                    // The room keeps picture addresses; the AI is told names, so it reads names back.
+                    history =
+                        material.history.map {
+                            AiHistoryItem(
+                                it.role,
+                                if (it.role ==
+                                    "assistant"
+                                ) {
+                                    SceneImages.toAi(it.content, character.images)
+                                } else {
+                                    it.content
+                                },
+                            )
+                        },
                     summary = material.summary,
                     userInput = started.userInput,
                     generation = AiGeneration(started.locale),
@@ -139,10 +154,11 @@ class TurnRunner(
                         override fun stillWanted() = wanted.get()
                     },
                 )
+            val output = SceneImages.toStored(result.output, character.images)
             val assistantId =
-                chat.complete(started, result.output, result.meta, AiInputShape(material.history.size, material.summary.isNotEmpty()))
+                chat.complete(started, output, result.meta, AiInputShape(material.history.size, material.summary.isNotEmpty()))
             if (assistantId != null) {
-                stream.send("completed", CompletedEvent(assistantId, result.output))
+                stream.send("completed", CompletedEvent(assistantId, output))
             } else {
                 sendStoredFailure(started, stream)
             }

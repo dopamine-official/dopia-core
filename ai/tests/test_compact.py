@@ -54,7 +54,9 @@ async def test_cmp_02_prompt_assembly(harness) -> None:
     user_with = with_summary.prompt.messages[0].content
     assert "Existing summary:\nold summary" in user_with
     assert 'locale "ko-KR"' in with_summary.prompt.system
-    assert "{{" not in user_with and "{{" not in with_summary.prompt.system
+    # No placeholder or block of ours is left behind; the `{{img::name}}` the prompt names is text.
+    assert "{{" not in user_with
+    assert "{{" not in with_summary.prompt.system.replace("{{img::name}}", "")
 
 
 async def test_cmp_03_normal_response_and_int_02(harness_factory) -> None:
@@ -65,7 +67,7 @@ async def test_cmp_03_normal_response_and_int_02(harness_factory) -> None:
     body = r.json()
     assert body["summary"] == "사용자는 지난달 타이베이로 이사함."
     meta = body["meta"]
-    assert meta["model"] == "fake-compact" and meta["provider"] == "fake" and meta["prompt_version"] == "compact_v2"
+    assert meta["model"] == "fake-compact" and meta["provider"] == "fake" and meta["prompt_version"] == "compact_v3"
     assert meta["input_token_count"] == 120 and meta["output_token_count"] == 30
     assert "ttft_ms" not in meta and isinstance(meta["generation_ms"], int)
 
@@ -118,3 +120,11 @@ async def test_cmp_06_summary_is_told_to_keep_the_last_status_window(harness) ->
     assert "`<status>`" in system and "`</status>`" in system
     assert "copied character for character" in system
     assert "Only blocks in assistant messages count" in system
+
+
+async def test_cmp_07_summary_is_told_to_leave_image_tags_out(harness) -> None:
+    async with harness.client() as client:
+        r = await client.post("/api/v1/chat/compact", json=compact_body(), headers=ids("r"))
+    assert r.status_code == 200
+    system = harness.adapter.calls[0].prompt.system
+    assert "`{{img::name}}`" in system and "Leave them out of the summary" in system

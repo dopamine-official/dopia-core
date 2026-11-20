@@ -52,7 +52,8 @@ test("My Page view, and the shared parts record page me", async ({
   await page.getByRole("button", { name: "고객센터", exact: true }).click();
   await sent(analytics, "footer_link_clicked", { page: "me" });
   await page.keyboard.press("Escape");
-  await page.locator(".site_header").getByRole("link").first().click();
+  // The logo: in the sidebar on a wide screen, in the header on a narrow one.
+  await page.getByRole("link", { name: "캐릭터챗", exact: true }).click();
   await expect(page).toHaveURL("/");
   await sent(analytics, "logo_clicked", { page: "me" });
   await settle(page);

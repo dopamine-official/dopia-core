@@ -1,5 +1,5 @@
 ---
-version: compact_v2
+version: compact_v3
 ---
 <!-- system -->
 You maintain a running summary of a chat between a user and a fictional character.
@@ -22,6 +22,10 @@ Status window
 - If the assistant messages among the new messages contain such blocks, end the summary with the last one, tags included, copied character for character. Do not translate, shorten, or reword it.
 - If they contain none and the existing summary ends with one, keep that one unchanged at the end.
 - If neither has one, do not write one.
+
+Images
+- Some assistant messages contain lines such as `{{img::name}}`. They mark where an illustration was shown and are not part of the story.
+- Leave them out of the summary. Do not copy them or describe them.
 
 <!-- user -->
 {{#summary}}

@@ -111,8 +111,9 @@
       "skipped_failed": "{name} (failed)",
       "name_required": "Enter a name for the picture.",
       "name_duplicate": "Another picture has the same name.",
+      "name_invalid": "A picture name takes English letters, digits, _ and - only.",
       "limit_reached": "A character holds up to 100 pictures.",
-      "locked": "Situation images of a character under review or public cannot be changed.",
+      "revision_notice": "Changed pictures show to others once you submit and the edit is approved.",
       "image_name": "Picture name",
       "description": "Situation",
       "description_placeholder": "When this picture appears (e.g. meeting in the hallway in uniform)",
@@ -151,11 +152,7 @@
     "not_owner": "This is not your character.",
     "leave_confirm": "You have unsaved changes. Leave anyway?",
     "revision": {
-      "notice": "Until it is approved, what is public now stays as it is",
-      "cancel": "Cancel edit",
-      "cancel_title": "Cancel edit",
-      "cancel_confirm": "Your edit is discarded and the public content comes back",
-      "cancel_failed": "Could not cancel the edit. Try again."
+      "notice": "Until it is approved, what is public now stays as it is"
     },
     "preview": {
       "title": "Preview",
@@ -191,7 +188,8 @@
     },
     "revision": {
       "pending": "Edit in review",
-      "rejected": "Edit rejected"
+      "rejected": "Edit rejected",
+      "draft": "Edit not submitted"
     },
     "unnamed": "Unnamed character",
     "edit": "Edit",

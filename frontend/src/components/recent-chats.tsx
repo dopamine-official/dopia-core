@@ -7,6 +7,7 @@ import { recentSchema, type RecentResponse } from "@/lib/contracts";
 import { useSession } from "./providers";
 import { errorMessageKey } from "@/lib/errors";
 import { splitStatusWindow } from "@/lib/status-window";
+import { withoutSceneImages } from "@/lib/scene-images";
 import { errorCode } from "@/lib/analytics";
 import { useRetry, useScreenOnce, useTrack } from "./page";
 import { ErrorState, Icon, Loading, Modal, type CloseReason } from "./ui";
@@ -81,7 +82,9 @@ export function RecentChats({
               <strong>{chat.character.name}</strong>
               <span>
                 {chat.last_message &&
-                  splitStatusWindow(chat.last_message).body.replace(/\*/g, "")}
+                  withoutSceneImages(
+                    splitStatusWindow(chat.last_message).body,
+                  ).replace(/\*/g, "")}
               </span>
             </span>
           </>

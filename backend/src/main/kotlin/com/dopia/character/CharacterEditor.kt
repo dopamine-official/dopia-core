@@ -29,7 +29,10 @@ data class CharacterImageView(
 data class CharacterDetail(
     val id: UUID,
     val status: String,
-    /** pending or rejected while a public character has a revision; otherwise null. */
+    /**
+     * pending or rejected while a public character has a revision, draft while only its images
+     * were changed and not submitted; otherwise null.
+     */
     val revisionStatus: String?,
     val rejectionReason: String?,
     val name: String?,
@@ -147,8 +150,7 @@ class CharacterEditor(
         return row
     }
 
-    private fun saveNotAllowed() =
-        ApiException("save_not_allowed", HttpStatus.CONFLICT, message = "a character under review or public takes only a submit")
+    private fun saveNotAllowed() = ApiException("save_not_allowed", HttpStatus.CONFLICT, message = "a public character takes only a submit")
 
     private fun text(
         row: CharacterRow,
@@ -177,7 +179,7 @@ class CharacterEditor(
         return CharacterDetail(
             id = row.id,
             status = row.status,
-            revisionStatus = revision?.status,
+            revisionStatus = revisionStatus(live, revision),
             rejectionReason = revision?.rejectionReason ?: row.rejectionReason,
             name = texts["name"],
             characterName = texts["character_name"],
@@ -199,6 +201,11 @@ class CharacterEditor(
         )
     }
 
+    private fun revisionStatus(
+        live: CharacterRow,
+        revision: RevisionRow?,
+    ): String? = revision?.status ?: "draft".takeIf { live.approved && live.hasImageRevision }
+
     private fun view(image: CharacterImageRow) = CharacterImageView(image.id, image.name, image.description, image.imageUrl, image.position)
 
     fun mine(identity: Identity): MyCharacters =
@@ -214,7 +221,7 @@ class CharacterEditor(
                         text(row, row.name).ifEmpty { null },
                         row.imageUrl,
                         row.status,
-                        revision?.status,
+                        revisionStatus(live, revision),
                         revision?.rejectionReason ?: row.rejectionReason,
                         row.updatedAt,
                     )
@@ -308,7 +315,12 @@ class CharacterEditor(
         change: CharacterChange,
         hasImage: Boolean,
     ) {
-        if (!change.submit && (current.status == "pending" || current.status == "approved")) throw saveNotAllowed()
+        // A public character changes only through a reviewed revision. One under review may still be
+        // edited: the operator approves what is there at that moment.
+        if (!change.submit && current.status == "approved") throw saveNotAllowed()
+        // Only a draft may be incomplete (the characters_complete constraint), so a save of one
+        // under review or rejected is checked like a submit.
+        val complete = change.submit || current.status != "draft"
         val texts = rowTexts(current) + change.texts
         val gender = if (change.gender != null) change.gender.value else current.gender
         val age = if (change.age != null) change.age.value else current.age
@@ -320,7 +332,7 @@ class CharacterEditor(
         val errors = mutableListOf<FieldError>()
         if (statusWindow && texts.getValue("status_window_format").isEmpty()) errors += FieldError("status_window_format", "required")
         if (isAdult && (age == null || age < settings.adultMinAge)) errors += FieldError("is_adult", "age_too_low")
-        if (change.submit) {
+        if (complete) {
             required.filter { texts.getValue(it).isEmpty() }.forEach { errors += FieldError(it, "required") }
             if (gender == null) errors += FieldError("gender", "required")
             if (age == null) errors += FieldError("age", "required")
@@ -389,34 +401,17 @@ class CharacterEditor(
         identity: Identity,
         id: UUID,
     ) {
-        val revisionFile =
+        val revisionFiles =
             tx.execute {
                 val live = owned(repository.lock(id), identity)
-                // The thumbnail of an edit that was never approved goes with it; the rest stays for rooms.
+                // What an edit that was never approved added goes with it; the rest stays for rooms.
                 val file = repository.revision(id)?.imageUrl?.takeIf { it != live.imageUrl }
+                val images = if (live.hasImageRevision) repository.restorePublicImages(id) else emptyList()
                 repository.softDelete(id)
-                listOfNotNull(file)
+                listOfNotNull(file) + images
             }!!
-        revisionFile.forEach(storage::delete)
+        revisionFiles.forEach(storage::delete)
         characters.clearCache()
-    }
-
-    /** Drops the revision of a public character; what is public is untouched (4-2-7). */
-    fun cancelRevision(
-        identity: Identity,
-        id: UUID,
-    ) {
-        val file =
-            tx.execute {
-                val live = owned(repository.lock(id), identity)
-                val revision =
-                    repository.revision(id)
-                        ?: throw ApiException("revision_not_found", HttpStatus.NOT_FOUND, message = "this character has no revision")
-                repository.deleteRevision(id)
-                repository.touch(id)
-                listOfNotNull(revision.imageUrl.takeIf { it != live.imageUrl })
-            }!!
-        file.forEach(storage::delete)
     }
 
     /**
@@ -437,15 +432,21 @@ class CharacterEditor(
         characterId: UUID,
     ): CharacterRow {
         val row = owned(repository.lock(characterId), identity)
-        // Pictures of a character under review or public do not change without a review (2-2).
-        if (row.status == "pending" || row.status == "approved") throw saveNotAllowed()
+        // The first change to a public character's images keeps them as they are for everyone
+        // else; an operator's approval makes the changed ones public (4-1-8 step 1-1).
+        if (row.approved && !row.hasImageRevision) repository.copyPublicImages(characterId)
         return row
     }
 
+    /**
+     * The name goes inside `{{img::name}}` in a reply and the model has to write it back exactly,
+     * so it is plain: English letters, digits, `_` and `-`. A space becomes `_`.
+     */
     private fun imageName(value: String?): String {
-        val name = value?.let(::cleanText).orEmpty().replace('\n', ' ')
+        val name = value?.let(::cleanText).orEmpty().replace(Regex("\\s+"), "_")
         if (name.isEmpty()) throw ApiException.invalidInput(FieldError("name", "required"))
         if (textLength(name) > 40) throw ApiException.invalidInput(FieldError("name", "too_long"))
+        if (!Regex("[A-Za-z0-9_-]+").matches(name)) throw ApiException.invalidInput(FieldError("name", "invalid_value"))
         return name
     }
 
@@ -502,7 +503,7 @@ class CharacterEditor(
     ): CharacterImageView {
         assertEnabled(identity)
         return tx.execute {
-            editable(identity, characterId)
+            val row = editable(identity, characterId)
             val current = repository.findImage(characterId, imageId) ?: throw imageNotFound()
             val newName = if (name == null) current.name else imageName(name)
             val newDescription = if (description == null) current.description else imageDescription(description)
@@ -515,6 +516,8 @@ class CharacterEditor(
                 throw ApiException.invalidInput(FieldError("name", "duplicate"))
             }
             repository.touch(characterId)
+            // Back to what is public: nothing is left to review (4-1-8 step 1-2).
+            if (row.approved) repository.dropUnchangedImageRevision(characterId)
             view(current.copy(name = newName, description = newDescription))
         }!!
     }
@@ -527,13 +530,16 @@ class CharacterEditor(
         assertEnabled(identity)
         val url =
             tx.execute {
-                editable(identity, characterId)
+                val row = editable(identity, characterId)
                 val current = repository.findImage(characterId, imageId) ?: throw imageNotFound()
                 repository.deleteImage(imageId)
                 repository.touch(characterId)
-                current.imageUrl
-            }!!
-        storage.delete(url)
+                // Others still see the picture through its public copy.
+                val unused = current.imageUrl.takeUnless { repository.publicCopyUses(characterId, it) }
+                if (row.approved) repository.dropUnchangedImageRevision(characterId)
+                unused
+            }
+        url?.let(storage::delete)
     }
 
     /** A creator's public characters, for anyone (4-1-3). */

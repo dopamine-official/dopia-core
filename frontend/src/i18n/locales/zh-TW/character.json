@@ -111,8 +111,9 @@
       "skipped_failed": "{name}（失敗）",
       "name_required": "請填寫圖片名稱。",
       "name_duplicate": "已有相同名稱的圖片。",
+      "name_invalid": "圖片名稱只能使用英文字母、數字、_ 和 -。",
       "limit_reached": "最多可放入 100 張圖片。",
-      "locked": "審核中或已公開的角色無法變更情境圖片。",
+      "revision_notice": "變更的圖片在提交並核准後才會顯示給其他人。",
       "image_name": "圖片名稱",
       "description": "情境說明",
       "description_placeholder": "這張圖片出現的情境（例：穿著制服在走廊相遇時）",
@@ -151,11 +152,7 @@
     "not_owner": "這不是你的角色。",
     "leave_confirm": "有尚未儲存的變更，要離開嗎？",
     "revision": {
-      "notice": "在核准之前，仍會顯示目前公開的內容",
-      "cancel": "取消修改",
-      "cancel_title": "取消修改",
-      "cancel_confirm": "將捨棄修改內容並恢復為公開的內容",
-      "cancel_failed": "無法取消修改，請再試一次。"
+      "notice": "在核准之前，仍會顯示目前公開的內容"
     },
     "preview": {
       "title": "預覽",
@@ -191,7 +188,8 @@
     },
     "revision": {
       "pending": "修改審核中",
-      "rejected": "修改退回"
+      "rejected": "修改退回",
+      "draft": "修改尚未提交"
     },
     "unnamed": "未命名的角色",
     "edit": "編輯",

@@ -82,34 +82,45 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await page.locator("#ce_status_window_format").fill("호감도: <0~100>");
   await page.locator("#ce_status_window_initial").fill("호감도: 5");
 
-  // Situation images: two files with one name get different names; a text is saved
-  // with the draft, not on its own.
+  // Situation images: a name is English letters, digits, _ and -; two files with one name
+  // get different names, and a file named in another script gets a plain one.
   await step(page, "미디어 관리").click();
   await page
     .locator(".ce_pane > input[type=file]")
     .setInputFiles([
-      picture("눈길.png"),
+      picture("snow.png"),
+      picture("snow.png"),
       picture("눈길.png"),
       { ...picture("메모.txt"), mimeType: "text/plain" },
     ]);
-  await expect(page.locator(".ce_item")).toHaveCount(2);
-  await expect(line(page)).toContainText("2장 추가");
+  await expect(page.locator(".ce_item")).toHaveCount(3);
+  await expect(line(page)).toContainText("3장 추가");
   await expect(line(page)).toContainText("메모.txt (형식)");
   const names = page.getByRole("textbox", { name: "이미지 이름" });
-  await expect(names.nth(0)).toHaveValue("눈길");
-  await expect(names.nth(1)).toHaveValue("눈길-2");
-  await names.nth(1).fill("눈길");
+  const descriptions = page.getByRole("textbox", { name: "상황 설명" });
+  await expect(names.nth(0)).toHaveValue("snow");
+  await expect(names.nth(1)).toHaveValue("snow-2");
+  await expect(names.nth(2)).toHaveValue("image");
+  await page.getByRole("button", { name: "삭제", exact: true }).last().click();
+  await expect(page.locator(".ce_item")).toHaveCount(2);
+  await names.nth(1).fill("snow");
   await expect(page.getByText("같은 이름의 이미지가 있어요.")).toHaveCount(2);
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
   await expect(line(page)).toContainText("같은 이름의 이미지가 있어요.");
-  await names.nth(1).fill("창가");
+  // A space becomes _, and anything else that is not allowed is not typed at all.
+  await names.nth(1).fill("창가 by window!");
+  await expect(names.nth(1)).toHaveValue("_by_window");
+  await names.nth(1).fill("window");
   await names.nth(1).blur();
   await expect(line(page)).not.toContainText("저장됨");
+  // A description is optional: one picture is saved with it and the other without.
+  await descriptions.nth(0).fill("눈 오는 거리를 걸을 때");
+  await expect(page.locator(".ce_item .ce_error")).toHaveCount(0);
   await page.getByRole("button", { name: "임시 저장", exact: true }).click();
   await expect(line(page)).toContainText("저장됨");
   await page.reload();
   await step(page, "미디어 관리").click();
-  await expect(names.nth(1)).toHaveValue("창가");
+  await expect(names.nth(1)).toHaveValue("window");
   await page.getByRole("button", { name: "삭제", exact: true }).first().click();
   await expect(page.locator(".ce_item")).toHaveCount(1);
 
@@ -121,21 +132,28 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await expect(item).toContainText("눈 내리는 도시");
   await expect(item).toContainText("심사 중");
 
-  // Under review: no draft save, and the pictures are read-only.
+  // Under review it can still be edited: the draft save and the pictures stay open.
   await item.getByRole("link", { name: "수정", exact: true }).click();
   await expect(page.locator("#ce_name")).toHaveValue("눈 내리는 도시");
   await expect(
     page.getByRole("button", { name: "임시 저장", exact: true }),
-  ).toHaveCount(0);
+  ).toHaveCount(1);
+  // A save keeps it under review, and it stays complete: an emptied name is refused.
+  await page.locator("#ce_name").fill("");
+  await page.getByRole("button", { name: "임시 저장", exact: true }).click();
+  await expect(line(page)).toContainText("저장하지 못했어요");
+  await page.locator("#ce_name").fill("눈 내리는 도시");
   await step(page, "미디어 관리").click();
-  await expect(
-    page.getByText(
-      "심사 중이거나 공개된 캐릭터의 상황 이미지는 바꿀 수 없어요.",
-    ),
-  ).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "이미지 이름" })).toHaveCount(
-    0,
-  );
+  const reviewNames = page.getByRole("textbox", { name: "이미지 이름" });
+  await expect(reviewNames).toHaveCount(1);
+  await reviewNames.first().fill("window_night");
+  await page.getByRole("button", { name: "임시 저장", exact: true }).click();
+  await expect(line(page)).toContainText("저장됨");
+  await page.reload();
+  await step(page, "미디어 관리").click();
+  await expect(reviewNames.first()).toHaveValue("window_night");
+  await page.goto("/characters/mine");
+  await expect(page.locator(".mine_item")).toContainText("심사 중");
 
   // The creator chats with it before any review; the first status values are in the room.
   await page.goto("/characters/mine");
@@ -147,6 +165,13 @@ test("a member makes a character, adds images, submits, chats with it and delete
   await expect(page.locator(".message.assistant").first()).toContainText(
     "늦었네.",
   );
+  // A reply that names a picture shows it above its text, outside the bubble.
+  await page.getByRole("textbox", { name: "메시지", exact: true }).fill("안녕");
+  await page.keyboard.press("Enter");
+  const reply = page.locator(".message_wrap.assistant").last().locator("> *");
+  await expect(reply.nth(0)).toHaveAttribute("alt", "window_night");
+  await expect(reply.nth(1)).toHaveText("고개를 끄덕인다. 계속 말해 봐.");
+  await expect(page.locator(".message_list")).not.toContainText("{{");
 
   await page.goto("/characters/mine");
   await page
@@ -258,24 +283,6 @@ test("a public character is edited through a revision", async ({ page }) => {
   await step(page, "등록").click();
   await expect(submit).toBeDisabled();
 
-  // Cancelling the edit asks first, then loads the character again.
-  await setStubs(page, [
-    {
-      path: `/api/v1/characters/${id}`,
-      method: "GET",
-      merge: { status: "approved" },
-    },
-  ]);
-  await page.getByRole("button", { name: "수정 취소", exact: true }).click();
-  await page
-    .getByRole("dialog", { name: "수정 취소" })
-    .getByRole("button", { name: "수정 취소", exact: true })
-    .click();
-  await expect(
-    page.getByRole("button", { name: "수정 취소", exact: true }),
-  ).toHaveCount(0);
-  await expect(page.getByText("제목을 확인해 주세요.")).toHaveCount(0);
-
   // The list shows both badges and the reason of a rejected edit.
   await setStubs(page, [
     {
@@ -303,4 +310,104 @@ test("a public character is edited through a revision", async ({ page }) => {
   await expect(item).toContainText("공개");
   await expect(item).toContainText("수정 반려");
   await expect(item).toContainText("제목을 확인해 주세요.");
+});
+
+test("the situation images of a public character are changed through a revision", async ({
+  page,
+}) => {
+  await installStubs(page);
+  await member(page);
+  await page.goto("/characters/new");
+  await page
+    .locator(".ce_slot input[type=file]")
+    .setInputFiles(picture("thumb.png"));
+  await fill(page);
+  await step(page, "등록").click();
+  await page.getByRole("button", { name: "제출", exact: true }).click();
+  await expect(page).toHaveURL(/\/characters\/mine$/);
+  const edit = page
+    .locator(".mine_item")
+    .getByRole("link", { name: "수정", exact: true });
+  const id = (await edit.getAttribute("href"))!.split("/")[2];
+
+  // The preview never approves, so the answers say the character is public.
+  await setStubs(page, [
+    {
+      path: `/api/v1/characters/${id}`,
+      method: "GET",
+      merge: { status: "approved" },
+    },
+  ]);
+  await edit.click();
+  const submit = page.getByRole("button", { name: "제출", exact: true });
+  await step(page, "등록").click();
+  await expect(submit).toBeDisabled();
+
+  // The images are open, with a line saying when others see the change.
+  await step(page, "미디어 관리").click();
+  await expect(
+    page.getByText("바꾼 이미지는 제출해서 승인된 뒤에 다른 사람에게 보여요."),
+  ).toBeVisible();
+  await page
+    .locator(".ce_pane > input[type=file]")
+    .setInputFiles(picture("snow.png"));
+  await expect(page.locator(".ce_item")).toHaveCount(1);
+
+  // An added image alone is something to submit.
+  await step(page, "등록").click();
+  await expect(submit).toBeEnabled();
+
+  // Removing it again leaves nothing to submit.
+  await step(page, "미디어 관리").click();
+  await page.getByRole("button", { name: "삭제", exact: true }).last().click();
+  await expect(page.locator(".ce_item")).toHaveCount(0);
+  await step(page, "등록").click();
+  await expect(submit).toBeDisabled();
+
+  // With a rejected edit too, an image added and removed again is nothing to submit.
+  await setStubs(page, [
+    {
+      path: `/api/v1/characters/${id}`,
+      method: "GET",
+      merge: { status: "approved", revision_status: "rejected" },
+    },
+  ]);
+  await page.goBack();
+  await edit.click();
+  await expect(submit).toBeDisabled();
+  await step(page, "미디어 관리").click();
+  await page
+    .locator(".ce_pane > input[type=file]")
+    .setInputFiles(picture("snow.png"));
+  await expect(page.locator(".ce_item")).toHaveCount(1);
+  await expect(submit).toBeEnabled();
+  await page.getByRole("button", { name: "삭제", exact: true }).last().click();
+  await expect(page.locator(".ce_item")).toHaveCount(0);
+  await expect(submit).toBeDisabled();
+
+  // The list says when a change is not submitted yet.
+  await setStubs(page, [
+    {
+      path: "/api/v1/characters/mine",
+      merge: {
+        characters: [
+          {
+            id,
+            name: "눈 내리는 도시",
+            image_url: null,
+            status: "approved",
+            revision_status: "draft",
+            rejection_reason: null,
+            updated_at: "2026-11-15T00:00:00Z",
+          },
+        ],
+      },
+    },
+  ]);
+  await page.getByRole("link", { name: "캐릭터챗", exact: true }).click();
+  await page.getByRole("button", { name: "내 프로필", exact: true }).click();
+  await page.getByRole("link", { name: "내 캐릭터 목록", exact: true }).click();
+  const item = page.locator(".mine_item");
+  await expect(item).toContainText("공개");
+  await expect(item).toContainText("수정 제출 전");
 });

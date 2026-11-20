@@ -381,3 +381,71 @@ async def test_chat_10_status_window_presence_is_recorded_not_repaired(harness_f
         metadata = h.tracer.records[0].metadata
         assert metadata.get("status_window_present") is expected
         assert ("status_window_present" in metadata) is has_format
+
+
+IMAGES = [
+    {"name": "hallway", "description": "She meets the user\n  in the school hallway."},
+    {"name": " crying ", "description": "She is in tears."},
+    {"name": "hallway", "description": "a repeated name is dropped"},
+    {"name": "   ", "description": "a nameless image is dropped"},
+    {"name": "plain", "description": ""},
+]
+
+
+async def test_chat_11_image_list_assembly(harness) -> None:
+    base = chat_body()["character"]
+    cases = [
+        {**base, "images": IMAGES, "status_window": {"format": STATUS_FORMAT}},
+        {**base, "images": []},
+        {**base, "images": None},
+        {**base, "images": [{"name": " ", "description": "x"}]},
+        base,
+    ]
+    async with harness.client() as client:
+        for character in cases:
+            r = await client.post("/api/v1/chat/turn", json=chat_body(character=character), headers=ids("r"))
+            assert r.status_code == 200, character
+        missing = {**base, "images": [{"description": "no name"}]}
+        r = await client.post("/api/v1/chat/turn", json=chat_body(character=missing), headers=ids("r"))
+        assert r.status_code == 422
+    with_images, *without = [call.prompt.system for call in harness.adapter.calls]
+    listed = "- hallway: She meets the user in the school hallway.\n- crying: She is in tears.\n- plain\n"
+    assert "## keyword output" in with_images and f"**Images:**\n{listed}" in with_images
+    assert "Form: {{img::keyword}}" in with_images and "example: {{img::hallway}}\n" in with_images
+    assert "on a line of its own" in with_images and "inside the status window" in with_images
+    assert "repeated name" not in with_images and "nameless" not in with_images
+    # Images come before the status window, which must stay the last thing in a reply.
+    assert (
+        with_images.index("# Output Formatting")
+        < with_images.index("## keyword output")
+        < with_images.index("## Status Window")
+    )
+    for system in without:
+        assert "## keyword output" not in system and "{{img::" not in system
+    assert all("{{#" not in s and "{{/" not in s and "{{image_" not in s for s in (with_images, *without))
+
+
+async def test_chat_12_image_tags_are_recorded_not_repaired(harness_factory) -> None:
+    cases = [
+        ("{{img::hallway}}\n*She waves.*\n{{img:: crying }}\nYou came.", True, (2, 0)),
+        ("*She waves.*\n{{img::rooftop}}\n{{img::hallway}}\n{{img::hallway}}", True, (3, 1)),
+        ("{{ IMG:Hallway }}\n*She waves.*", True, (1, 0)),  # written loosely, still the same tag
+        ("*She waves.*", True, (0, 0)),
+        ("*She waves.*\n{{img::hallway", True, (0, 0)),  # never closed
+        ("{{img::hallway\n*She waves.*\n{{img::crying}}", True, (1, 0)),  # the open tag does not swallow the next
+        ("{{img::hallway}}\n*She waves.*", False, None),  # the character has no images
+    ]
+    for text, has_images, expected in cases:
+        h = harness_factory(FakeAdapter([text]))
+        character = {**chat_body()["character"], **({"images": IMAGES} if has_images else {})}
+        async with h.client() as client:
+            async with client.stream(
+                "POST", "/api/v1/chat/turn", json=chat_body(character=character), headers=ids("r")
+            ) as r:
+                events = await read_sse(r)
+        assert [e[0] for e in events] == ["token", "completed"]
+        assert events[0][1]["text"] == text and events[1][1]["output"] == text
+        metadata = h.tracer.records[0].metadata
+        counts = (metadata.get("image_tag_count"), metadata.get("image_tag_unknown_count"))
+        assert counts == (expected or (None, None))
+        assert ("image_tag_count" in metadata) is has_images

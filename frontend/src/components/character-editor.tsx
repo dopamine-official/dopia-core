@@ -22,7 +22,7 @@ import { errorCode } from "@/lib/analytics";
 import { regionConfig } from "@/i18n";
 import { useCreatorOnly, useSession } from "./providers";
 import { Screen, useTrack } from "./page";
-import { ErrorState, Icon, Loading, Modal } from "./ui";
+import { ErrorState, Icon, Loading } from "./ui";
 
 // The text fields a creator writes: name, length limit and the step it is on (CHARACTER web 2-2-5).
 const TEXTS = [
@@ -94,6 +94,20 @@ function rich(text: string): ReactNode {
         <Fragment key={index}>{part}</Fragment>
       ),
     );
+}
+// A picture's name goes inside {{img::name}} in a reply and the model has to write it back
+// exactly, so it is plain: English letters, digits, _ and -. A space becomes _.
+const IMAGE_NAME = /^[A-Za-z0-9_-]+$/;
+function imageName(value: string) {
+  return value
+    .replace(/\s/g, "_")
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 40);
+}
+function imagesKey(images: CharacterImage[]) {
+  return JSON.stringify(
+    images.map((image) => [image.id, image.name, image.description]),
+  );
 }
 function fieldErrors(error: unknown): { field: string; reason: string }[] {
   if (!(error instanceof ApiError) || !Array.isArray(error.detail)) return [];
@@ -197,16 +211,18 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     total: number;
   } | null>(null);
   const queue = useRef<File[]>([]);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelBusy, setCancelBusy] = useState(false);
+  // The pictures a public character had when nothing of them waited for a submit.
+  const [imagesBase, setImagesBase] = useState(() =>
+    imagesKey(initial?.images ?? []),
+  );
   const alive = useRef(true);
   const mainRef = useRef<HTMLElement>(null);
   const thumbnailInput = useRef<HTMLInputElement>(null);
   const mediaInput = useRef<HTMLInputElement>(null);
 
   const status = saved?.status ?? "draft";
-  const canSaveDraft = status === "draft" || status === "rejected";
-  const mediaLocked = status === "pending" || status === "approved";
+  // A public character takes only a submit, which makes a revision.
+  const canSaveDraft = status !== "approved";
   const adultAvailable =
     regionConfig().content.adult_mode_available && account.adult_verified;
   const age = values.age === "" ? null : Number(values.age);
@@ -233,6 +249,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     values.age !== base.age ||
     values.status_window_enabled !== base.status_window_enabled ||
     isAdult !== base.is_adult;
+  // Pictures put back as they were leave nothing to submit.
+  const imagesTouched = imagesKey(images) !== imagesBase;
   const imageUrl = thumbnail?.url ?? saved?.image_url ?? null;
   const say = (text: string, error = false) => setLine({ text, error });
   const savedAt = () =>
@@ -250,6 +268,36 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     savedRef.current = next;
     setSaved(next);
     putImages(next.images);
+  }
+  /**
+   * Adding or removing a picture of a public character starts an edit on the server; it is
+   * reviewed only after a submit (2-2).
+   */
+  function imagesChanged() {
+    const now = savedRef.current;
+    if (now?.status !== "approved" || now.revision_status) return;
+    const next: CharacterDetail = { ...now, revision_status: "draft" };
+    savedRef.current = next;
+    setSaved(next);
+  }
+  /**
+   * After a picture of a public character was removed or renamed: the server ends the edit
+   * when the pictures are again what is public, and then nothing is left to submit (2-2).
+   */
+  async function syncRevision() {
+    const id = savedRef.current?.id;
+    if (!id || savedRef.current?.status !== "approved") return;
+    try {
+      const detail = await api(`/characters/${id}`, characterDetailSchema);
+      const now = savedRef.current;
+      if (!alive.current || !now) return;
+      const next = { ...now, revision_status: detail.revision_status };
+      savedRef.current = next;
+      setSaved(next);
+      if (!detail.revision_status) setImagesBase(imagesKey(imagesRef.current));
+    } catch {
+      // The next load of this screen says it.
+    }
   }
 
   const viewed = useRef(false);
@@ -435,21 +483,12 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         ...now,
         ...Object.fromEntries(
           badImages
-            .filter((image) => !draftOf(image).name.trim())
+            .filter((image) => nameProblem(image) === "name_required")
             .map((image) => [image.id, "name_required"]),
         ),
       }));
       jump("media");
-      say(
-        t(
-          `character.create.media.${
-            draftOf(badImages[0]).name.trim()
-              ? "name_duplicate"
-              : "name_required"
-          }`,
-        ),
-        true,
-      );
+      say(t(`character.create.media.${nameProblem(badImages[0])}`), true);
       return null;
     }
     busyRef.current = true;
@@ -462,7 +501,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
     const event =
       action === "save" ? "character_draft_saved" : "character_submitted";
     try {
-      // The pictures first: once submitted they can no longer be changed.
+      // The pictures first, so a failed picture stops the save before the character changes.
       if (current && !(await saveImages(current.id))) return null;
       const detail = await api(
         current ? `/characters/${current.id}` : "/characters",
@@ -539,9 +578,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         (drafts[image.id]?.name ?? image.name).trim(),
       ]),
     );
-    const stem =
-      clip(file.name.replace(/\.[^.]+$/, ""), 40).trim() ||
-      t("character.create.field.images");
+    // A file name in another script leaves nothing: the creator names the picture then.
+    const stem = imageName(file.name.replace(/\.[^.]+$/, "").trim()) || "image";
     if (!names.has(stem)) return stem;
     for (let n = 2; ; n++) {
       const suffix = `-${n}`;
@@ -552,8 +590,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   async function addFiles(list: FileList | File[] | null) {
     const files = Array.from(list ?? []);
     // One upload at a time: the screen is locked while one runs.
-    if (!files.length || mediaLocked || busyRef.current || queue.current.length)
-      return;
+    if (!files.length || busyRef.current || queue.current.length) return;
     queue.current.push(...files);
     let added = 0;
     const skipped: string[] = [];
@@ -598,6 +635,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             }
             if (!alive.current) return;
             putImages([...imagesRef.current, image]);
+            imagesChanged();
             added++;
           } catch (error) {
             if (!alive.current) return;
@@ -605,10 +643,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             if (code === "image_limit_reached") {
               stop = true;
               skip("skipped_limit", file);
-            } else if (code === "save_not_allowed") {
-              queue.current = [];
-              void reload();
-              return;
             } else if (leaveOn(error)) {
               queue.current = [];
               return;
@@ -658,7 +692,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       ...now,
       [image.id]: {
         ...draftOf(image),
-        [key]: clip(value, key === "name" ? 40 : 200),
+        [key]: key === "name" ? imageName(value) : clip(value, 200),
       },
     }));
     if (key === "name" && imageErrors[image.id])
@@ -680,6 +714,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   async function saveImages(id: string) {
     // What an earlier try was refused for is asked again now.
     setImageErrors({});
+    let changed = false;
     for (const image of [...imagesRef.current]) {
       const draft = drafts[image.id];
       if (!draft) continue;
@@ -698,6 +733,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         putImages(
           imagesRef.current.map((item) => (item.id === next.id ? next : item)),
         );
+        imagesChanged();
+        changed = true;
       } catch (error) {
         if (!alive.current) return false;
         const code = errorCode(error);
@@ -705,8 +742,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
           dropImage(image.id);
           continue;
         }
-        if (code === "save_not_allowed") void reload();
-        else if (!leaveOn(error)) {
+        if (!leaveOn(error)) {
           setImageErrors((now) => ({
             ...now,
             [image.id]: fieldErrors(error).some(
@@ -722,7 +758,8 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       }
     }
     setDrafts({});
-    return true;
+    if (changed) await syncRevision();
+    return alive.current;
   }
   async function removeImages(ids: string[]) {
     const id = savedRef.current?.id;
@@ -737,7 +774,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       } catch (error) {
         if (!alive.current) return;
         const code = errorCode(error);
-        if (code === "save_not_allowed") return void reload();
         if (leaveOn(error)) return;
         if (code !== "image_not_found") {
           failed = true;
@@ -746,40 +782,17 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
       }
       if (!alive.current) return;
       dropImage(imageId);
+      imagesChanged();
       removed++;
     }
+    if (removed) await syncRevision();
+    if (!alive.current) return;
     say(
       failed
         ? t("character.create.media.failed")
         : t("character.create.media.deleted", { count: removed }),
       failed,
     );
-  }
-  async function cancelRevision() {
-    const id = savedRef.current?.id;
-    if (!id || cancelBusy) return;
-    setCancelBusy(true);
-    try {
-      await request(`/characters/${id}/revision`, { method: "DELETE" });
-      send("character_revision_cancelled", { result: "succeeded" });
-    } catch (error) {
-      if (!alive.current) return;
-      const code = errorCode(error);
-      if (code !== "revision_not_found") {
-        send("character_revision_cancelled", { result: "failed", code });
-        setCancelBusy(false);
-        setCancelling(false);
-        if (!leaveOn(error))
-          say(t("character.create.revision.cancel_failed"), true);
-        return;
-      }
-    }
-    if (!alive.current) return;
-    query.removeQueries({ queryKey: ["my_characters"] });
-    await reload();
-    if (!alive.current) return;
-    setCancelBusy(false);
-    setCancelling(false);
   }
   /** A link out of this screen: with unsaved changes the browser asks first. */
   function guardLeave(event: { preventDefault: () => void }) {
@@ -788,14 +801,20 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
   }
 
   // ---------- view helpers ----------
-  const badImages = images.filter((image) => {
+  /** What is wrong with a picture's name, as a message key; "" when nothing is. */
+  const nameProblem = (image: CharacterImage) => {
     const name = draftOf(image).name.trim();
-    return (
-      !name ||
-      images.some(
-        (other) => other.id !== image.id && draftOf(other).name.trim() === name,
-      )
-    );
+    if (!name) return "name_required";
+    // Only a name saved before the rule can be this: typing never lets one in.
+    if (!IMAGE_NAME.test(name)) return "name_invalid";
+    return images.some(
+      (other) => other.id !== image.id && draftOf(other).name.trim() === name,
+    )
+      ? "name_duplicate"
+      : "";
+  };
+  const badImages = images.filter((image) => {
+    return !!nameProblem(image);
   });
   const need = missing();
   const done: Record<Step, boolean> = {
@@ -933,50 +952,53 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             {t("common.brand")}
           </Link>
         </div>
-        <nav
-          className="ce_steps"
-          aria-label={t("character.create.steps_label")}
-        >
-          {STEPS.map((id, index) => (
-            <button
-              key={id}
-              type="button"
-              className="ce_step"
-              aria-current={step === id ? "step" : undefined}
-              onClick={() => go(id)}
-            >
-              <span className="ce_num">{index + 1}</span>
-              {t(`character.create.step.${id}`)}
-              {id !== "media" && <span className="ce_req">*</span>}
-              {done[id] && (
-                <span className="ce_done" aria-hidden="true">
-                  ✓
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-        {saved?.revision_status && (
-          <button
-            type="button"
-            className="button"
-            disabled={busy || cancelBusy || !!uploading}
-            onClick={() => setCancelling(true)}
-          >
-            {t("character.create.revision.cancel")}
-          </button>
-        )}
         {canSaveDraft && (
           <button
             type="button"
-            className="button primary"
+            className="button"
             disabled={busy || !!uploading}
             onClick={() => void persist("save")}
           >
             {t("character.create.save_draft")}
           </button>
         )}
+        <button
+          type="button"
+          className="button primary"
+          disabled={
+            busy ||
+            !!uploading ||
+            (status === "approved" &&
+              !dirty &&
+              !imagesTouched &&
+              saved?.revision_status !== "draft")
+          }
+          onClick={() => void persist("submit")}
+        >
+          {t("character.create.submit")}
+        </button>
       </header>
+
+      <nav className="ce_steps" aria-label={t("character.create.steps_label")}>
+        {STEPS.map((id, index) => (
+          <button
+            key={id}
+            type="button"
+            className="ce_step"
+            aria-current={step === id ? "step" : undefined}
+            onClick={() => go(id)}
+          >
+            <span className="ce_num">{index + 1}</span>
+            {t(`character.create.step.${id}`)}
+            {id !== "media" && <span className="ce_req">*</span>}
+            {done[id] && (
+              <span className="ce_done" aria-hidden="true">
+                ✓
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
 
       <main
         id="main"
@@ -986,7 +1008,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         // meanwhile is lost and a submit cannot cut the upload short.
         inert={busy || !!uploading}
         onDragOver={(event) => {
-          if (step !== "media" || mediaLocked) return;
+          if (step !== "media") return;
           event.preventDefault();
           setOver(true);
         }}
@@ -995,7 +1017,7 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
             setOver(false);
         }}
         onDrop={(event) => {
-          if (step !== "media" || mediaLocked) return;
+          if (step !== "media") return;
           event.preventDefault();
           setOver(false);
           void addFiles(event.dataTransfer.files);
@@ -1225,47 +1247,42 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
 
         {step === "media" && (
           <section className="ce_pane">
-            {mediaLocked ? (
+            {status === "approved" && (
               <div className="ce_notice">
-                <p>{t("character.create.media.locked")}</p>
-              </div>
-            ) : (
-              <div className="ce_tip">
-                <ul>
-                  <li>{t("character.create.media.tip_1")}</li>
-                  <li>{t("character.create.media.tip_2")}</li>
-                  <li>{t("character.create.media.tip_3")}</li>
-                </ul>
+                <p>{t("character.create.media.revision_notice")}</p>
               </div>
             )}
+            <div className="ce_tip">
+              <ul>
+                <li>{t("character.create.media.tip_1")}</li>
+                <li>{t("character.create.media.tip_2")}</li>
+                <li>{t("character.create.media.tip_3")}</li>
+              </ul>
+            </div>
             <div className="ce_media_bar">
               <h3>
                 {t("character.create.media.all", { count: images.length })}
               </h3>
-              {!mediaLocked && (
-                <>
-                  <button
-                    type="button"
-                    className="button"
-                    disabled={!picked.length}
-                    onClick={() => void removeImages(picked)}
-                  >
-                    {picked.length
-                      ? t("character.create.media.delete_selected_count", {
-                          count: picked.length,
-                        })
-                      : t("character.create.media.delete_selected")}
-                  </button>
-                  <button
-                    type="button"
-                    id="ce_media_add"
-                    className="button"
-                    onClick={() => mediaInput.current?.click()}
-                  >
-                    {t("character.create.media.add")}
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                className="button"
+                disabled={!picked.length}
+                onClick={() => void removeImages(picked)}
+              >
+                {picked.length
+                  ? t("character.create.media.delete_selected_count", {
+                      count: picked.length,
+                    })
+                  : t("character.create.media.delete_selected")}
+              </button>
+              <button
+                type="button"
+                id="ce_media_add"
+                className="button"
+                onClick={() => mediaInput.current?.click()}
+              >
+                {t("character.create.media.add")}
+              </button>
               <div
                 className="ce_seg"
                 role="group"
@@ -1306,28 +1323,25 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
                 // a refusal of the server stays until the name changes.
                 const bad =
                   !!imageErrors[image.id] || badImages.includes(image);
+                const typed = nameProblem(image);
                 const problem =
                   imageErrors[image.id] ||
-                  (badImages.includes(image) && draft.name.trim()
-                    ? "name_duplicate"
-                    : "");
+                  (typed === "name_required" ? "" : typed);
                 return (
                   <div key={image.id} className={`ce_item ${bad ? "bad" : ""}`}>
-                    {!mediaLocked && (
-                      <input
-                        type="checkbox"
-                        className="ce_pick"
-                        aria-label={t("character.create.media.select")}
-                        checked={picked.includes(image.id)}
-                        onChange={(event) =>
-                          setPicked((now) =>
-                            event.target.checked
-                              ? [...now, image.id]
-                              : now.filter((id) => id !== image.id),
-                          )
-                        }
-                      />
-                    )}
+                    <input
+                      type="checkbox"
+                      className="ce_pick"
+                      aria-label={t("character.create.media.select")}
+                      checked={picked.includes(image.id)}
+                      onChange={(event) =>
+                        setPicked((now) =>
+                          event.target.checked
+                            ? [...now, image.id]
+                            : now.filter((id) => id !== image.id),
+                        )
+                      }
+                    />
                     <button
                       type="button"
                       className="ce_thumb"
@@ -1337,68 +1351,51 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
                       <img src={image.image_url} alt="" loading="lazy" />
                     </button>
                     <div className="ce_texts">
-                      {mediaLocked ? (
-                        <>
-                          <strong>{image.name}</strong>
-                          <span className="ce_meta">{image.description}</span>
-                        </>
-                      ) : (
-                        <>
-                          <input
-                            type="text"
-                            aria-label={t("character.create.media.image_name")}
-                            placeholder={t("character.create.media.image_name")}
-                            value={draft.name}
-                            onChange={(event) =>
-                              editImage(image, "name", event.target.value)
-                            }
-                          />
-                          <textarea
-                            aria-label={t("character.create.media.description")}
-                            placeholder={t(
-                              "character.create.media.description_placeholder",
-                            )}
-                            value={draft.description}
-                            onChange={(event) =>
-                              editImage(
-                                image,
-                                "description",
-                                event.target.value,
-                              )
-                            }
-                          />
-                          {problem && (
-                            <span className="ce_error" role="alert">
-                              {t(`character.create.media.${problem}`)}
-                            </span>
-                          )}
-                        </>
+                      <input
+                        type="text"
+                        aria-label={t("character.create.media.image_name")}
+                        placeholder={t("character.create.media.image_name")}
+                        value={draft.name}
+                        onChange={(event) =>
+                          editImage(image, "name", event.target.value)
+                        }
+                      />
+                      <textarea
+                        aria-label={t("character.create.media.description")}
+                        placeholder={t(
+                          "character.create.media.description_placeholder",
+                        )}
+                        value={draft.description}
+                        onChange={(event) =>
+                          editImage(image, "description", event.target.value)
+                        }
+                      />
+                      {problem && (
+                        <span className="ce_error" role="alert">
+                          {t(`character.create.media.${problem}`)}
+                        </span>
                       )}
                     </div>
-                    {!mediaLocked && (
-                      <button
-                        type="button"
-                        className="ce_del"
-                        aria-label={t("character.create.media.delete")}
-                        onClick={() => void removeImages([image.id])}
-                      >
-                        ×
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="ce_del"
+                      aria-label={t("character.create.media.delete")}
+                      onClick={() => void removeImages([image.id])}
+                    >
+                      ×
+                    </button>
                   </div>
                 );
               })}
             </div>
-            {!mediaLocked && (
-              <button
-                type="button"
-                className={`ce_dropzone ${images.length ? "small" : ""}`}
-                onClick={() => mediaInput.current?.click()}
-              >
-                <strong>{t("character.create.media.drop_title")}</strong>
-                {t("character.create.media.drop_hint")}
-              </button>
-            )}
+            <button
+              type="button"
+              className={`ce_dropzone ${images.length ? "small" : ""}`}
+              onClick={() => mediaInput.current?.click()}
+            >
+              <strong>{t("character.create.media.drop_title")}</strong>
+              {t("character.create.media.drop_hint")}
+            </button>
           </section>
         )}
 
@@ -1503,14 +1500,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
                 </tbody>
               </table>
             </div>
-            <button
-              type="button"
-              className="button primary ce_submit"
-              disabled={busy || (status === "approved" && !dirty)}
-              onClick={() => void persist("submit")}
-            >
-              {t("character.create.submit")}
-            </button>
           </section>
         )}
       </main>
@@ -1626,34 +1615,6 @@ function Form({ initial }: { initial: CharacterDetail | null }) {
         >
           <img src={zoom} alt="" />
         </button>
-      )}
-      {cancelling && (
-        <Modal
-          title={t("character.create.revision.cancel_title")}
-          onClose={() => {
-            if (!cancelBusy) setCancelling(false);
-          }}
-        >
-          <p className="muted">
-            {t("character.create.revision.cancel_confirm")}
-          </p>
-          <div className="modal_actions">
-            <button
-              className="button"
-              disabled={cancelBusy}
-              onClick={() => setCancelling(false)}
-            >
-              {t("common.cancel")}
-            </button>
-            <button
-              className="button danger"
-              disabled={cancelBusy}
-              onClick={() => void cancelRevision()}
-            >
-              {t("character.create.revision.cancel")}
-            </button>
-          </div>
-        </Modal>
       )}
     </div>
   );

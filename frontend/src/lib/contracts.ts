@@ -62,7 +62,12 @@ export const messageSchema = z.object({
 export type Message = z.infer<typeof messageSchema>;
 export const roomSchema = z.object({
   room_id: z.string(),
-  character: characterSchema,
+  // `images` are the pictures a reply's {{img::name}} tags stand for (lib/scene-images.ts).
+  character: characterSchema.extend({
+    images: z
+      .array(z.object({ name: z.string(), image_url: z.string() }))
+      .default([]),
+  }),
   messages: z.array(messageSchema),
   generating: z.boolean(),
 });
@@ -79,7 +84,8 @@ export const recentSchema = z.object({
 });
 export type RecentResponse = z.infer<typeof recentSchema>;
 const characterStatus = z.enum(["draft", "pending", "approved", "rejected"]);
-const revisionStatus = z.enum(["pending", "rejected"]).nullable();
+// draft: the pictures of a public character were changed and not submitted yet.
+const revisionStatus = z.enum(["pending", "rejected", "draft"]).nullable();
 export const myCharactersSchema = z.object({
   characters: z.array(
     z.object({

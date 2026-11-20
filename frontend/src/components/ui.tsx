@@ -146,7 +146,9 @@ export function SiteHeader({
   const { t, account, openLogin } = useSession();
   const send = useTrack();
   return (
-    <header className="site_header">
+    <header className={menu ? "site_header beside_sidebar" : "site_header"}>
+      {/* Beside an open sidebar this part is hidden: the sidebar carries the logo and the
+          button (globals.css). */}
       <div className="header_start">
         {menu && (
           <button

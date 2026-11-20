@@ -335,7 +335,12 @@ function lookup(state: State, characterId: string): Character | undefined {
     first_message: initial
       ? `${text("first_message")}\n<status>\n${initial}\n</status>`
       : text("first_message"),
-    replies: ["*고개를 끄덕인다.* 계속 말해 봐."],
+    // A made character with pictures shows its first one, so the preview has something to see.
+    replies: [
+      made.images.length
+        ? `{{img::${made.images[0].name}}}\n*고개를 끄덕인다.* 계속 말해 봐.`
+        : "*고개를 끄덕인다.* 계속 말해 봐.",
+    ],
   };
   return {
     id: made.id,
@@ -345,6 +350,7 @@ function lookup(state: State, characterId: string): Character | undefined {
         ?.nickname ?? "",
     is_adult: made.is_adult,
     texts: { "ko-KR": content, "zh-TW": content, "en-US": content },
+    images: made.images.map(({ name, image_url }) => ({ name, image_url })),
   };
 }
 export function home(state: State, locale: Locale) {
@@ -486,9 +492,13 @@ export function settle(state: State, now = Date.now()) {
 }
 export function roomView(state: State, roomId: string, locale: Locale) {
   const room = ownedRoom(state, roomId);
+  const character = lookup(state, room.character_id)!;
   return {
     room_id: roomId,
-    character: characterInfo(lookup(state, room.character_id)!, locale),
+    character: {
+      ...characterInfo(character, locale),
+      images: character.images ?? [],
+    },
     messages: room.messages,
     generating: room.turns.some((turn) => turn.status === "generating"),
   };
@@ -727,11 +737,11 @@ export function saveCharacter(
   const isAdult = flag("is_adult", current.is_adult);
   if (errors.length) throw invalid(...errors);
   const submit = action === "submit";
-  if (
-    !submit &&
-    (current.status === "pending" || current.status === "approved")
-  )
+  // A public character changes only through a revision; one under review may still be edited.
+  if (!submit && current.status === "approved")
     throw new ApiError("save_not_allowed", 409);
+  // Only a draft may be incomplete, so a save of one under review or rejected is checked like a submit.
+  const complete = submit || current.status !== "draft";
   if (isAdult && !user.adult_verified)
     throw new ApiError("adult_verification_required", 403);
   if (statusWindow && !texts.status_window_format)
@@ -739,7 +749,7 @@ export function saveCharacter(
   if (isAdult && (age === null || age < ADULT_MIN_AGE))
     errors.push(["is_adult", "age_too_low"]);
   const image = thumbnail ?? current.image_url;
-  if (submit) {
+  if (complete) {
     for (const key of REQUIRED) if (!texts[key]) errors.push([key, "required"]);
     if (!gender) errors.push(["gender", "required"]);
     if (age === null) errors.push(["age", "required"]);
@@ -767,21 +777,16 @@ export function saveCharacter(
 export function deleteCharacter(state: State, characterId: string) {
   owned(state, characterId).deleted = true;
 }
-/** The preview never approves, so a public character with a revision does not exist here. */
-export function cancelRevision(state: State, characterId: string) {
-  owned(state, characterId);
-  throw new ApiError("revision_not_found", 404);
-}
+/** The preview never approves, so the pictures here are always the creator's own to change. */
 function editable(state: State, characterId: string) {
-  const character = owned(state, characterId);
-  if (character.status === "pending" || character.status === "approved")
-    throw new ApiError("save_not_allowed", 409);
-  return character;
+  return owned(state, characterId);
 }
 function imageName(value: string | undefined) {
-  const name = (value ?? "").trim().replaceAll("\n", " ");
+  // English letters, digits, _ and - only; a space becomes _ (CharacterEditor.imageName).
+  const name = (value ?? "").trim().replace(/\s+/g, "_");
   if (!name) throw invalid(["name", "required"]);
   if (size(name) > 40) throw invalid(["name", "too_long"]);
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) throw invalid(["name", "invalid_value"]);
   return name;
 }
 function imageDescription(value: string | undefined) {

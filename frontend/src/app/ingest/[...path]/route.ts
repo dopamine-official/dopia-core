@@ -9,12 +9,26 @@ const API_HOST = "us.i.posthog.com";
 const ASSET_HOST = "us-assets.i.posthog.com";
 const FORWARDED = ["content-type", "content-encoding", "user-agent"];
 
-/** The visitor's IP as the hosting platform reports it. */
+// Loopback, private and link-local addresses. PostHog cannot geolocate these (127.0.0.1
+// resolves to Sweden), so they are never sent as the visitor's IP.
+const INTERNAL_IP =
+  /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0$|::1$|f[cd][0-9a-f]{2}:|fe80:)/i;
+
+/**
+ * The visitor's IP as the hosting platform reports it. Null when only an internal address
+ * is known (local development), so PostHog falls back to the address of this request.
+ */
 function clientIp(request: NextRequest): string | null {
-  const real = request.headers.get("x-real-ip");
-  if (real) return real.trim();
   const forwarded = request.headers.get("x-forwarded-for");
-  return forwarded ? forwarded.split(",")[0].trim() : null;
+  const candidates = [
+    request.headers.get("x-real-ip"),
+    forwarded ? forwarded.split(",")[0] : null,
+  ];
+  for (const candidate of candidates) {
+    const ip = candidate?.trim().replace(/^::ffff:/i, "");
+    if (ip && !INTERNAL_IP.test(ip)) return ip;
+  }
+  return null;
 }
 
 async function proxy(request: NextRequest) {

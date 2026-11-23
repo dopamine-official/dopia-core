@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { useSession } from "@/components/providers";
-import { errorCode, track } from "@/lib/analytics";
+import { errorCode, reportError, track } from "@/lib/analytics";
 
 // Kept outside the component: a retry that fails again shows this screen anew, and its
 // result is only known once that happens or the screen goes away.
@@ -40,6 +40,7 @@ export default function ErrorPage({
     }
     // Once per notice shown, as the session failure screen does (TRACKING-PLAN 7-3).
     shown.add(error);
+    reportError(error);
     track("error_screen_viewed", "error", {
       target: "app",
       code: errorCode(error),

@@ -13,7 +13,9 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
 @RestControllerAdvice
-class ErrorHandler {
+class ErrorHandler(
+    private val posthog: PostHogClient,
+) {
     private val log = LoggerFactory.getLogger(ErrorHandler::class.java)
 
     @ExceptionHandler(ApiException::class)
@@ -49,6 +51,7 @@ class ErrorHandler {
     @ExceptionHandler(Exception::class)
     fun other(error: Exception): ResponseEntity<ErrorBody> {
         log.error("unhandled error", error)
+        posthog.captureException(error)
         return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
             .body(ErrorBody("internal_error", "unexpected server error", emptyList()))

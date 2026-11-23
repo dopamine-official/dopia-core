@@ -1,4 +1,7 @@
 import posthog, { type PostHog, type PostHogConfig } from "posthog-js";
+// Error autocapture ships as a separate script PostHog would fetch at runtime; bundled here
+// because BASE_CONFIG turns external loading off.
+import "posthog-js/dist/exception-autocapture";
 import { ApiError, type Account } from "./contracts";
 
 // Product analytics (TRACKING-PLAN 1, 2). Off when no key is set, e.g. local mock runs and tests.
@@ -98,6 +101,8 @@ export function syncAnalyticsAccount(account: Account) {
       bootstrap: bootstrap(account),
       person_profiles: "always",
       capture_pageview: "history_change",
+      // Uncaught errors and rejected promises go to PostHog error tracking.
+      capture_exceptions: true,
     });
     // A stored ID from an earlier visit wins over bootstrap; replace it with the server's.
     if (posthog.get_distinct_id() !== account.account_id) restart(account);
@@ -132,6 +137,12 @@ export function track(
 ) {
   if (!enabled() || current === null) return;
   posthog.capture(event, { ...properties, page });
+}
+
+/** Reports an error the app caught itself (the error screen), which autocapture never sees. */
+export function reportError(error: unknown) {
+  if (!enabled() || current === null) return;
+  posthog.captureException(error);
 }
 
 // Before the session exists there is no account ID to record under. The session failure

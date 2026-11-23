@@ -51,6 +51,37 @@ class PostHogClientTest {
     }
 
     @Test
+    fun `reports an exception with its cause and stack, under no person when the account is unknown`() {
+        val bodies = LinkedBlockingQueue<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/i/v0/e/") { exchange ->
+            bodies.add(exchange.requestBody.readAllBytes().decodeToString())
+            exchange.sendResponseHeaders(200, -1)
+            exchange.close()
+        }
+        server.start()
+        try {
+            val error = IllegalStateException("outer", IllegalArgumentException("inner"))
+            client("http://127.0.0.1:${server.address.port}").captureException(error, properties = mapOf("request_id" to "r1"))
+            val json = ObjectMapper().readTree(assertNotNull(bodies.poll(5, TimeUnit.SECONDS)))
+            assertEquals("\$exception", json.get("event").asString())
+            assertEquals("chat-server", json.get("distinct_id").asString())
+            val properties = json.get("properties")
+            assertEquals(false, properties.get("\$process_person_profile").asBoolean())
+            assertEquals("r1", properties.get("request_id").asString())
+            val list = properties.get("\$exception_list")
+            assertEquals("IllegalStateException", list.get(0).get("type").asString())
+            assertEquals("IllegalArgumentException", list.get(1).get("type").asString())
+            assertEquals("outer", list.get(0).get("value").asString())
+            // Frames run entry point first, so the crash site (this test) is the last one.
+            val frames = list.get(0).get("stacktrace").get("frames")
+            assertEquals(PostHogClientTest::class.java.name, frames.get(frames.size() - 1).get("module").asString())
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun `without a key nothing is sent`() {
         // Port 1 refuses connections; a send attempt would only log, so this checks no exception.
         client("http://127.0.0.1:1", key = "").capture(UUID.randomUUID(), "e", emptyMap(), Instant.now())

@@ -47,12 +47,16 @@ function fake(prefix: string) {
       ]),
     ),
     get_distinct_id: vi.fn(() => distinctId),
+    captureException: vi.fn((error: unknown) =>
+      calls.push([`${prefix}captureException`, error]),
+    ),
   };
   return instance;
 }
 const main = fake("");
 const before = fake("before.");
 vi.mock("posthog-js", () => ({ default: main }));
+vi.mock("posthog-js/dist/exception-autocapture", () => ({}));
 
 const guest: Account = {
   account_id: "guest-1",
@@ -212,6 +216,19 @@ describe("analytics events", () => {
       expect(props).not.toHaveProperty("adult_mode");
     }
     expect(named("capture")).toHaveLength(0);
+  });
+
+  it("turns error autocapture on and reports a caught error once PostHog has started", async () => {
+    const analytics = await load();
+    const error = new Error("boom");
+    analytics.reportError(error);
+    expect(named("captureException")).toHaveLength(0);
+    analytics.syncAnalyticsAccount(guest);
+    expect(main.init.mock.calls[0][1]).toMatchObject({
+      capture_exceptions: true,
+    });
+    analytics.reportError(error);
+    expect(named("captureException")).toEqual([["captureException", error]]);
   });
 
   it("does nothing without a key", async () => {

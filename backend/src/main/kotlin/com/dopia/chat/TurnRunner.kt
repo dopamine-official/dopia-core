@@ -11,6 +11,7 @@ import com.dopia.chat.ai.AiStatusWindow
 import com.dopia.chat.ai.AiTurnListener
 import com.dopia.chat.ai.AiTurnRequest
 import com.dopia.common.ErrorBody
+import com.dopia.common.PostHogClient
 import com.dopia.config.AppProperties
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
@@ -42,6 +43,7 @@ class TurnRunner(
     private val characters: CharacterService,
     private val ai: AiClient,
     private val properties: AppProperties,
+    private val posthog: PostHogClient,
 ) {
     private val log = LoggerFactory.getLogger(TurnRunner::class.java)
     private val capacity = Semaphore(properties.turns.maxConcurrent)
@@ -170,6 +172,8 @@ class TurnRunner(
             }
         } catch (error: Exception) {
             log.error("turn {} failed", started.turnId, error)
+            // request_id is the same key chat-ai reports under, so both sides of a turn line up.
+            posthog.captureException(error, started.accountId, mapOf("request_id" to started.aiRequestId))
             if (chat.fail(started, "ai_unavailable", stage(streaming))) {
                 stream.send("failed", ErrorBody("ai_unavailable", "ai request failed", emptyList()))
             } else {

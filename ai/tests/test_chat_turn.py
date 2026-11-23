@@ -7,10 +7,10 @@ import time
 
 import pytest
 
-from chat_ai.chat.generate import generate_turn
+from chat_ai.chat.generate import REFUSAL_RETRIES, generate_turn, is_refusal
 from chat_ai.chat.inputs import ChatTurnInput
 from chat_ai.llm.adapters.fake import FakeAdapter
-from chat_ai.llm.types import PROVIDER_ERROR, LlmError, LlmUsage
+from chat_ai.llm.types import PROVIDER_ERROR, PROVIDER_REJECTED, LlmError, LlmUsage
 from chat_ai.prompt.assembler import Message
 from tests.conftest import CHAT_PROMPT_VERSION, chat_body, ids, make_settings, read_sse
 
@@ -275,7 +275,8 @@ def _direct_turn(h):  # type: ignore[no-untyped-def]
 
 async def test_chat_07_closed_at_a_yield_still_records_cancel(harness_factory) -> None:
     """The response can close the generator while it waits at a yield (GeneratorExit, not CancelledError)."""
-    adapter = FakeAdapter(["a", "b", "c"], delay_seconds=0.01)
+    # Opens with an action: a reply that opens with a letter is held back while it may be a refusal.
+    adapter = FakeAdapter(["*a*", "b", "c"], delay_seconds=0.01)
     h = harness_factory(adapter)
     gen = _direct_turn(h)
     first = await gen.__anext__()
@@ -449,3 +450,125 @@ async def test_chat_12_image_tags_are_recorded_not_repaired(harness_factory) -> 
         counts = (metadata.get("image_tag_count"), metadata.get("image_tag_unknown_count"))
         assert counts == (expected or (None, None))
         assert ("image_tag_count" in metadata) is has_images
+
+
+REFUSAL = ["I cannot fulfill ", "this request. I am unable to participate in this roleplay scenario."]
+
+
+async def _turn(h) -> list:  # type: ignore[no-untyped-def]
+    async with h.client() as client:
+        async with client.stream("POST", "/api/v1/chat/turn", json=chat_body(), headers=ids("r")) as r:
+            return await read_sse(r)
+
+
+async def test_chat_13_a_refused_reply_is_asked_for_again_and_never_shown(harness_factory) -> None:
+    adapter = FakeAdapter(["*She smiles.* ", "Of course."], first_replies=[REFUSAL])
+    h = harness_factory(adapter)
+    events = await _turn(h)
+    assert [e[1]["text"] for e in events if e[0] == "token"] == ["*She smiles.* ", "Of course."]
+    assert events[-1][0] == "completed" and events[-1][1]["output"] == "*She smiles.* Of course."
+    # The backend is told before the next try, so the web can say why the reply is late.
+    assert events[0] == ("retrying", {"reason": "refused"})
+    assert [e[0] for e in events] == ["retrying", "token", "token", "completed"]
+    assert len(adapter.calls) == 2
+    # The same request both times: same model, same prompt.
+    assert adapter.calls[0] == adapter.calls[1]
+    assert h.tracer.records[0].metadata["refusal_count"] == 1
+
+
+async def test_chat_13_a_provider_block_before_any_text_is_asked_for_again(harness_factory) -> None:
+    blocked = LlmError(PROVIDER_REJECTED, "provider refused the request by content policy")
+    adapter = FakeAdapter(["Hello."], first_replies=[blocked, REFUSAL])
+    h = harness_factory(adapter)
+    events = await _turn(h)
+    assert events[-1][0] == "completed" and events[-1][1]["output"] == "Hello."
+    assert len(adapter.calls) == 3
+    assert h.tracer.records[0].metadata["refusal_count"] == 2
+
+
+async def test_chat_13_refused_every_time_fails_as_rejected(harness_factory) -> None:
+    adapter = FakeAdapter(REFUSAL)
+    h = harness_factory(adapter)
+    events = await _turn(h)
+    assert events == [
+        *[("retrying", {"reason": "refused"})] * REFUSAL_RETRIES,
+        ("failed", {"code": "provider_rejected", "message": "model refused in its reply"}),
+    ]
+    assert len(adapter.calls) == REFUSAL_RETRIES + 1
+    record = h.tracer.records[0]
+    assert record.outcome == "failed" and record.metadata["refusal_count"] == REFUSAL_RETRIES + 1
+
+
+async def test_chat_13_other_failures_and_text_already_sent_are_not_retried(harness_factory) -> None:
+    error = FakeAdapter(first_replies=[LlmError(PROVIDER_ERROR, "provider call failed")])
+    events = await _turn(harness_factory(error))
+    assert events[-1][1]["code"] == "provider_error" and len(error.calls) == 1
+
+    # Filtered after the reply started: the text is already with the user.
+    cut = FakeAdapter(
+        ["*She nods.* "], fail_after_chunks=LlmError(PROVIDER_REJECTED, "x", stop_reason="content_filter")
+    )
+    events = await _turn(harness_factory(cut))
+    assert [e[0] for e in events] == ["token", "failed"] and len(cut.calls) == 1
+
+
+async def test_chat_13_a_reply_that_is_not_a_refusal_arrives_whole(harness_factory) -> None:
+    long = ["She looks up from the counter and smiles at you, ", "setting her book aside. ", "You came back."]
+    for chunks in (long, ["Hi."], ["I can't ", "believe you came."]):
+        adapter = FakeAdapter(chunks)
+        h = harness_factory(adapter)
+        events = await _turn(h)
+        assert [e[1]["text"] for e in events if e[0] == "token"] == chunks
+        assert events[-1][0] == "completed" and len(adapter.calls) == 1
+        assert "refusal_count" not in h.tracer.records[0].metadata
+
+
+def test_chat_13_refusal_wording() -> None:
+    refusals = [
+        "I cannot fulfill this request. I am unable to participate in sexually explicit roleplay scenarios.",
+        "I'm sorry, but I can't continue with this roleplay.",
+        "Sorry, I can’t help with that.",
+        "  \nI’m unable to generate that content.",
+        "As an AI, I don't take part in this.",
+        "I must decline this request.",
+        "죄송하지만 그 요청은 도와드릴 수 없습니다.",
+        "죄송합니다. 해당 내용은 작성할 수 없어요.",
+        "이 요청은 도와드릴 수 없습니다.",
+        "저는 AI로서 이런 대화를 할 수 없습니다.",
+        "申し訳ありませんが、そのリクエストにはお応えできません。",
+        "很抱歉，我無法繼續這個對話。",
+        "I'm not comfortable continuing this scene.",
+        "I don't feel comfortable writing this.",
+        "I'm afraid I can't go along with that.",
+        "I can't and won't write this.",
+        "I'd prefer not to continue this roleplay.",
+        "I cannot roleplay this scenario.",
+        "This request goes against my guidelines.",
+        "As a language model, I have limits.",
+        "I'm really sorry, but I won't continue.",
+        "죄송하지만 이 내용은 작성하기 어렵습니다.",
+        "유감스럽지만 요청하신 장면은 묘사할 수 없습니다.",
+        "죄송합니다. 해당 요청은 정책에 위배됩니다.",
+        "해당 요청은 답변드리기 어렵습니다.",
+        "저는 그런 내용을 다루지 않습니다.",
+        "성적인 묘사는 제공할 수 없습니다.",
+        "このリクエストにはお応えできません。",
+        "我無法協助這個請求。",
+    ]
+    in_story = [
+        "*하리가 고개를 든다.* 죄송하지만 그건 도와드릴 수 없어요.",
+        '"I can\'t help you," she says.',
+        "I can't believe you came back.",
+        "I cannot wait to see you tonight.",
+        "Sorry I'm late!",
+        "죄송해요, 늦었죠? 어제는 갈 수 없었어요.",
+        "그 요청에 하리는 웃었다.",
+        "I'm not comfortable in this dress, she admits.",
+        "I'd rather not go home tonight.",
+        "This scene reminds her of home.",
+        "죄송한데, 오늘은 같이 못 있을 것 같아요.",
+        "이런 장면은 처음이라 하리는 얼굴을 붉혔다.",
+        "미안하지만 오늘은 만날 수 없어.",
+    ]
+    assert [text for text in refusals if not is_refusal(text)] == []
+    assert [text for text in in_story if is_refusal(text)] == []

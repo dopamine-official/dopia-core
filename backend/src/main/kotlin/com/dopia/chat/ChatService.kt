@@ -123,6 +123,14 @@ class ChatService(
 
     private fun notFound() = ApiException("room_not_found", HttpStatus.NOT_FOUND, message = "room not found")
 
+    /** The character is there, but adult mode is off: the web says so instead of "not found". */
+    private fun adultModeOff(locale: RequestLocale) =
+        if (locale.region.adultModeAvailable) {
+            ApiException("adult_mode_required", HttpStatus.FORBIDDEN, message = "adult mode is off")
+        } else {
+            ApiException("adult_mode_unavailable", HttpStatus.FORBIDDEN, message = "region does not offer adult mode")
+        }
+
     private fun inProgress() = ApiException("generation_in_progress", HttpStatus.CONFLICT, message = "a reply is being generated")
 
     // 4-1-1 open
@@ -142,6 +150,7 @@ class ChatService(
                         throw notFound()
                     }
                 repository.latestRoom(identity.accountId, characterId)?.let { return@execute OpenResponse(it.id, false) }
+                if (character.needsAdultMode) throw adultModeOff(locale)
                 if (!character.canOpenNewRoom) throw notFound()
                 val roomId = repository.insertRoom(identity.accountId, characterId, character.isAdult)
                 repository.insertMessage(roomId, null, 1, "assistant", character.firstMessage)

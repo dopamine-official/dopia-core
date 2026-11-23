@@ -8,10 +8,12 @@ const messages: Record<string, string> = {
   session_recovery_failed: "common.session_expired",
   adult_verification_required: "character.adult_verification_required",
   adult_mode_unavailable: "character.adult_mode_unavailable",
+  adult_mode_required: "character.adult_mode_required",
   nickname_taken: "account.me.nickname_taken",
   photo_type_invalid: "account.me.photo_type_invalid",
   file_too_large: "account.me.photo_large",
   generation_in_progress: "chat.generation_in_progress",
+  provider_rejected: "chat.rejected",
   room_not_found: "chat.not_found",
   character_not_found: "character.not_found",
 };

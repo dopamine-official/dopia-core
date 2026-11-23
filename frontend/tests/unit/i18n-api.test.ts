@@ -59,4 +59,14 @@ describe("localization and transport", () => {
       ),
     ).rejects.toThrow("stream_interrupted");
   });
+  it("passes on that a refused reply is being written again", async () => {
+    const events: string[] = [];
+    await readStream(
+      new Response(
+        'event: retrying\ndata: {"reason":"refused"}\n\nevent: token\ndata: {"text":"hi"}\n\nevent: completed\ndata: {"assistant_message_id":"1","content":"hi"}\n\n',
+      ),
+      (value) => events.push(value.event),
+    );
+    expect(events).toEqual(["retrying", "token", "completed"]);
+  });
 });

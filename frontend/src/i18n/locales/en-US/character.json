@@ -17,6 +17,7 @@
     "policy_close": "Close policy"
   },
   "adult": "Adult character",
+  "adult_mode_required": "This is an adult character. Turn SAFE off to chat.",
   "adult_mode_unavailable": "Adult mode is currently unavailable.",
   "not_found": "This character is currently unavailable.",
   "adult_verification_rejected": "You don't meet the adult verification requirement, so SAFE stays on.",

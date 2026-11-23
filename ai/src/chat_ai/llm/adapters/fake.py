@@ -20,7 +20,11 @@ class FakeAdapter:
         fail_after_chunks: LlmError | None = None,
         usage: LlmUsage | None = None,
         on_close: Callable[[], None] | None = None,
+        first_replies: list[list[str] | LlmError] | None = None,
     ) -> None:
+        # What the first calls answer, one entry per call: chunks, or an error raised before any.
+        # Calls after these get `chunks`.
+        self.first_replies = first_replies or []
         self.chunks = chunks if chunks is not None else ["*she looks up from her book.* ", "You're early today", "."]
         self.delay_seconds = delay_seconds
         self.fail_before = fail_before
@@ -43,8 +47,12 @@ class FakeAdapter:
         self.calls.append(request)
         if self.fail_before is not None:
             raise self.fail_before
+        scripted = len(self.calls) <= len(self.first_replies)
+        reply = self.first_replies[len(self.calls) - 1] if scripted else self.chunks
+        if isinstance(reply, LlmError):
+            raise reply
         try:
-            for chunk in self.chunks:
+            for chunk in reply:
                 if self.delay_seconds:
                     await asyncio.sleep(self.delay_seconds)
                 yield TextChunk(chunk)
@@ -52,7 +60,7 @@ class FakeAdapter:
                 raise self.fail_after_chunks
             if self.delay_seconds:
                 await asyncio.sleep(self.delay_seconds)
-            yield Done(self._result(request, "".join(self.chunks)))
+            yield Done(self._result(request, "".join(reply)))
         finally:
             self.closed_streams += 1
             if self.on_close:

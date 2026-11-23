@@ -36,6 +36,7 @@ class HttpAiClientTest {
     private fun serve(
         tokens: Int,
         gapMs: Long,
+        retrying: Int = 0,
     ) {
         server.createContext("/api/v1/chat/turn") { exchange ->
             exchange.requestHeaders.forEach { (k, v) -> headers[k.lowercase()] = v.first() }
@@ -44,6 +45,7 @@ class HttpAiClientTest {
             exchange.sendResponseHeaders(200, 0)
             try {
                 exchange.responseBody.use { out ->
+                    repeat(retrying) { out.write("event: retrying\ndata: {\"reason\":\"refused\"}\n\n".toByteArray()) }
                     repeat(tokens) {
                         out.write("event: token\ndata: {\"text\":\"t$it\"}\n\n".toByteArray())
                         out.flush()
@@ -116,6 +118,32 @@ class HttpAiClientTest {
         assertEquals(listOf("t0", "t1"), tokens)
         assertEquals("done", result.output)
         assertEquals("chat_v1", result.meta.promptVersion)
+    }
+
+    @Test
+    fun `a refused reply being asked for again is passed on before the tokens`() {
+        serve(tokens = 1, gapMs = 0, retrying = 2)
+        val seen = mutableListOf<String>()
+        val result =
+            client().turn(
+                "req-retry",
+                UUID.randomUUID(),
+                request,
+                UUID.randomUUID(),
+                object : AiTurnListener {
+                    override fun onToken(text: String) {
+                        seen += text
+                    }
+
+                    override fun onRetrying(reason: String) {
+                        seen += "retrying:$reason"
+                    }
+
+                    override fun stillWanted() = true
+                },
+            )
+        assertEquals(listOf("retrying:refused", "retrying:refused", "t0"), seen)
+        assertEquals("done", result.output)
     }
 
     @Test

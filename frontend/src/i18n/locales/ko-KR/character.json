@@ -17,6 +17,7 @@
     "policy_close": "정책 닫기"
   },
   "adult": "성인 캐릭터",
+  "adult_mode_required": "SAFE를 꺼야 대화할 수 있는 성인 캐릭터예요.",
   "adult_mode_unavailable": "현재 성인 모드를 사용할 수 없어요.",
   "not_found": "이 캐릭터는 현재 대화할 수 없어요.",
   "adult_verification_rejected": "성인 인증 조건을 충족하지 않아 SAFE를 끌 수 없어요.",

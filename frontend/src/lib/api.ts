@@ -182,6 +182,11 @@ const streamEvent = z.discriminatedUnion("event", [
     data: z.object({ user_message_id: z.string() }),
   }),
   z.object({ event: z.literal("token"), data: z.object({ text: z.string() }) }),
+  // The reply is late: the model refused and is being asked again (CHAT 4-1-3).
+  z.object({
+    event: z.literal("retrying"),
+    data: z.object({ reason: z.string() }),
+  }),
   z.object({
     event: z.literal("completed"),
     data: z.object({ assistant_message_id: z.string(), content: z.string() }),

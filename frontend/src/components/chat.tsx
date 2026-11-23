@@ -73,6 +73,8 @@ function ChatRoom({ roomId }: { roomId: string }) {
   const [draft, setDraft] = useState(saved.draft);
   const [pending, setPending] = useState<Pending | null>(saved.pending);
   const [partial, setPartial] = useState("");
+  // The model refused and the reply is being asked for again; told only on a live stream.
+  const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState("");
   const [atBottom, setAtBottom] = useState(true);
   const pendingRef = useRef<Pending | null>(saved.pending);
@@ -131,6 +133,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
     sending.current = false;
     setPending(null);
     setPartial("");
+    setRegenerating(false);
     sessionStorage.removeItem(pendingKey);
     if (failed) {
       updateDraft(
@@ -260,9 +263,11 @@ function ChatRoom({ roomId }: { roomId: string }) {
           void query.invalidateQueries({
             queryKey: ["room", account.account_id, roomId],
           });
-        else if (event.event === "token")
+        else if (event.event === "retrying") setRegenerating(true);
+        else if (event.event === "token") {
+          setRegenerating(false);
           setPartial((value) => value + event.data.text);
-        else if (event.event === "completed") {
+        } else if (event.event === "completed") {
           setPartial(event.data.content);
           void query.invalidateQueries({
             queryKey: ["room", account.account_id, roomId],
@@ -280,6 +285,8 @@ function ChatRoom({ roomId }: { roomId: string }) {
       });
     } catch (error) {
       if (disposed.current || abort.signal.aborted) return;
+      // The stream is gone, and with it the word on whether the model is still being asked again.
+      setRegenerating(false);
       const message = errorMessageKey(error, "chat.failed");
       if (error instanceof ApiError && error.status === 401) {
         // Identity recovery already failed or switched users; do not start
@@ -492,14 +499,13 @@ function ChatRoom({ roomId }: { roomId: string }) {
                     />
                   </div>
                 ) : generating && !hasPendingReply ? (
-                  <div
-                    className="typing"
-                    role="status"
-                    aria-label={t("chat.generating")}
-                  >
-                    <span />
-                    <span />
-                    <span />
+                  <div className="typing" role="status">
+                    {t(regenerating ? "chat.regenerating" : "chat.generating")}
+                    <span className="typing_dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
                   </div>
                 ) : null}
               </div>

@@ -73,6 +73,8 @@ data class ChatCharacter(
     val firstMessage: String,
     val isAdult: Boolean,
     val canOpenNewRoom: Boolean,
+    /** Adult mode being off is the only thing that keeps this requester from a new room. */
+    val needsAdultMode: Boolean,
     /** In the creator's order. Empty for the list lookup, which shows no pictures. */
     val images: List<ChatImage> = emptyList(),
 )
@@ -192,6 +194,7 @@ class CharacterService(
         // The creator writes only the values; the tags are ours (4-1-4 step 3-1).
         val initial = if (statusWindowFormat != null) text(row.statusWindowInitial).trim() else ""
         val firstMessage = text(row.firstMessage)
+        val open = !row.deleted && (row.approved || row.creatorId == requesterId)
         return ChatCharacter(
             id = row.id,
             name = name,
@@ -205,7 +208,8 @@ class CharacterService(
             statusWindow = statusWindowFormat?.let { StatusWindow(it, text(row.statusWindowRules).trim().ifEmpty { null }) },
             firstMessage = if (initial.isEmpty()) firstMessage else "$firstMessage\n<status>\n$initial\n</status>",
             isAdult = row.isAdult,
-            canOpenNewRoom = !row.deleted && (row.approved || row.creatorId == requesterId) && (!row.isAdult || adultAllowed),
+            canOpenNewRoom = open && (!row.isAdult || adultAllowed),
+            needsAdultMode = open && row.isAdult && !adultAllowed,
         )
     }
 }

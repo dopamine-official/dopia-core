@@ -373,6 +373,10 @@ p {
   html:not([data-sidebar="closed"]) .sidebar_opener {
     display: none;
   }
+  /* With the sidebar folded only the button to open it is left: the logo lives in the sidebar. */
+  .beside_sidebar .brand {
+    display: none;
+  }
 }
 /* A screen whose content is centred: it centres in the room beside the sidebar. */
 .side_shift {

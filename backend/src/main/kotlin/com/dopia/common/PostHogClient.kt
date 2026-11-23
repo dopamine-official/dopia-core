@@ -42,6 +42,59 @@ class PostHogClient(
         event: String,
         properties: Map<String, Any?>,
         at: Instant,
+    ) = send(distinctId.toString(), event, properties, at)
+
+    /**
+     * Reports an error to PostHog error tracking, as chat-ai does (observe/errors.py): under the
+     * account when one is known, so the error sits on that person's timeline.
+     */
+    fun captureException(
+        error: Throwable,
+        accountId: UUID? = null,
+        properties: Map<String, Any?> = emptyMap(),
+    ) {
+        // The cause chain, outermost first; bounded so a cause cycle cannot loop.
+        val chain = generateSequence(error) { it.cause }.take(5).toList()
+        val exceptions =
+            chain.mapIndexed { index, e ->
+                mapOf(
+                    "type" to e.javaClass.simpleName,
+                    "module" to e.javaClass.packageName,
+                    "value" to (e.message ?: ""),
+                    "mechanism" to mapOf("handled" to true, "synthetic" to false, "type" to if (index == 0) "generic" else "chained"),
+                    // PostHog reads frames entry point first; the JVM lists the crash site first.
+                    "stacktrace" to
+                        mapOf(
+                            "type" to "raw",
+                            "frames" to
+                                e.stackTrace.take(50).reversed().map { frame ->
+                                    mapOf(
+                                        "platform" to "java",
+                                        "module" to frame.className,
+                                        "function" to frame.methodName,
+                                        "filename" to frame.fileName,
+                                        "lineno" to frame.lineNumber.takeIf { it >= 0 },
+                                        "in_app" to frame.className.startsWith("com.dopia"),
+                                    ).filterValues { it != null }
+                                },
+                        ),
+                )
+            }
+        // No account (e.g. the request never identified one): no person is created for it.
+        val anonymous = if (accountId == null) mapOf("\$process_person_profile" to false) else emptyMap()
+        send(
+            accountId?.toString() ?: SERVICE,
+            "\$exception",
+            properties + anonymous + mapOf("service" to SERVICE, "\$exception_list" to exceptions),
+            Instant.now(),
+        )
+    }
+
+    private fun send(
+        distinctId: String,
+        event: String,
+        properties: Map<String, Any?>,
+        at: Instant,
     ) {
         if (!enabled) return
         val body =
@@ -49,7 +102,7 @@ class PostHogClient(
                 mapOf(
                     "api_key" to settings.apiKey,
                     "event" to event,
-                    "distinct_id" to distinctId.toString(),
+                    "distinct_id" to distinctId,
                     "timestamp" to at.toString(),
                     "properties" to properties + common,
                 ),
@@ -81,5 +134,9 @@ class PostHogClient(
         runCatching {
             CompletableFuture.allOf(*inFlight.toTypedArray()).get(5, TimeUnit.SECONDS)
         }
+    }
+
+    private companion object {
+        const val SERVICE = "chat-server"
     }
 }

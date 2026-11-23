@@ -1092,22 +1092,39 @@ p {
   align-self: flex-start;
   background: #252422;
   border-radius: 18px 18px 18px 4px;
-  padding: 18px;
+  padding: 13px 18px;
   display: flex;
+  align-items: baseline;
   gap: 6px;
+  font-size: 14px;
+  color: #a09c97;
+  animation: typing_pulse 1.6s ease-in-out infinite;
 }
-.typing span {
-  width: 7px;
-  height: 7px;
+.typing_dots {
+  display: inline-flex;
+  gap: 4px;
+}
+.typing_dots span {
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: #9a9a9a;
+  background: currentColor;
   animation: blink 1.2s infinite;
 }
-.typing span:nth-child(2) {
+.typing_dots span:nth-child(2) {
   animation-delay: 0.2s;
 }
-.typing span:nth-child(3) {
+.typing_dots span:nth-child(3) {
   animation-delay: 0.4s;
+}
+@keyframes typing_pulse {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 @keyframes blink {
   0%,

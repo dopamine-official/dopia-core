@@ -210,6 +210,53 @@ test("failed reply restores the sent text and the next draft without keeping fai
   await expect(page.locator(".message.assistant")).toHaveCount(2);
 });
 
+test("a refused reply says it is being written again, then restores the text when refused to the end", async ({
+  page,
+}) => {
+  await openChat(page);
+  await page.evaluate(() => {
+    const originalFetch = window.fetch.bind(window);
+    const waitFor = (name: string) =>
+      new Promise<void>((resolve) =>
+        window.addEventListener(name, () => resolve(), { once: true }),
+      );
+    window.fetch = async (input, init) => {
+      if (!String(input).endsWith("/messages") || init?.method !== "POST")
+        return originalFetch(input, init);
+      const encoder = new TextEncoder();
+      const frame = (event: string, data: object) =>
+        encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      return new Response(
+        new ReadableStream({
+          async start(controller) {
+            await waitFor("dopia:refuse");
+            controller.enqueue(frame("retrying", { reason: "refused" }));
+            await waitFor("dopia:reject");
+            controller.enqueue(
+              frame("failed", { code: "provider_rejected", message: "x" }),
+            );
+            controller.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    };
+  });
+  await send(page, "거절될 메시지");
+  const waiting = page.locator(".typing");
+  await expect(waiting).toHaveText("응답을 생성 중입니다");
+  await page.evaluate(() => window.dispatchEvent(new Event("dopia:refuse")));
+  await expect(waiting).toHaveText("모델이 응답을 거절하여 재생성 중입니다");
+  await page.evaluate(() => window.dispatchEvent(new Event("dopia:reject")));
+  await expect(page.locator(".inline_error")).toHaveText(
+    "답변이 거절됐어요. 입력 내용을 복구했어요.",
+  );
+  await expect(
+    page.getByRole("textbox", { name: "메시지", exact: true }),
+  ).toHaveValue("거절될 메시지");
+  await expect(waiting).toHaveCount(0);
+});
+
 test("stream interruption recovers one reply by polling; reload during generation also completes", async ({
   page,
 }) => {

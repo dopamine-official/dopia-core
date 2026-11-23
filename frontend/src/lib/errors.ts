@@ -13,6 +13,7 @@ const messages: Record<string, string> = {
   photo_type_invalid: "account.me.photo_type_invalid",
   file_too_large: "account.me.photo_large",
   generation_in_progress: "chat.generation_in_progress",
+  provider_rejected: "chat.rejected",
   room_not_found: "chat.not_found",
   character_not_found: "character.not_found",
 };

@@ -24,6 +24,8 @@ describe("localized error guidance", () => {
     ["invalid_input", 422, "common.invalid_input"],
     ["generation_in_progress", 409, "chat.generation_in_progress"],
     ["room_not_found", 404, "chat.not_found"],
+    ["adult_mode_required", 403, "character.adult_mode_required"],
+    ["provider_rejected", 0, "chat.rejected"],
     ["unknown", 429, "common.too_many_requests"],
     ["unknown", 503, "common.server_error"],
     ["toString", 400, "common.action_failed"],

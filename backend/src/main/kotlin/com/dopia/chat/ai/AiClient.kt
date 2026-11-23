@@ -62,6 +62,9 @@ class AiFailure(
 interface AiTurnListener {
     fun onToken(text: String)
 
+    /** The model refused and chat-ai is asking it again; no token of the refused reply was sent. */
+    fun onRetrying(reason: String) {}
+
     /** Preview only: the web stream should be closed now while generation continues. */
     fun onWebDisconnectRequested() {}
 

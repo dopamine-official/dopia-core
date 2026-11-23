@@ -88,6 +88,10 @@ class HttpAiClient(
                             listener.onToken(node.path("text").asString())
                         }
 
+                        "retrying" -> {
+                            listener.onRetrying(node.path("reason").asString())
+                        }
+
                         "completed" -> {
                             val meta = node.path("meta")
                             result =

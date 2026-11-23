@@ -30,6 +30,11 @@ data class TokenEvent(
     val text: String,
 )
 
+/** The reply is late because the model refused and is being asked again. */
+data class RetryingEvent(
+    val reason: String,
+)
+
 data class CompletedEvent(
     val assistantMessageId: UUID,
     val content: String,
@@ -148,6 +153,8 @@ class TurnRunner(
                             streaming.set(true)
                             stream.send("token", TokenEvent(text))
                         }
+
+                        override fun onRetrying(reason: String) = stream.send("retrying", RetryingEvent(reason))
 
                         override fun onWebDisconnectRequested() = stream.close()
 

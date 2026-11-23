@@ -63,4 +63,32 @@ describe("/ingest proxy", () => {
     expect(calls[0].headers.get("x-forwarded-for")).toBe("1.34.0.9");
     expect(calls[0].headers.get("authorization")).toBe("Bearer phc_project");
   });
+
+  it("does not send an internal address as the visitor IP", async () => {
+    const calls = capture();
+    for (const ip of ["127.0.0.1", "::1", "::ffff:127.0.0.1", "192.168.0.7"]) {
+      await POST(
+        new NextRequest("http://127.0.0.1:3000/ingest/e/", {
+          method: "POST",
+          body: "payload",
+          headers: { "x-forwarded-for": ip },
+        }),
+      );
+    }
+    expect(calls).toHaveLength(4);
+    for (const call of calls)
+      expect(call.headers.get("x-forwarded-for")).toBeNull();
+  });
+
+  it("skips an internal real IP when a public forwarded IP is known", async () => {
+    const calls = capture();
+    await POST(
+      new NextRequest("http://127.0.0.1:3000/ingest/e/", {
+        method: "POST",
+        body: "payload",
+        headers: { "x-real-ip": "10.0.0.2", "x-forwarded-for": "1.34.0.1" },
+      }),
+    );
+    expect(calls[0].headers.get("x-forwarded-for")).toBe("1.34.0.1");
+  });
 });
